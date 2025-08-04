@@ -30,8 +30,7 @@ router.post('/register', async (req, res) => {
     }
 
     // ✅ Hash the password using bcrypt
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const hashedPassword = await bcrypt.hash(password,10);
 
     // ✅ Insert employee with hashed password
     const result = await pool.query(
@@ -47,5 +46,50 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// Employee login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. Check if employee exists
+    const result = await pool.query(
+      `SELECT * FROM employees WHERE email = $1`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const employee = result.rows[0];
+
+    // 2. Compare hashed password
+    const isMatch = await bcrypt.compare(password, employee.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
+
+    // 3. Success response (you can add token later if needed)
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      employee: {
+        id: employee.id,
+        fullName: employee.full_name,
+        email: employee.email,
+        department: employee.department,
+        role: employee.role,
+        dob: employee.dob,
+        image: employee.image
+      }
+    });
+
+  } catch (error) {
+    console.error('Login error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 module.exports = router;
