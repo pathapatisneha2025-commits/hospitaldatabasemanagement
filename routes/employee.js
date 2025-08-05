@@ -38,7 +38,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       dob
     } = req.body;
 
-    const imageFile = req.file;
+    const imageFile = req.files || [];
 
     if (password !== confirmPassword) {
       return res.status(400).json({
@@ -50,7 +50,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // ✅ Use Cloudinary image URL
-    const imageUrl = imageFile?.path || null;
+    const imageUrl = files.map(file => file.path);
 
     const result = await pool.query(
       `INSERT INTO employees 
