@@ -1,5 +1,5 @@
 // utils/faceUtils.js
-const faceapi = require('@vladmandic/face-api');
+const faceapi = require('face-api.js');
 const canvas = require('canvas');
 const path = require('path');
 const fetch = require('node-fetch');
