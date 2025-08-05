@@ -1,6 +1,6 @@
 // utils/faceUtils.js
 const faceapi = require('face-api.js');
-const canvas = require('canvas');
+const canvas =  require('@napi-rs/canvas');
 const path = require('path');
 const fetch = require('node-fetch');
 
