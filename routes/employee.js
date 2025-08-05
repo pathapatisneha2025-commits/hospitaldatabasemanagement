@@ -4,28 +4,28 @@ const router = express.Router();
 const pool = require('../db');
 const multer = require('multer');
 const path = require('path');
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const cloudinary = require("../cloudinary");
+const fs = require('fs');
 
-router.get('/', (req, res) => {
-  res.send('Employee API is working!');
-});
+// Create uploads directory if it doesn't exist
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 
-// Register new employee
-
-
-// Create upload directory if it doesn't exist
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: "employee", // Optional folder name in Cloudinary
-    allowed_formats: ["jpg", "png", "jpeg", "webp"],
-    public_id: (req, file) => Date.now() + "-" + file.originalname,
+// Multer local storage config
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir); // uploads/ folder
+  },
+  filename: function (req, file, cb) {
+    const uniqueName = Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
+    cb(null, uniqueName);
   },
 });
 
 const upload = multer({ storage });
 
+// Register new employee
 router.post('/register', upload.single('image'), async (req, res) => {
   try {
     const {
@@ -35,21 +35,25 @@ router.post('/register', upload.single('image'), async (req, res) => {
       confirmPassword,
       department,
       role,
-      dob
+      dob,
     } = req.body;
 
-  const file = req.file;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'Image is required' });
+    }
 
     if (password !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: "Password and Confirm Password do not match",
+        message: 'Password and Confirm Password do not match',
       });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const imageUrl = file.path; // ✅ Corrected
+    const imageUrl = `/uploads/${file.filename}`; // Local image path to be served
 
     const result = await pool.query(
       `INSERT INTO employees 
@@ -64,7 +68,6 @@ router.post('/register', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
 
 // Employee login
 router.post('/login', async (req, res) => {
