@@ -4,8 +4,8 @@ const router = express.Router();
 const pool = require('../db');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-router.get('/', (req, res) => {
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../cloudinary");router.get('/', (req, res) => {
   res.send('Employee API is working!');
 });
 
@@ -13,24 +13,16 @@ router.get('/', (req, res) => {
 
 
 // Create upload directory if it doesn't exist
-const uploadDir = 'uploads/';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-// Configure diskStorage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "products", // Optional folder name in Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    public_id: (req, file) => Date.now() + "-" + file.originalname,
   },
-  filename: function (req, file, cb) {
-    const uniqueName = Date.now() + '-' + file.originalname;
-    cb(null, uniqueName);
-  }
 });
 
-const upload = multer({ storage: storage });
-
+const upload = multer({ storage });
 
 router.post('/register', upload.single('image'), async (req, res) => {
   try {
@@ -55,13 +47,14 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const image = imageFile?.filename || null; // ✅ filename from diskStorage
+    // ✅ Use Cloudinary image URL
+    const imageUrl = imageFile?.path || null;
 
     const result = await pool.query(
       `INSERT INTO employees 
         (full_name, email, password, department, role, dob, image)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [fullName, email, hashedPassword, department, role, dob, image]
+      [fullName, email, hashedPassword, department, role, dob, imageUrl]
     );
 
     res.status(201).json({ success: true, employee: result.rows[0] });

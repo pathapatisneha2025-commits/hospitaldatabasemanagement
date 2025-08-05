@@ -14,11 +14,13 @@
     "@tensorflow/tfjs": "^4.22.0",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
+    "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "face-api.js": "^0.22.2",
     "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
     "pg": "^8.16.3",
     "uuid": "^11.1.0"
   }
