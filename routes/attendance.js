@@ -1,6 +1,67 @@
 // routes/location.js
 const express = require('express');
 const router = express.Router();
+const {
+  loadModels,
+  getFaceDescriptorFromUrl,
+  euclideanDistance,
+} = require('../utils/faceUtils');
+
+// Load face-api models at server start
+loadModels();
+
+
+router.post('/verify-face', async (req, res) => {
+  try {
+    const { employeeId, capturedUrl } = req.body;
+
+    if (!employeeId || !capturedUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Both employeeId and capturedUrl are required',
+      });
+    }
+
+    // Fetch registered image URL from DB
+    const result = await pool.query(
+      'SELECT image FROM employees WHERE id = $1',
+      [employeeId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found',
+      });
+    }
+
+    const registeredUrl = result.rows[0].image;
+
+    // Get face descriptors
+    const registeredDescriptor = await getFaceDescriptorFromUrl(registeredUrl);
+    const capturedDescriptor = await getFaceDescriptorFromUrl(capturedUrl);
+
+    if (!registeredDescriptor || !capturedDescriptor) {
+      return res.status(400).json({
+        success: false,
+        message: 'Could not detect face in one or both images',
+      });
+    }
+
+    // Compare descriptors
+    const distance = euclideanDistance(registeredDescriptor, capturedDescriptor);
+    const isMatch = distance < 0.6;
+
+    res.json({
+      success: true,
+      match: isMatch,
+      distance,
+    });
+  } catch (error) {
+    console.error('Face verification error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Office coordinates (example)
 const OFFICE_LAT =  17.677607;
