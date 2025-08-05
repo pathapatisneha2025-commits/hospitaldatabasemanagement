@@ -12,7 +12,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-// Multer local storage config with file filter
+// Multer local storage config
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadDir); // uploads/ folder
@@ -23,28 +23,10 @@ const storage = multer.diskStorage({
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|webp/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
-  if (extname && mimetype) {
-    cb(null, true);
-  } else {
-    cb(new Error('Unsupported image type'));
-  }
-};
+const upload = multer({ storage });
 
-const upload = multer({ storage, fileFilter });
-
-// ✅ Register new employee
-router.post('/register', (req, res, next) => {
-  upload.single('image')(req, res, function (err) {
-    if (err instanceof multer.MulterError || err) {
-      return res.status(400).json({ success: false, error: err.message });
-    }
-    next();
-  });
-}, async (req, res) => {
+// Register new employee
+router.post('/register', upload.single('image'), async (req, res) => {
   try {
     const {
       fullName,
@@ -71,7 +53,7 @@ router.post('/register', (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+    const imageUrl = `/uploads/${file.filename}`; // Local image path to be served
 
     const result = await pool.query(
       `INSERT INTO employees 
@@ -87,11 +69,12 @@ router.post('/register', (req, res, next) => {
   }
 });
 
-// ✅ Employee login
+// Employee login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // 1. Check if employee exists
     const result = await pool.query(
       `SELECT * FROM employees WHERE email = $1`,
       [email]
@@ -103,11 +86,13 @@ router.post('/login', async (req, res) => {
 
     const employee = result.rows[0];
 
+    // 2. Compare hashed password
     const isMatch = await bcrypt.compare(password, employee.password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
+    // 3. Success response (you can add token later if needed)
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -128,17 +113,16 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ✅ Fetch all employees
+// Fetch all employees
 router.get('/all', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT id, full_name, email, department, role, dob, image FROM employees'
-    );
+    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image FROM employees');
     res.status(200).json({ success: true, employees: result.rows });
   } catch (error) {
     console.error('Error fetching employees:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 module.exports = router;
