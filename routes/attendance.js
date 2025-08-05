@@ -1,11 +1,7 @@
 // routes/location.js
 const express = require('express');
 const router = express.Router();
-const {
-  loadModels,
-  getFaceDescriptorFromUrl,
-  euclideanDistance,
-} = require('../utils/faceUtils');
+const { loadModels, getDescriptor, euclideanDistance } = require('./faceUtils');
 
 // Load face-api models at server start
 loadModels();
