@@ -38,7 +38,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       dob
     } = req.body;
 
-    const imageFile = req.file; // ✅ Corrected
+  const file = req.file;
 
     if (password !== confirmPassword) {
       return res.status(400).json({
@@ -49,7 +49,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const imageUrl = imageFile?.path || null; // ✅ Corrected
+    const imageUrl = file.path; // ✅ Corrected
 
     const result = await pool.query(
       `INSERT INTO employees 
