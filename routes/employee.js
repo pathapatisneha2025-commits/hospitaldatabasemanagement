@@ -18,7 +18,7 @@ router.get('/', (req, res) => {
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: "products", // Optional folder name in Cloudinary
+    folder: "employee", // Optional folder name in Cloudinary
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
     public_id: (req, file) => Date.now() + "-" + file.originalname,
   },
