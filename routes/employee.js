@@ -3,14 +3,34 @@ const bcrypt = require('bcrypt');
 const router = express.Router();
 const pool = require('../db');
 const multer = require('multer');
-
+const path = require('path');
+const fs = require('fs');
 router.get('/', (req, res) => {
   res.send('Employee API is working!');
 });
 
 // Register new employee
-const storage = multer.memoryStorage(); // use diskStorage if needed
+
+
+// Create upload directory if it doesn't exist
+const uploadDir = 'uploads/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+// Configure diskStorage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueName = Date.now() + '-' + file.originalname;
+    cb(null, uniqueName);
+  }
+});
+
 const upload = multer({ storage: storage });
+
 
 router.post('/register', upload.single('image'), async (req, res) => {
   try {
@@ -26,7 +46,6 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const imageFile = req.file;
 
-    // ✅ Check if password and confirmPassword match
     if (password !== confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -34,13 +53,10 @@ router.post('/register', upload.single('image'), async (req, res) => {
       });
     }
 
-    // ✅ Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Image (you can save as buffer or base64 or store filename if using disk)
-    const image = imageFile?.buffer || null;
+    const image = imageFile?.filename || null; // ✅ filename from diskStorage
 
-    // ✅ Insert into DB
     const result = await pool.query(
       `INSERT INTO employees 
         (full_name, email, password, department, role, dob, image)
@@ -54,6 +70,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 // Employee login
 router.post('/login', async (req, res) => {
   try {
