@@ -26,7 +26,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-router.post('/register', upload.array('image'), async (req, res) => {
+router.post('/register', upload.single('image'), async (req, res) => {
   try {
     const {
       fullName,
@@ -38,7 +38,7 @@ router.post('/register', upload.array('image'), async (req, res) => {
       dob
     } = req.body;
 
-    const files = req.files || [];
+    const imageFile = req.file; // ✅ Corrected
 
     if (password !== confirmPassword) {
       return res.status(400).json({
@@ -49,8 +49,7 @@ router.post('/register', upload.array('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Use Cloudinary image URL
-    const imageUrl = files.map(file => file.path);
+    const imageUrl = imageFile?.path || null; // ✅ Corrected
 
     const result = await pool.query(
       `INSERT INTO employees 
@@ -65,6 +64,7 @@ router.post('/register', upload.array('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 // Employee login
 router.post('/login', async (req, res) => {
