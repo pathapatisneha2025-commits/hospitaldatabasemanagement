@@ -5,7 +5,9 @@ const pool = require('../db');
 const multer = require('multer');
 const path = require('path');
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const cloudinary = require("../cloudinary");router.get('/', (req, res) => {
+const cloudinary = require("../cloudinary");
+
+router.get('/', (req, res) => {
   res.send('Employee API is working!');
 });
 
