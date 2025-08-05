@@ -9,7 +9,7 @@ const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
 // Models folder path
-const MODEL_PATH = path.join(__dirname, '../models');
+const MODEL_PATH = path.join(__dirname, 'models');
 
 // Load models from disk
 const loadModels = async () => {
