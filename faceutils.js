@@ -9,13 +9,13 @@ const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
 // Models folder path
-const MODEL_PATH = path.join(__dirname, '../face-api-models');
+const MODEL_PATH = path.join(__dirname, '../models');
 
 // Load models from disk
 const loadModels = async () => {
-  await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_PATH);
-  await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_PATH);
-  await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_PATH);
+await faceapi.nets.ssdMobilenetv1.loadFromDisk(path.join(__dirname, 'models', 'ssd_mobilenetv1_model'));
+await faceapi.nets.faceLandmark68Net.loadFromDisk(path.join(__dirname, 'models', 'face_landmark_68_model'));
+await faceapi.nets.faceRecognitionNet.loadFromDisk(path.join(__dirname, 'models', 'face_recognition_model'));
 };
 
 // Load image from URL and get face descriptor
