@@ -26,7 +26,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-router.post('/register', upload.single('image'), async (req, res) => {
+router.post('/register', upload.array('image'), async (req, res) => {
   try {
     const {
       fullName,
@@ -38,7 +38,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       dob
     } = req.body;
 
-    const imageFile = req.files || [];
+    const files = req.files || [];
 
     if (password !== confirmPassword) {
       return res.status(400).json({
