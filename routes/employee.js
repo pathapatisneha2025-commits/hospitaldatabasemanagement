@@ -2,13 +2,17 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const router = express.Router();
 const pool = require('../db');
+const multer = require('multer');
 
 router.get('/', (req, res) => {
   res.send('Employee API is working!');
 });
 
 // Register new employee
-router.post('/register', async (req, res) => {
+const storage = multer.memoryStorage(); // use diskStorage if needed
+const upload = multer({ storage: storage });
+
+router.post('/register', upload.single('image'), async (req, res) => {
   try {
     const {
       fullName,
@@ -17,9 +21,10 @@ router.post('/register', async (req, res) => {
       confirmPassword,
       department,
       role,
-      dob,
-      image
+      dob
     } = req.body;
+
+    const imageFile = req.file;
 
     // ✅ Check if password and confirmPassword match
     if (password !== confirmPassword) {
@@ -29,12 +34,15 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ✅ Hash the password using bcrypt
-    const hashedPassword = await bcrypt.hash(password,10);
+    // ✅ Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Insert employee with hashed password
+    // ✅ Image (you can save as buffer or base64 or store filename if using disk)
+    const image = imageFile?.buffer || null;
+
+    // ✅ Insert into DB
     const result = await pool.query(
-      `INSERT INTO employees
+      `INSERT INTO employees 
         (full_name, email, password, department, role, dob, image)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [fullName, email, hashedPassword, department, role, dob, image]
@@ -46,7 +54,6 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
 // Employee login
 router.post('/login', async (req, res) => {
   try {
