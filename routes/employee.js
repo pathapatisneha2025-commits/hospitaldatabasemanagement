@@ -4,22 +4,15 @@ const router = express.Router();
 const pool = require('../db');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../cloudinary");
 // Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-// Multer local storage config
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir); // uploads/ folder
-  },
-  filename: function (req, file, cb) {
-    const uniqueName = Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
-    cb(null, uniqueName);
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "products", // Optional folder name in Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    public_id: (req, file) => Date.now() + "-" + file.originalname,
   },
 });
 
@@ -53,7 +46,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const imageUrl = `/uploads/${file.filename}`; // Local image path to be served
+    const imageUrl = file.path; // Local image path to be served
 
     const result = await pool.query(
       `INSERT INTO employees 
