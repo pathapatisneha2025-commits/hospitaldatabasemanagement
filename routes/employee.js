@@ -12,7 +12,10 @@ const storage = new CloudinaryStorage({
   params: {
     folder: "employee",
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
-    public_id: (req, file) => Date.now() + "-" + file.originalname,
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name;
+      return Date.now() + "-" + nameWithoutExt;
+    },
   },
 });
 
