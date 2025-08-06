@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { loadModels, getFaceDescriptorFromUrl, euclideanDistance } = require('../utils/faceUtils');
 const pool = require('../db');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('../cloudinary');
 
 // Load face-api models at server start
 (async () => {
@@ -10,22 +12,32 @@ const pool = require('../db');
   console.log('Models loaded');
 })();
 
-router.post('/verify-face', async (req, res) => {
-  try {
-    const { employeeId, capturedUrl } = req.body;
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'employee_faces',
+    allowed_formats: ['jpg', 'jpeg', 'png'],
+  },
+});
 
-    if (!employeeId || !capturedUrl) {
+const upload = multer({ storage });
+
+// 👉 Use multer middleware for file upload
+router.post('/verify-face', upload.single('image'), async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+
+    if (!employeeId || !req.file || !req.file.path) {
       return res.status(400).json({
         success: false,
-        message: 'Both employeeId and capturedUrl are required',
+        message: 'employeeId and image file are required',
       });
     }
 
+    const capturedUrl = req.file.path;
+
     // Fetch registered image URL from DB
-    const result = await pool.query(
-      'SELECT image FROM employees WHERE id = $1',
-      [employeeId]
-    );
+    const result = await pool.query('SELECT image FROM employees WHERE id = $1', [employeeId]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
