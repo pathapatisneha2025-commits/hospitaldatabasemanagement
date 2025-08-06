@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { loadModels, getFaceDescriptorFromUrl, euclideanDistance } = require('../utils/faceUtils');
 const pool = require('../db');
+const multer = require('multer');
+
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../cloudinary');
 
