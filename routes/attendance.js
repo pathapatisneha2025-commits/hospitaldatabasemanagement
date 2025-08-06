@@ -1,7 +1,7 @@
 // routes/location.js
 const express = require('express');
 const router = express.Router();
-const { loadModels, getDescriptor, euclideanDistance } = require('../utils/faceUtils');
+const { loadModels, getFaceDescriptorFromUrl, euclideanDistance } = require('../utils/faceUtils');
 const pool = require('../db');
 
 // Load face-api models at server start
@@ -35,8 +35,8 @@ router.post('/verify-face', async (req, res) => {
     const registeredUrl = result.rows[0].image;
 
     // Get face descriptors
-    const registeredDescriptor = await getDescriptor(registeredUrl);
-    const capturedDescriptor = await getDescriptor(capturedUrl);
+    const registeredDescriptor = await getFaceDescriptorFromUrl(registeredUrl);
+    const capturedDescriptor = await getFaceDescriptorFromUrl(capturedUrl);
 
     if (!registeredDescriptor || !capturedDescriptor) {
       return res.status(400).json({
