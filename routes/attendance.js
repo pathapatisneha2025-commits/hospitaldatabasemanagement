@@ -5,8 +5,10 @@ const { loadModels, getFaceDescriptorFromUrl, euclideanDistance } = require('../
 const pool = require('../db');
 
 // Load face-api models at server start
-loadModels();
-
+(async () => {
+  await loadModels();
+  console.log('Models loaded');
+})();
 
 router.post('/verify-face', async (req, res) => {
   try {
