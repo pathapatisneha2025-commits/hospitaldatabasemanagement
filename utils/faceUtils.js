@@ -1,42 +1,38 @@
+// utils/faceUtils.js
 const faceapi = require('face-api.js');
-const canvas = require('canvas');
+const canvas =  require('canvas');
+const path = require('path');
 const fetch = require('node-fetch');
 
 // Setup canvas for face-api
 const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
-// Cloudinary model hosting base URL
-const MODEL_URL = 'https://res.cloudinary.com/dtsdj9mll/raw/upload/employee';
+// Models folder path
+const MODEL_PATH = path.join(__dirname, 'models');
 
-// Load models from Cloudinary
+// Load models from disk
 const loadModels = async () => {
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(`${MODEL_URL}/ssd_mobilenetv1_model`);
-  await faceapi.nets.faceLandmark68Net.loadFromUri(`${MODEL_URL}/face_landmark_68_model`);
-  await faceapi.nets.faceRecognitionNet.loadFromUri(`${MODEL_URL}/face_recognition_model`);
-  console.log("Models loaded from Cloudinary");
+await faceapi.nets.ssdMobilenetv1.loadFromDisk(path.join(__dirname, 'models', 'ssd_mobilenetv1_model'));
+await faceapi.nets.faceLandmark68Net.loadFromDisk(path.join(__dirname, 'models', 'face_landmark_68_model'));
+await faceapi.nets.faceRecognitionNet.loadFromDisk(path.join(__dirname, 'models', 'face_recognition_model'));
 };
 
-// Load image from Cloudinary URL and get face descriptor
+// Load image from URL and get face descriptor
 const getFaceDescriptorFromUrl = async (url) => {
-  try {
-    const response = await fetch(url);
-    const buffer = await response.buffer();
-    const img = await canvas.loadImage(buffer);
+  const response = await fetch(url);
+  const buffer = await response.buffer();
+  const img = await canvas.loadImage(buffer);
 
-    const detection = await faceapi
-      .detectSingleFace(img)
-      .withFaceLandmarks()
-      .withFaceDescriptor();
+  const detection = await faceapi
+    .detectSingleFace(img)
+    .withFaceLandmarks()
+    .withFaceDescriptor();
 
-    return detection?.descriptor || null;
-  } catch (error) {
-    console.error('Error getting face descriptor:', error.message);
-    return null;
-  }
+  return detection?.descriptor || null;
 };
 
-// Calculate Euclidean distance manually
+// Calculate Euclidean distance manually (alternative to faceapi.euclideanDistance)
 const euclideanDistance = (desc1, desc2) => {
   let sum = 0;
   for (let i = 0; i < desc1.length; i++) {
