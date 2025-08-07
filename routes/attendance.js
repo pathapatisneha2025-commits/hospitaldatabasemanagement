@@ -116,16 +116,26 @@ router.post('/mark-attendance', async (req, res) => {
   try {
     const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
 
+    // Validate required fields
     if (
       !employeeId ||
       !capturedUrl ||
       locationVerified !== true ||
-      faceVerified !== true 
+      faceVerified !== true
     ) {
       return res.status(400).json({ success: false, message: 'Missing or invalid required fields' });
     }
-    const status = 'On Duty'; // Automatically set if verification passed
 
+    // Check if employee exists in the employees table
+    const employeeResult = await pool.query('SELECT * FROM employees WHERE id = $1', [employeeId]);
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const status = 'On Duty'; // Set status automatically if verification passed
+
+    // Insert into attendance table
     await pool.query(
       'INSERT INTO attendance (employee_id, timestamp, image_url, status) VALUES ($1, NOW(), $2, $3)',
       [employeeId, capturedUrl, status]
@@ -137,6 +147,7 @@ router.post('/mark-attendance', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 
 module.exports = router;
