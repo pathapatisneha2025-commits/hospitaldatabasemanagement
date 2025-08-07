@@ -114,7 +114,7 @@ router.post('/verify-location', (req, res) => {
 });
 router.post('/mark-attendance', async (req, res) => {
   try {
-    const { employeeId, capturedUrl, locationVerified, faceVerified, status } = req.body;
+    const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
 
     if (
       !employeeId ||
@@ -125,6 +125,7 @@ router.post('/mark-attendance', async (req, res) => {
     ) {
       return res.status(400).json({ success: false, message: 'Missing or invalid required fields' });
     }
+    const status = 'On Duty'; // Automatically set if verification passed
 
     await pool.query(
       'INSERT INTO attendance (employee_id, timestamp, image_url, status) VALUES ($1, NOW(), $2, $3)',
