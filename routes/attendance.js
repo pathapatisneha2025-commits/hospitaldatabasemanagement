@@ -44,6 +44,7 @@ router.post('/verify-face', upload.single('image'), async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
+        capturedUrl,
         message: 'Employee not found',
       });
     }
@@ -111,5 +112,31 @@ router.post('/verify-location', (req, res) => {
     return res.json({ locationVerified: false, distance });
   }
 });
+router.post('/mark-attendance', async (req, res) => {
+  try {
+    const { employeeId, capturedUrl, locationVerified, faceVerified, status } = req.body;
+
+    if (
+      !employeeId ||
+      !capturedUrl ||
+      locationVerified !== true ||
+      faceVerified !== true ||
+      !status
+    ) {
+      return res.status(400).json({ success: false, message: 'Missing or invalid required fields' });
+    }
+
+    await pool.query(
+      'INSERT INTO attendance (employee_id, timestamp, image_url, status) VALUES ($1, NOW(), $2, $3)',
+      [employeeId, capturedUrl, status]
+    );
+
+    return res.json({ success: true, message: 'Attendance marked successfully' });
+  } catch (error) {
+    console.error('Mark attendance error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 module.exports = router;
