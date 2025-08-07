@@ -120,8 +120,7 @@ router.post('/mark-attendance', async (req, res) => {
       !employeeId ||
       !capturedUrl ||
       locationVerified !== true ||
-      faceVerified !== true ||
-      !status
+      faceVerified !== true 
     ) {
       return res.status(400).json({ success: false, message: 'Missing or invalid required fields' });
     }
