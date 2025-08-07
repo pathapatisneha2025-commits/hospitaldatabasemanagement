@@ -98,9 +98,9 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
 }
 
 router.post('/verify-location', (req, res) => {
-  const { latitude, longitude } = req.body;
+  const { employeeId,latitude, longitude } = req.body;
 
-  if (!latitude || !longitude) {
+  if (!employeeId||!latitude || !longitude) {
     return res.status(400).json({ success: false, message: 'Missing coordinates' });
   }
 
