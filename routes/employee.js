@@ -4,6 +4,8 @@ const router = express.Router();
 const pool = require('../db');
 const multer = require('multer');
 const path = require('path');
+const nodemailer = require('nodemailer');
+
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
 // Create uploads directory if it doesn't exist
@@ -106,6 +108,52 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error.message);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // 1. Check if user exists
+    const user = await pool.query('SELECT * FROM employees WHERE email = $1', [email]);
+    if (user.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // 2. Generate a secure token and expiry time
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+
+    // 3. Store token and expiry in database
+    await pool.query(
+      'UPDATE employees SET reset_token = $1, reset_token_expires = $2 WHERE email = $3',
+      [token, expiresAt, email]
+    );
+
+    // 4. Construct the reset password link
+    const resetLink = `http://localhost:3000/reset-password?token=${token}`;
+
+    // 5. Configure the email transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS,
+      },
+    });
+    // 6. Send the reset email
+    await transporter.sendMail({
+      to: email,
+      subject: 'Password Reset',
+      html: `<p>Click <a href="${resetLink}">here</a> to reset your password. This link is valid for 1 hour.</p>`,
+    });
+
+    // 7. Respond to client
+    res.json({ message: 'Password reset email sent' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
