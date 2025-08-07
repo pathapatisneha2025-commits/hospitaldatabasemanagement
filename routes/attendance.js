@@ -44,8 +44,7 @@ router.post('/verify-face', upload.single('image'), async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        capturedUrl,
-        message: 'Employee not found',
+       message: 'Employee not found',
       });
     }
 
@@ -69,6 +68,7 @@ router.post('/verify-face', upload.single('image'), async (req, res) => {
     res.json({
       success: true,
       match: isMatch,
+        capturedUrl,
       distance,
     });
   } catch (error) {
