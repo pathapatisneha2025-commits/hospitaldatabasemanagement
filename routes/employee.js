@@ -158,10 +158,42 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
+router.post('/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  try {
+    // 1. Find the user with the matching token
+    const result = await pool.query(
+      'SELECT * FROM employees WHERE reset_token = $1 AND reset_token_expires > NOW()',
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    const user = result.rows[0];
+
+    // 2. Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 3. Update the user's password and clear the token
+    await pool.query(
+      'UPDATE employees SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE email = $2',
+      [hashedPassword, user.email]
+    );
+
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Fetch all employees
 router.get('/all', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image FROM employees');
+    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image,reset_token FROM employees');
     res.status(200).json({ success: true, employees: result.rows });
   } catch (error) {
     console.error('Error fetching employees:', error.message);
