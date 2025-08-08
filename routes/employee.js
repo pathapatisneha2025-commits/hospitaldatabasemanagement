@@ -201,5 +201,72 @@ router.get('/all', async (req, res) => {
   }
 });
 
+router.put('/update/:id', upload.single('image'), async (req, res) => {
+  const { id } = req.params;
+  const {
+    fullName,
+    email,
+    password,
+    confirmPassword,
+    department,
+    role,
+    dob,
+  } = req.body;
+
+  try {
+    // Get current employee data
+    const existing = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const existingEmployee = existing.rows[0];
+
+    // Handle image
+    const imageUrl = req.file ? req.file.path : existingEmployee.image;
+
+    // Handle password update if provided
+    let hashedPassword = existingEmployee.password;
+    if (password && confirmPassword) {
+      if (password !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password and Confirm Password do not match',
+        });
+      }
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    const result = await pool.query(
+      `UPDATE employees
+       SET full_name = $1,
+           email = $2,
+           password = $3,
+           department = $4,
+           role = $5,
+           dob = $6,
+           image = $7
+       WHERE id = $8
+       RETURNING *`,
+      [
+        fullName || existingEmployee.full_name,
+        email || existingEmployee.email,
+        hashedPassword,
+        department || existingEmployee.department,
+        role || existingEmployee.role,
+        dob || existingEmployee.dob,
+        imageUrl,
+        id
+      ]
+    );
+
+    res.json({ success: true, employee: result.rows[0] });
+
+  } catch (error) {
+    console.error('Update error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 module.exports = router;
