@@ -112,12 +112,14 @@ router.post('/login', async (req, res) => {
   }
 });
 
+
+
 router.post('/forgot-password', async (req, res) => {
-  const { email, newPassword, confirmNewPassword } = req.body;
+  const { employeeId, email, newPassword, confirmNewPassword } = req.body;
 
   try {
     // 1. Validate input
-    if (!email || !newPassword || !confirmNewPassword) {
+    if (!employeeId || !email || !newPassword || !confirmNewPassword) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -125,17 +127,24 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Passwords do not match' });
     }
 
-    // 2. Check if user exists
-    const userResult = await pool.query('SELECT * FROM employees WHERE email = $1', [email]);
+    // 2. Check if user exists with matching employee ID and email
+    const userResult = await pool.query(
+      'SELECT * FROM employees WHERE id = $1 AND email = $2',
+      [employeeId, email]
+    );
+
     if (userResult.rows.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'User not found with provided Employee ID and Email' });
     }
 
     // 3. Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // 4. Update password in database
-    await pool.query('UPDATE employees SET password = $1 WHERE email = $2', [hashedPassword, email]);
+    await pool.query(
+      'UPDATE employees SET password = $1 WHERE id = $2 AND email = $3',
+      [hashedPassword, employeeId, email]
+    );
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -143,6 +152,9 @@ router.post('/forgot-password', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+module.exports = router;
+
 
 
 
