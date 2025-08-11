@@ -5,6 +5,8 @@ const express = require('express');
 const cors = require('cors');
 const employeeRoutes = require('./routes/employee');
 const attendanceRoutes = require('./routes/attendance');
+const taskRoutes = require('./routes/task');
+
 
 
 const app = express();
@@ -14,6 +16,8 @@ app.use(cors());
 app.use(express.json());
 app.use('/employee', employeeRoutes);
 app.use('/attendance',attendanceRoutes);
+app.use('/task',taskRoutes);
+
 
 
 
