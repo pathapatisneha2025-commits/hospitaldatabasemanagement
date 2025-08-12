@@ -166,7 +166,7 @@ router.post('/mark-attendance', async (req, res) => {
     // Step 5: Insert attendance record
     await pool.query(
       `INSERT INTO attendance
-        (employee_id, timestamp, image_url, status, deduction_amount, remaining_salary)
+        (employee_id, timestamp, image_url, status, remaining_salary)
        VALUES ($1, NOW(), $2, $3, $4, $5)`,
       [employeeId, capturedUrl, status, deduction_amount, remaining_salary]
     );
