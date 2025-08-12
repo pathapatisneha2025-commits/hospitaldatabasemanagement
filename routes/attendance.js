@@ -168,7 +168,7 @@ router.post('/mark-attendance', async (req, res) => {
       `INSERT INTO attendance
         (employee_id, timestamp, image_url, status, remaining_salary)
        VALUES ($1, NOW(), $2, $3, $4)`,
-      [employeeId, capturedUrl, status, deduction_amount, remaining_salary]
+      [employeeId, capturedUrl, status,  remaining_salary]
     );
 
     return res.json({
