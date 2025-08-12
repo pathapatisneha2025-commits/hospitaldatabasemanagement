@@ -35,6 +35,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       department,
       role,
       dob,
+       monthlySalary 
     } = req.body;
 
     const file = req.file;
@@ -56,9 +57,9 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO employees 
-        (full_name, email, password, department, role, dob, image)
+        (full_name, email, password, department, role, dob, image,monthly_salary)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [fullName, email, hashedPassword, department, role, dob, imageUrl]
+      [fullName, email, hashedPassword, department, role, dob, imageUrl,monthlySalary]
     );
 
     res.status(201).json({ success: true, employee: result.rows[0] });
@@ -161,7 +162,7 @@ module.exports = router;
 // Fetch all employees
 router.get('/all', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image,reset_token FROM employees');
+    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image,monthly_salary,reset_token FROM employees');
     res.status(200).json({ success: true, employees: result.rows });
   } catch (error) {
     console.error('Error fetching employees:', error.message);
@@ -179,6 +180,7 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     department,
     role,
     dob,
+    monthlySalary
   } = req.body;
 
   try {
@@ -206,15 +208,16 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE employees
+       `UPDATE employees
        SET full_name = $1,
            email = $2,
            password = $3,
            department = $4,
            role = $5,
            dob = $6,
-           image = $7
-       WHERE id = $8
+           image = $7,
+           monthly_salary = $8
+       WHERE id = $9
        RETURNING *`,
       [
         fullName || existingEmployee.full_name,
@@ -223,6 +226,8 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
         department || existingEmployee.department,
         role || existingEmployee.role,
         dob || existingEmployee.dob,
+                monthlySalary || existingEmployee.monthly_salary,
+
         imageUrl,
         id
       ]

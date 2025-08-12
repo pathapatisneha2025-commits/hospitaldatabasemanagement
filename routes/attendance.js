@@ -116,32 +116,72 @@ router.post('/mark-attendance', async (req, res) => {
   try {
     const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
 
-    // Validate required fields
-    if (
-      !employeeId ||
-      !capturedUrl ||
-      locationVerified !== true ||
-      faceVerified !== true
-    ) {
-      return res.status(400).json({ success: false, message: 'Missing or invalid required fields' });
+    if (!employeeId || !capturedUrl) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
-    // Check if employee exists in the employees table
-    const employeeResult = await pool.query('SELECT * FROM employees WHERE id = $1', [employeeId]);
+    // Step 1: Decide status based on verification
+    let status = 'Off Duty';
+    if (locationVerified === true && faceVerified === true) {
+      status = 'On Duty';
+    }
 
+    // Step 2: Get employee salary (fixed working_days = 26)
+    const employeeResult = await pool.query(
+      'SELECT monthly_salary FROM employees WHERE id = $1',
+      [employeeId]
+    );
     if (employeeResult.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    const status = 'On Duty'; // Set status automatically if verification passed
+    const { monthly_salary } = employeeResult.rows[0];
+    const working_days = 26; // Fixed value
+    const per_day_salary = monthly_salary / working_days;
 
-    // Insert into attendance table
-    await pool.query(
-      'INSERT INTO attendance (employee_id, timestamp, image_url, status) VALUES ($1, NOW(), $2, $3)',
-      [employeeId, capturedUrl, status]
+    let deduction_amount = 0;
+    let remaining_salary = monthly_salary;
+
+    // Step 3: Get last remaining salary for the current month
+    const lastAttendance = await pool.query(
+      `SELECT remaining_salary
+       FROM attendance
+       WHERE employee_id = $1
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+       ORDER BY timestamp DESC
+       LIMIT 1`,
+      [employeeId]
     );
 
-    return res.json({ success: true, message: 'Attendance marked successfully' });
+    if (lastAttendance.rows.length > 0) {
+      remaining_salary = parseFloat(lastAttendance.rows[0].remaining_salary);
+    }
+
+    // Step 4: Deduct if Off Duty
+    if (status.toLowerCase() === 'off duty') {
+      deduction_amount = per_day_salary;
+      remaining_salary -= deduction_amount;
+    }
+
+    // Step 5: Insert attendance record
+    await pool.query(
+      `INSERT INTO attendance
+        (employee_id, timestamp, image_url, status, deduction_amount, remaining_salary)
+       VALUES ($1, NOW(), $2, $3, $4, $5)`,
+      [employeeId, capturedUrl, status, deduction_amount, remaining_salary]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Attendance marked successfully',
+      data: {
+        employeeId,
+        status,
+        deduction_amount,
+        remaining_salary
+      }
+    });
+
   } catch (error) {
     console.error('Mark attendance error:', error.message);
     res.status(500).json({ success: false, message: 'Server error' });
