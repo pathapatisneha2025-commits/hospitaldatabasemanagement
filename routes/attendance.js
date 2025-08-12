@@ -167,7 +167,7 @@ router.post('/mark-attendance', async (req, res) => {
     await pool.query(
       `INSERT INTO attendance
         (employee_id, timestamp, image_url, status, remaining_salary)
-       VALUES ($1, NOW(), $2, $3, $4, $5)`,
+       VALUES ($1, NOW(), $2, $3, $4)`,
       [employeeId, capturedUrl, status, deduction_amount, remaining_salary]
     );
 
