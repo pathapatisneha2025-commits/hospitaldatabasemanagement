@@ -58,7 +58,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
     const result = await pool.query(
       `INSERT INTO employees 
         (full_name, email, password, department, role, dob, image,monthly_salary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7,$8) RETURNING *`,
       [fullName, email, hashedPassword, department, role, dob, imageUrl,monthlySalary]
     );
 
