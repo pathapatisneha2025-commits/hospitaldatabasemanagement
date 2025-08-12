@@ -187,6 +187,27 @@ router.post('/mark-attendance', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+// Get all attendance records
+router.get('/all', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status, a.remaining_salary
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       ORDER BY a.timestamp DESC`
+    );
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get attendance error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 
 
