@@ -78,8 +78,8 @@ router.post('/verify-face', upload.single('image'), async (req, res) => {
 });
 
 // Office coordinates (example)
-const OFFICE_LAT =  17.677607;
-const OFFICE_LNG =  83.198662;
+const OFFICE_LAT =  14.6832402;
+const OFFICE_LNG =  77.5638584;
 const RADIUS_IN_METERS = 1000; // Acceptable distance
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
