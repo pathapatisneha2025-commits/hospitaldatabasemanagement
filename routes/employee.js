@@ -103,7 +103,8 @@ router.post('/login', async (req, res) => {
         department: employee.department,
         role: employee.role,
         dob: employee.dob,
-        image: employee.image
+        image: employee.image,
+        monthlysalary: employee.monthly_salary
       }
     });
 
