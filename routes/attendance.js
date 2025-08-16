@@ -177,8 +177,7 @@ router.post('/mark-attendance', async (req, res) => {
       data: {
         employeeId,
         status,
-        deduction_amount,
-        remaining_salary
+       remaining_salary
       }
     });
 
