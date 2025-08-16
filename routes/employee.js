@@ -170,6 +170,28 @@ router.get('/all', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+// Fetch employee by ID
+router.get('/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT id, full_name, email, department, role, dob, image, monthly_salary 
+       FROM employees WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    res.status(200).json({ success: true, employee: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching employee by ID:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 router.put('/update/:id', upload.single('image'), async (req, res) => {
   const { id } = req.params;
