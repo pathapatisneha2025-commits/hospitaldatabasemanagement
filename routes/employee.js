@@ -35,7 +35,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       department,
       role,
       dob,
-       monthlySalary 
+      monthlySalary 
     } = req.body;
 
     const file = req.file;
@@ -53,13 +53,13 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const imageUrl =file.path;// Local image path to be served
+    const imageUrl = file.path; // Local image path
 
     const result = await pool.query(
       `INSERT INTO employees 
-        (full_name, email, password, department, role, dob, image,monthly_salary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7,$8) RETURNING *`,
-      [fullName, email, hashedPassword, department, role, dob, imageUrl,monthlySalary]
+        (full_name, email, password, department, role, dob, image, monthly_salary, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [fullName, email, hashedPassword, department, role, dob, imageUrl, monthlySalary, "pending"]
     );
 
     res.status(201).json({ success: true, employee: result.rows[0] });
@@ -68,49 +68,58 @@ router.post('/register', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-// Employee login
-router.post('/login', async (req, res) => {
+router.post("/update-status", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { id, status } = req.body;
 
-    // 1. Check if employee exists
+    if (!id || !status) {
+      return res.status(400).json({ error: "Employee ID and status are required" });
+    }
+
     const result = await pool.query(
-      `SELECT * FROM employees WHERE email = $1`,
-      [email]
+      "UPDATE employees SET status = $1 WHERE id = $2 RETURNING *",
+      [status, id]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res.status(404).json({ error: "Employee not found" });
     }
 
-    const employee = result.rows[0];
-
-    // 2. Compare hashed password
-    const isMatch = await bcrypt.compare(password, employee.password);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
-    }
-
-    // 3. Success response (you can add token later if needed)
-    res.status(200).json({
-      success: true,
-      message: "Login successful",
-      employee: {
-        id: employee.id,
-        fullName: employee.full_name,
-        email: employee.email,
-        department: employee.department,
-        role: employee.role,
-        dob: employee.dob,
-        image: employee.image,
-        monthlysalary: employee.monthly_salary
-      }
-    });
-
+    res.json({ message: `Employee ${status}`, employee: result.rows[0] });
   } catch (error) {
-    console.error('Login error:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Employee login
+// routes/auth.js
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await pool.query("SELECT * FROM employees WHERE email = $1", [email]);
+
+    if (user.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const employee = user.rows[0];
+
+    // ✅ check approval status
+    if (employee.status !== "approved") {
+      return res.status(403).json({ error: "Account not approved yet" });
+    }
+
+    // 🔑 compare password (if you store hashed passwords, use bcrypt.compare)
+    if (employee.password !== password) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    res.json({ message: "Login successful", employee });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
