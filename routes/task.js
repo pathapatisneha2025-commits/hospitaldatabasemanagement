@@ -131,6 +131,36 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+router.post("/update-status", async (req, res) => {
+  try {
+    const { id, status } = req.body;
+
+    if (!id || !status) {
+      return res.status(400).json({ error: "Task ID and status are required" });
+    }
+
+    const query = `
+      UPDATE tasks
+      SET status = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, [status, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    res.status(200).json({
+      message: `Task status updated to ${status}.`,
+      task: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error updating task status:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 
 
