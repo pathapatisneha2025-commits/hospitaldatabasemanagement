@@ -111,14 +111,16 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ error: "Account not approved yet" });
     }
 
-    // 🔑 compare password (if you store hashed passwords, use bcrypt.compare)
-    if (employee.password !== password) {
+    // 🔑 check hashed password
+    const isMatch = await bcrypt.compare(password, employee.password);
+    if (!isMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    // ✅ login success
     res.json({ message: "Login successful", employee });
   } catch (error) {
-    console.error(error);
+    console.error("Login error:", error.message);
     res.status(500).json({ error: "Server error" });
   }
 });
