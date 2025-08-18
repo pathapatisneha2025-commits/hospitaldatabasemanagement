@@ -102,4 +102,36 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+// POST - Update Leave Status
+// POST - Update Leave Status
+router.post("/update-status", async (req, res) => {
+  try {
+    const { id, status } = req.body; // ✅ get id from body
+
+  
+
+    const query = `
+      UPDATE leaves 
+      SET status = $1 
+      WHERE id = $2 
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, [status, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Leave not found." });
+    }
+
+    res.status(200).json({
+      message: `Leave status updated to ${status}.`,
+      leave: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error updating leave status:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 module.exports = router;
