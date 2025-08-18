@@ -172,7 +172,7 @@ module.exports = router;
 // Fetch all employees
 router.get('/all', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image,monthly_salary,reset_token FROM employees');
+    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image,monthly_salary,status,reset_token FROM employees');
     res.status(200).json({ success: true, employees: result.rows });
   } catch (error) {
     console.error('Error fetching employees:', error.message);
