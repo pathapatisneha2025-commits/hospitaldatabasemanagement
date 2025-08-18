@@ -89,4 +89,17 @@ router.get("/by-employee/:id", async (req, res) => {
 });
 
 
+//  READ ALL - Get all leaves
+router.get("/all", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM leaves ORDER BY start_date DESC");
+    res.status(200).json({
+      message: "All leaves fetched successfully.",
+      leaves: result.rows,
+    });
+  } catch (error) {
+    console.error("Error fetching all leaves:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 module.exports = router;
