@@ -274,6 +274,27 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+// Delete employee by ID
+router.delete('/delete/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Check if employee exists
+    const existing = await pool.query("SELECT * FROM employees WHERE id = $1", [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    // Delete employee
+    await pool.query("DELETE FROM employees WHERE id = $1", [id]);
+
+    res.json({ success: true, message: "Employee deleted successfully" });
+  } catch (error) {
+    console.error("Delete error:", error.message);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 
 
 module.exports = router;
