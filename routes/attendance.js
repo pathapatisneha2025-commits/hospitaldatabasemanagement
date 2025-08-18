@@ -207,6 +207,37 @@ router.get('/all', async (req, res) => {
   }
 });
 
+// Get attendance by employee ID
+router.get('/employee/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status, a.remaining_salary
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       WHERE a.employee_id = $1
+       ORDER BY a.timestamp DESC`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No attendance records found for this employee',
+      });
+    }
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Get attendance by employee error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 
 

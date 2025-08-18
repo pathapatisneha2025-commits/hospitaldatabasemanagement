@@ -26,6 +26,29 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// ============================
+// Get all tasks
+// ============================
+router.get("/all", async (req, res) => {
+  try {
+    const tasks = await pool.query(
+      `SELECT t.*
+       FROM tasks t
+       LEFT JOIN employees e ON t.assignto = e.email
+       ORDER BY t.due_date ASC`
+    );
+
+    res.status(200).json({
+      success: true,
+      count: tasks.rows.length,
+      tasks: tasks.rows
+    });
+  } catch (err) {
+    console.error("Get all tasks error:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 // ============================
 // Get task by ID
