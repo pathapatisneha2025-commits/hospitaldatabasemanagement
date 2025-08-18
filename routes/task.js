@@ -6,18 +6,18 @@ const pool = require("../db"); // PostgreSQL pool connection
 // Create new task
 router.post("/add", async (req, res) => {
   try {
-    const { title, description, assignto, priority, due_date } = req.body;
+    const { title, description, assignto, priority, due_date, due_time } = req.body;
 
     // Basic validation
-    if (!title || !assignto || !priority || !due_date) {
+    if (!title || !assignto || !priority || !due_date || !due_time) {
       return res.status(400).json({ error: "Please fill all required fields" });
     }
 
-    // Insert task
+    // Insert task with default status "pending"
     const newTask = await pool.query(
-      `INSERT INTO tasks (title, description, assignto, priority, due_date) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [title, description || null, assignto, priority, due_date]
+      `INSERT INTO tasks (title, description, assignto, priority, due_date, due_time, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [title, description || null, assignto, priority, due_date, due_time, "pending"]
     );
 
     res.status(201).json({ message: "Task created successfully", task: newTask.rows[0] });
@@ -26,6 +26,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 // ============================
 // Get all tasks
 // ============================
