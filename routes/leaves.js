@@ -111,9 +111,7 @@ router.post("/salary-deduction", async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
-});
+
 // GET leaves by employee ID without storing employee_id in leaves table (based on full_name)
 router.get("/by-employee/:id", async (req, res) => {
   try {
