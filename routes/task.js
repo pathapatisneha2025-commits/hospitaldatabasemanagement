@@ -32,20 +32,17 @@ router.post("/add", async (req, res) => {
 // ============================
 router.get("/all", async (req, res) => {
   try {
-    // Step 1: Update overdue tasks and capture them
-    const overdueUpdate = await pool.query(`
-    UPDATE tasks
-SET status = 'overdue'
-WHERE status = 'pending'
-AND (
-  due_date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-  OR (due_date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-      AND due_time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
-);
-
+    // Step 1: Update overdue tasks
+    await pool.query(`
+      UPDATE tasks
+      SET status = 'overdue'
+      WHERE status = 'pending'
+      AND (
+        due_date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+        OR (due_date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+            AND due_time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
+      );
     `);
-
-    console.log("Overdue updated:", overdueUpdate.rows);
 
     // Step 2: Fetch all tasks
     const tasks = await pool.query(
@@ -61,11 +58,10 @@ AND (
       due_date: task.due_date.toISOString().split("T")[0]
     }));
 
-    // Step 4: Return both overdue updates + all tasks
+    // Step 4: Return only tasks (no overdue_updated)
     res.status(200).json({
       success: true,
       count: formatted.length,
-      overdue_updated: overdueUpdate.rows, // 👈 new field
       tasks: formatted
     });
 
@@ -74,6 +70,7 @@ AND (
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
