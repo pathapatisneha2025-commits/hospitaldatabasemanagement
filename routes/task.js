@@ -34,14 +34,15 @@ router.get("/all", async (req, res) => {
   try {
     // Step 1: Update overdue tasks and capture them
     const overdueUpdate = await pool.query(`
-      UPDATE tasks
-      SET status = 'overdue'
-      WHERE status = 'pending'
-      AND (
-        due_date < CURRENT_DATE 
-        OR (due_date = CURRENT_DATE AND due_time < CURRENT_TIME(0))
-      )
-      RETURNING id, title, due_date, due_time, status;
+    UPDATE tasks
+SET status = 'overdue'
+WHERE status = 'pending'
+AND (
+  due_date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+  OR (due_date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+      AND due_time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
+);
+
     `);
 
     console.log("Overdue updated:", overdueUpdate.rows);
