@@ -34,14 +34,13 @@ router.get("/all", async (req, res) => {
   try {
     // Overdue check (date and time separately)
     await pool.query(`
-     UPDATE tasks
-SET status = 'overdue'
-WHERE status = 'pending'
-AND (
-  due_date::date < CURRENT_DATE 
-  OR (due_date::date = CURRENT_DATE AND due_time < CURRENT_TIME)
-);
-
+      UPDATE tasks
+      SET status = 'overdue'
+      WHERE status = 'pending'
+      AND (
+        due_date < CURRENT_DATE 
+        OR (due_date = CURRENT_DATE AND due_time < CURRENT_TIME)
+      );
     `);
 
     const tasks = await pool.query(
@@ -51,7 +50,7 @@ AND (
        ORDER BY t.due_date ASC, t.due_time ASC`
     );
 
-  const formatted = tasks.rows.map(task => ({
+ const formatted = tasks.rows.map(task => ({
   ...task,
   due_date: task.due_date.toISOString().split("T")[0]  // only YYYY-MM-DD
 }));
