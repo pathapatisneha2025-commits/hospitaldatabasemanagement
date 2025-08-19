@@ -58,7 +58,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-app.post("/salary-deduction", async (req, res) => {
+router.post("/salary-deduction", async (req, res) => {
   try {
     const { employeeId, leaveDuration, startDate, endDate } = req.body;
 
