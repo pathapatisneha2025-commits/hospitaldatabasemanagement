@@ -92,8 +92,8 @@ router.get("/employee/:empId", async (req, res) => {
       WHERE status = 'pending'
       AND assignto = (SELECT email FROM employees WHERE id = $1)
       AND (
-    (due_date + due_time) < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
-  );`,
+        (due_date::timestamp + due_time::interval) < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
+      );`,
       [empId]
     );
 
