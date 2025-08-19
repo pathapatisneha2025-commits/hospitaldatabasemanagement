@@ -51,11 +51,16 @@ AND (
        ORDER BY t.due_date ASC, t.due_time ASC`
     );
 
-    res.status(200).json({
-      success: true,
-      count: tasks.rows.length,
-      tasks: tasks.rows
-    });
+  const formatted = tasks.rows.map(task => ({
+  ...task,
+  due_date: task.due_date.toISOString().split("T")[0]  // only YYYY-MM-DD
+}));
+
+res.status(200).json({
+  success: true,
+  count: formatted.length,
+  tasks: formatted
+});
   } catch (err) {
     console.error("Get all tasks error:", err.message);
     res.status(500).json({ error: "Server error" });
