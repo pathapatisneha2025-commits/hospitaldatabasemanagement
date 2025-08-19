@@ -32,11 +32,22 @@ router.post("/add", async (req, res) => {
 // ============================
 router.get("/all", async (req, res) => {
   try {
+    // Overdue check (date and time separately)
+    await pool.query(`
+      UPDATE tasks
+      SET status = 'overdue'
+      WHERE status = 'pending'
+      AND (
+        due_date < CURRENT_DATE 
+        OR (due_date = CURRENT_DATE AND due_time < CURRENT_TIME)
+      );
+    `);
+
     const tasks = await pool.query(
       `SELECT t.*
        FROM tasks t
        LEFT JOIN employees e ON t.assignto = e.email
-       ORDER BY t.due_date ASC`
+       ORDER BY t.due_date ASC, t.due_time ASC`
     );
 
     res.status(200).json({
