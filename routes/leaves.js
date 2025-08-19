@@ -102,7 +102,7 @@ router.post("/salary-deduction", async (req, res) => {
 
     // 🔹 Get how many leaves already taken (sum of equivalent days)
     const leaveResult = await pool.query(
-      `SELECT COALESCE(SUM(equivalent_days), 0) as used_leaves
+      `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
        FROM leaves 
        WHERE employee_id = $1 
          AND date_trunc('month', start_date) = date_trunc('month', CURRENT_DATE)`,
