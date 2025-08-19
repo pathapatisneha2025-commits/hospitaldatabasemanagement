@@ -58,6 +58,62 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+app.post("/salary-deduction", async (req, res) => {
+  try {
+    const { employeeId, leaveDuration, startDate, endDate } = req.body;
+
+    // Fetch employee monthly salary from DB
+    const result = await pool.query(
+      "SELECT monthly_salary FROM employees WHERE id = $1",
+      [employeeId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const monthlySalary = result.rows[0].salary;
+    const workingDays = 22; // Avg working days in month
+    const workingHoursPerDay = 8;
+
+    // Calculate per day and per hour salary
+    const perDaySalary = monthlySalary / workingDays;
+    const perHourSalary = perDaySalary / workingHoursPerDay;
+
+    let salaryDeduction = 0;
+
+    if (leaveDuration.toLowerCase() === "hourly") {
+      const hours =
+        (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
+      salaryDeduction = hours * perHourSalary;
+    } else if (leaveDuration.toLowerCase() === "halfday") {
+      salaryDeduction = perDaySalary / 2;
+    } else if (leaveDuration.toLowerCase() === "fullday") {
+      const days =
+        (new Date(endDate).setHours(0, 0, 0, 0) -
+          new Date(startDate).setHours(0, 0, 0, 0)) /
+          (1000 * 60 * 60 * 24) +
+        1;
+      salaryDeduction = days * perDaySalary;
+    }
+
+    res.json({
+      employeeId,
+      monthlySalary,
+      leaveDuration,
+      startDate,
+      endDate,
+      salaryDeduction: salaryDeduction.toFixed(2),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error calculating salary deduction" });
+  }
+});
+
+app.listen(3000, () => {
+  console.log("Server running on port 3000");
+});
 // GET leaves by employee ID without storing employee_id in leaves table (based on full_name)
 router.get("/by-employee/:id", async (req, res) => {
   try {
