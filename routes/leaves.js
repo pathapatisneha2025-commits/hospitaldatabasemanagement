@@ -64,9 +64,9 @@ router.post("/add", async (req, res) => {
 
 router.post("/salary-deduction", async (req, res) => {
   try {
-    const { employeeId, leaveDuration, startDate, endDate } = req.body;
+    const { employeeId, employeeName, leaveDuration, startDate, endDate } = req.body;
 
-    // Fetch employee salary
+    // ✅ Fetch employee salary using ID
     const result = await pool.query(
       "SELECT monthly_salary FROM employees WHERE id = $1",
       [employeeId]
@@ -77,9 +77,9 @@ router.post("/salary-deduction", async (req, res) => {
     }
 
     const monthlySalary = result.rows[0].monthly_salary;
-    const workingDays = 26;   
+    const workingDays = 26;
     const workingHoursPerDay = 8;
-    const paidLeaves = 3;     
+    const paidLeaves = 3;
 
     const perDaySalary = monthlySalary / workingDays;
     const perHourSalary = perDaySalary / workingHoursPerDay;
@@ -95,18 +95,19 @@ router.post("/salary-deduction", async (req, res) => {
       equivalentLeaveDays = 0.5;
     } else if (leaveDuration.toLowerCase() === "fullday") {
       equivalentLeaveDays =
-        (new Date(endDate).setHours(0, 0, 0, 0) - 
-         new Date(startDate).setHours(0, 0, 0, 0)) / 
-         (1000 * 60 * 60 * 24) + 1;
+        (new Date(endDate).setHours(0, 0, 0, 0) -
+          new Date(startDate).setHours(0, 0, 0, 0)) /
+          (1000 * 60 * 60 * 24) +
+        1;
     }
 
-    // 🔹 Get how many leaves already taken (sum of equivalent days)
+    // 🔹 Get how many leaves already taken this month (only by name)
     const leaveResult = await pool.query(
       `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
        FROM leaves 
-       WHERE employee_id = $1 
+       WHERE employee_name = $1
          AND date_trunc('month', start_date) = date_trunc('month', CURRENT_DATE)`,
-      [employeeId]
+      [employeeName]
     );
 
     const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
@@ -118,6 +119,7 @@ router.post("/salary-deduction", async (req, res) => {
 
     res.json({
       employeeId,
+      employeeName,
       monthlySalary,
       perDaySalary: perDaySalary.toFixed(2),
       perHourSalary: perHourSalary.toFixed(2),
@@ -127,12 +129,12 @@ router.post("/salary-deduction", async (req, res) => {
       unpaidDays,
       salaryDeduction: salaryDeduction.toFixed(2),
     });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
+
 
 
 
