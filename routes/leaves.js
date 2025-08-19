@@ -13,7 +13,8 @@ router.post("/add", async (req, res) => {
       end_date,
       leave_hours,
       reason,
-      status
+      status,
+      leavestaken // 👈 new field from req.body
     } = req.body;
 
     // Basic validation
@@ -30,9 +31,10 @@ router.post("/add", async (req, res) => {
         end_date,
         leave_hours,
         reason,
-        status
+        status,
+        leavestaken
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'Pending'))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'Pending'), COALESCE($9, 0))
       RETURNING *;
     `;
 
@@ -44,7 +46,8 @@ router.post("/add", async (req, res) => {
       end_date,
       leave_hours || null,
       reason || null,
-      status
+      status,
+      leavestaken // 👈 will be 0 if not passed because of COALESCE
     ];
 
     const result = await pool.query(query, values);
@@ -58,11 +61,12 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 router.post("/salary-deduction", async (req, res) => {
   try {
     const { employeeId, leaveDuration, startDate, endDate } = req.body;
 
-    // Fetch employee monthly salary from DB
+    // Fetch employee salary
     const result = await pool.query(
       "SELECT monthly_salary FROM employees WHERE id = $1",
       [employeeId]
@@ -72,44 +76,64 @@ router.post("/salary-deduction", async (req, res) => {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    const monthlySalary = result.rows[0].salary;
-    const workingDays = 22; // Avg working days in month
+    const monthlySalary = result.rows[0].monthly_salary;
+    const workingDays = 26;   
     const workingHoursPerDay = 8;
+    const paidLeaves = 3;     
 
-    // Calculate per day and per hour salary
     const perDaySalary = monthlySalary / workingDays;
     const perHourSalary = perDaySalary / workingHoursPerDay;
 
-    let salaryDeduction = 0;
+    let equivalentLeaveDays = 0;
 
+    // 🔹 Convert leave to equivalent full days
     if (leaveDuration.toLowerCase() === "hourly") {
       const hours =
         (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
-      salaryDeduction = hours * perHourSalary;
+      equivalentLeaveDays = hours / workingHoursPerDay;
     } else if (leaveDuration.toLowerCase() === "halfday") {
-      salaryDeduction = perDaySalary / 2;
+      equivalentLeaveDays = 0.5;
     } else if (leaveDuration.toLowerCase() === "fullday") {
-      const days =
-        (new Date(endDate).setHours(0, 0, 0, 0) -
-          new Date(startDate).setHours(0, 0, 0, 0)) /
-          (1000 * 60 * 60 * 24) +
-        1;
-      salaryDeduction = days * perDaySalary;
+      equivalentLeaveDays =
+        (new Date(endDate).setHours(0, 0, 0, 0) - 
+         new Date(startDate).setHours(0, 0, 0, 0)) / 
+         (1000 * 60 * 60 * 24) + 1;
     }
+
+    // 🔹 Get how many leaves already taken (sum of equivalent days)
+    const leaveResult = await pool.query(
+      `SELECT COALESCE(SUM(equivalent_days), 0) as used_leaves
+       FROM leaves 
+       WHERE employee_id = $1 
+         AND date_trunc('month', start_date) = date_trunc('month', CURRENT_DATE)`,
+      [employeeId]
+    );
+
+    const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
+    const remainingPaidLeaves = Math.max(paidLeaves - usedLeaves, 0);
+
+    // 🔹 Apply policy
+    const unpaidDays = Math.max(equivalentLeaveDays - remainingPaidLeaves, 0);
+    const salaryDeduction = unpaidDays * perDaySalary;
 
     res.json({
       employeeId,
       monthlySalary,
-      leaveDuration,
-      startDate,
-      endDate,
+      perDaySalary: perDaySalary.toFixed(2),
+      perHourSalary: perHourSalary.toFixed(2),
+      equivalentLeaveDays,
+      usedLeaves,
+      remainingPaidLeaves,
+      unpaidDays,
       salaryDeduction: salaryDeduction.toFixed(2),
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
+
 
 
 // GET leaves by employee ID without storing employee_id in leaves table (based on full_name)
