@@ -77,16 +77,35 @@ router.get("/all", async (req, res) => {
 // ============================
 // Get task by ID
 // ============================
+// ============================
+// Get tasks for a specific employee (with overdue check)
+// ============================
 router.get("/employee/:empId", async (req, res) => {
   try {
     const { empId } = req.params;
 
+    // Step 1: Update overdue tasks for this employee
+    await pool.query(
+      `
+      UPDATE tasks
+      SET status = 'overdue'
+      WHERE status = 'pending'
+      AND (
+        due_date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+        OR (due_date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+            AND due_time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
+      );
+      `,
+      [empId]
+    );
+
+    // Step 2: Fetch employee's tasks
     const tasks = await pool.query(
       `SELECT t.*
        FROM tasks t
        JOIN employees e ON t.assignto = e.email
        WHERE e.id = $1
-       ORDER BY t.due_date ASC`,
+       ORDER BY t.due_date ASC, t.due_time ASC`,
       [empId]
     );
 
@@ -94,12 +113,25 @@ router.get("/employee/:empId", async (req, res) => {
       return res.status(404).json({ error: "No tasks found for this employee ID" });
     }
 
-    res.status(200).json(tasks.rows);
+    // Step 3: Format date (YYYY-MM-DD only)
+    const formatted = tasks.rows.map(task => ({
+      ...task,
+      due_date: task.due_date.toISOString().split("T")[0]
+    }));
+
+    // Step 4: Return employee tasks
+    res.status(200).json({
+      success: true,
+      count: formatted.length,
+      tasks: formatted
+    });
+
   } catch (err) {
-    console.error(err.message);
+    console.error("Get employee tasks error:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // Update task by ID
 // ============================
