@@ -6,6 +6,7 @@ const pool = require("../db"); // PostgreSQL pool connection
 router.post("/add", async (req, res) => {
   try {
     const {
+      employee_id,        // 👈 new
       employee_name,
       department,
       leave_type,
@@ -14,7 +15,9 @@ router.post("/add", async (req, res) => {
       leave_hours,
       reason,
       status,
-      leavestaken // 👈 new field from req.body
+      leavestaken,        // 👈 existing
+      leaves_duration,    // 👈 new
+      salary_deduction    // 👈 new
     } = req.body;
 
     // Basic validation
@@ -24,6 +27,7 @@ router.post("/add", async (req, res) => {
 
     const query = `
       INSERT INTO leaves (
+        employee_id,
         employee_name,
         department,
         leave_type,
@@ -32,13 +36,16 @@ router.post("/add", async (req, res) => {
         leave_hours,
         reason,
         status,
-        leavestaken
+        leavestaken,
+        leaves_duration,
+        salary_deduction
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'Pending'), COALESCE($9, 0))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'Pending'), COALESCE($10, 0), $11, COALESCE($12, 0.00))
       RETURNING *;
     `;
 
     const values = [
+      employee_id || null,
       employee_name,
       department,
       leave_type,
@@ -47,7 +54,9 @@ router.post("/add", async (req, res) => {
       leave_hours || null,
       reason || null,
       status,
-      leavestaken // 👈 will be 0 if not passed because of COALESCE
+      leavestaken,
+      leaves_duration || null,
+      salary_deduction
     ];
 
     const result = await pool.query(query, values);
@@ -102,15 +111,18 @@ router.post("/salary-deduction", async (req, res) => {
     }
 
     // 🔹 Get how many leaves already taken this month
-    const leaveResult = await pool.query(
-      `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
-       FROM leaves 
-       WHERE employee_name = $1
-         AND date_trunc('month', start_date) = date_trunc('month', CURRENT_DATE)`,
-      [employeeName]
-    );
+  // 🔹 Get how many leaves already taken this month (check by id + name)
+const leaveResult = await pool.query(
+  `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
+   FROM leaves 
+   WHERE employee_id = $1
+     AND employee_name = $2
+     AND date_trunc('month', start_date) = date_trunc('month', CURRENT_DATE)`,
+  [employeeId, employeeName]
+);
 
-    const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
+const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
+
 
     // Total leaves including this request
     const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
