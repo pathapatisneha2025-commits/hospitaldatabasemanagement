@@ -7,6 +7,7 @@ const employeeRoutes = require('./routes/employee');
 const attendanceRoutes = require('./routes/attendance');
 const taskRoutes = require('./routes/task');
 const leavesRoutes = require('./routes/leaves');
+const leavepolicies=require('./routes/leavepolicies');
 
 
 
@@ -20,6 +21,8 @@ app.use('/employee', employeeRoutes);
 app.use('/attendance',attendanceRoutes);
 app.use('/task',taskRoutes);
 app.use('/leaves',leavesRoutes);
+app.use('/leavepolicies',leavepolicies);
+
 
 
 
