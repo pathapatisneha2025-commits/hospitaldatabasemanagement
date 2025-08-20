@@ -40,7 +40,7 @@ router.post("/add", async (req, res) => {
         leaves_duration,
         salary_deduction
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'Pending'), COALESCE($10, 0), $11, COALESCE($12, 0.00))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'Pending'), COALESCE($10, 0.00), $11, COALESCE($12, 0.00))
       RETURNING *;
     `;
 
