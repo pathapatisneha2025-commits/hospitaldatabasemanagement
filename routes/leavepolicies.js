@@ -5,19 +5,25 @@ const pool = require("../db"); // PostgreSQL pool connection
 // POST API to create a leave policy
 router.post("/add", async (req, res) => {
   try {
-    const { department, number_of_leaves } = req.body;
+    const { department, number_of_leaves, yearly_totalleaves } = req.body;
 
-    if (!department || !number_of_leaves) {
-      return res.status(400).json({ error: "Department and number_of_leaves are required" });
+    if (!department || !number_of_leaves || yearly_totalleaves === undefined) {
+      return res.status(400).json({ 
+        error: "Department, number_of_leaves, and yearly_totalleaves are required" 
+      });
     }
 
     const query = `
-      INSERT INTO leave_policies (department, number_of_leaves) 
-      VALUES ($1, $2) 
+      INSERT INTO leave_policies (department, number_of_leaves, yearly_totalleaves) 
+      VALUES ($1, $2, $3) 
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [department, number_of_leaves]);
+    const result = await pool.query(query, [
+      department,
+      number_of_leaves,
+      yearly_totalleaves,
+    ]);
 
     res.status(201).json({
       message: "Leave policy created successfully",
@@ -71,20 +77,27 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { department, number_of_leaves } = req.body;
+    const { department, number_of_leaves, yearly_totalleaves } = req.body;
 
-    if (!department || !number_of_leaves) {
-      return res.status(400).json({ error: "Department and number_of_leaves are required" });
+    if (!department || !number_of_leaves || yearly_totalleaves === undefined) {
+      return res.status(400).json({ 
+        error: "Department, number_of_leaves, and yearly_totalleaves are required" 
+      });
     }
 
     const query = `
       UPDATE leave_policies 
-      SET department = $1, number_of_leaves = $2 
-      WHERE id = $3 
+      SET department = $1, number_of_leaves = $2, yearly_totalleaves = $3
+      WHERE id = $4 
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [department, number_of_leaves, id]);
+    const result = await pool.query(query, [
+      department,
+      number_of_leaves,
+      yearly_totalleaves,
+      id,
+    ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Leave policy not found" });
