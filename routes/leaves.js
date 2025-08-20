@@ -101,7 +101,7 @@ router.post("/salary-deduction", async (req, res) => {
         1;
     }
 
-    // 🔹 Get how many leaves already taken this month (only by name)
+    // 🔹 Get how many leaves already taken this month
     const leaveResult = await pool.query(
       `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
        FROM leaves 
@@ -111,11 +111,21 @@ router.post("/salary-deduction", async (req, res) => {
     );
 
     const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
-    const remainingPaidLeaves = Math.max(paidLeaves - usedLeaves, 0);
 
-    // 🔹 Apply policy
-    const unpaidDays = Math.max(equivalentLeaveDays - remainingPaidLeaves, 0);
-    const salaryDeduction = unpaidDays * perDaySalary;
+    // Total leaves including this request
+    const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
+
+    // Remaining paid leaves (cannot go below 0)
+    const remainingPaidLeaves = Math.max(paidLeaves - totalUsedLeaves, 0);
+
+    // 🔹 Deduction only starts after paid leaves are exhausted
+    let unpaidDays = 0;
+    let salaryDeduction = 0;
+
+    if (totalUsedLeaves > paidLeaves) {
+      unpaidDays = totalUsedLeaves - paidLeaves;
+      salaryDeduction = unpaidDays * perDaySalary;
+    }
 
     res.json({
       employeeId,
@@ -124,7 +134,8 @@ router.post("/salary-deduction", async (req, res) => {
       perDaySalary: perDaySalary.toFixed(2),
       perHourSalary: perHourSalary.toFixed(2),
       equivalentLeaveDays,
-      usedLeaves,
+      usedLeaves,           // already taken before this request
+      totalUsedLeaves,      // new field: includes this request
       remainingPaidLeaves,
       unpaidDays,
       salaryDeduction: salaryDeduction.toFixed(2),
@@ -134,6 +145,7 @@ router.post("/salary-deduction", async (req, res) => {
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
+
 
 
 
