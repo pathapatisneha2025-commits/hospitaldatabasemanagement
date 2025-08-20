@@ -122,9 +122,9 @@ const leaveResult = await pool.query(
   `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
    FROM leaves 
    WHERE employee_id = $1
-     AND employee_name = $2
-     AND date_trunc('month', start_date) = date_trunc('month', CURRENT_DATE)`,
-  [employeeId, employeeName]
+     AND start_date >= date_trunc('month', CURRENT_DATE)
+     AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
+  [employeeId]
 );
 
 const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
