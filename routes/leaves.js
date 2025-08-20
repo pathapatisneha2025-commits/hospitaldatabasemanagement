@@ -108,7 +108,13 @@ router.post("/salary-deduction", async (req, res) => {
           new Date(startDate).setHours(0, 0, 0, 0)) /
           (1000 * 60 * 60 * 24) +
         1;
-    }
+    }else if (leaveDuration.toLowerCase() === "multipleday") {
+  equivalentLeaveDays =
+    (new Date(endDate).setHours(0, 0, 0, 0) -
+      new Date(startDate).setHours(0, 0, 0, 0)) /
+      (1000 * 60 * 60 * 24) +
+    1;
+}
 
     // 🔹 Get how many leaves already taken this month
   // 🔹 Get how many leaves already taken this month (check by id + name)
