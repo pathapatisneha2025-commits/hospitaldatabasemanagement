@@ -130,7 +130,7 @@ router.post('/mark-attendance', async (req, res) => {
     await pool.query(
       `INSERT INTO attendance
         (employee_id, timestamp, image_url, status)
-       VALUES ($1, NOW(), $2, $3)`,
+       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)`,
       [employeeId, capturedUrl, status]
     );
 
@@ -148,7 +148,6 @@ router.post('/mark-attendance', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
 // Get all attendance records
 router.get('/all', async (req, res) => {
   try {
