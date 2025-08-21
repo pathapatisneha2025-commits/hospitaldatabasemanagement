@@ -148,6 +148,37 @@ router.post('/mark-attendance', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+// ✅ LOGOUT API
+router.post('/logout', async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+
+    if (!employeeId) {
+      return res.status(400).json({ success: false, message: 'Missing employeeId' });
+    }
+
+    const status = 'Off Duty';
+
+    // Insert a new "Off Duty" record
+    await pool.query(
+      `INSERT INTO attendance
+        (employee_id, timestamp, status)
+       VALUES ($1,(NOW() AT TIME ZONE 'Asia/Kolkata'), $2)`,
+      [employeeId, status]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Logout marked successfully',
+      data: { employeeId, status }
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Get all attendance records
 router.get('/all', async (req, res) => {
   try {
