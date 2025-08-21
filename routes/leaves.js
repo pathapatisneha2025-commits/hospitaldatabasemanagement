@@ -132,7 +132,7 @@ router.post("/salary-deduction", async (req, res) => {
     // 🔹 Get how many leaves already taken this month
   // 🔹 Get how many leaves already taken this month (check by id + name)
 const leaveResult = await pool.query(
-  `SELECT COALESCE(SUM(leavestaken), 0) as used_leaves
+  `SELECT COALESCE(SUM(leavestaken), 0.0) as used_leaves
    FROM leaves 
    WHERE employee_id = $1
      AND start_date >= date_trunc('month', CURRENT_DATE)
