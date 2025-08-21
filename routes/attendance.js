@@ -179,6 +179,53 @@ router.post('/logout', async (req, res) => {
   }
 });
 
+// GET all logout records
+router.get('/logout/all', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * 
+       FROM attendance 
+       WHERE status = 'Off Duty'
+       ORDER BY timestamp DESC`
+    );
+
+    return res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get logout error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+// DELETE a specific logout record
+router.delete('/logout/delete/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM attendance WHERE id = $1 AND status = 'Off Duty' RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Logout record not found' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Logout record deleted successfully',
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Delete logout error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
+
 // Get all attendance records
 router.get('/all', async (req, res) => {
   try {
