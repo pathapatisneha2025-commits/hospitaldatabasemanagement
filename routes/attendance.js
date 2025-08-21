@@ -198,6 +198,33 @@ router.get('/logout/all', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+// GET logout records by employeeId
+router.get('/logout/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const result = await pool.query(
+      `SELECT * 
+       FROM attendance 
+       WHERE status = 'Off Duty' AND employee_id = $1
+       ORDER BY timestamp DESC`,
+      [employeeId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'No logout records found for this employee' });
+    }
+
+    return res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get logout by ID error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // DELETE a specific logout record
 router.delete('/logout/delete/:id', async (req, res) => {
   try {
