@@ -255,6 +255,32 @@ router.post("/update-status", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+// DELETE - Remove a leave by ID
+router.delete("/delete/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = `
+      DELETE FROM leaves
+      WHERE id = $1
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Leave not found." });
+    }
+
+    res.status(200).json({
+      message: "Leave deleted successfully.",
+      deletedLeave: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error deleting leave:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 
 module.exports = router;
