@@ -8,24 +8,65 @@ router.post("/add", async (req, res) => {
   try {
     const { title, description, assignto, priority, due_date, due_time } = req.body;
 
-    // Basic validation
     if (!title || !assignto || !priority || !due_date || !due_time) {
       return res.status(400).json({ error: "Please fill all required fields" });
     }
 
-    // Insert task with default status "pending"
+    // Step 1: Get employeeId from email
+    const employeeResult = await pool.query(
+      `SELECT id FROM employee WHERE email = $1 LIMIT 1`,
+      [assignto]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found with this email" });
+    }
+
+    const employeeId = employeeResult.rows[0].id;
+
+    // Step 2: Insert task
     const newTask = await pool.query(
       `INSERT INTO tasks (title, description, assignto, priority, due_date, due_time, status) 
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [title, description || null, assignto, priority, due_date, due_time, "pending"]
     );
 
-    res.status(201).json({ message: "Task created successfully", task: newTask.rows[0] });
+    const task = newTask.rows[0];
+
+    // Step 3: Save notification with employeeId
+    const notificationResult = await pool.query(
+      `INSERT INTO notifications (employee_id, message, task_id)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [employeeId, `A new task "${title}" has been assigned to you.`, task.id]
+    );
+
+    const notification = notificationResult.rows[0];
+
+    // Step 4: Send WebSocket notification if online
+    const ws = clients.get(employeeId.toString());
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "taskAssigned",
+          notification,
+        })
+      );
+    }
+
+    res.status(201).json({
+      message: "Task created successfully",
+      notification_message: "Notification sent successfully",
+      task,
+      notification,
+    });
+
   } catch (err) {
-    console.error(err.message);
+    console.error("Error creating task:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
+
+
 
 // ============================
 // Get all tasks
