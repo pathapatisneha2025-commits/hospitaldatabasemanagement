@@ -257,7 +257,7 @@ router.delete('/logout/delete/:id', async (req, res) => {
 router.get('/all', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status, a.remaining_salary
+      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status
        FROM attendance a
        JOIN employees e ON a.employee_id = e.id
        ORDER BY a.timestamp DESC`
@@ -280,7 +280,7 @@ router.get('/employee/:id', async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status, a.remaining_salary
+      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status
        FROM attendance a
        JOIN employees e ON a.employee_id = e.id
        WHERE a.employee_id = $1
