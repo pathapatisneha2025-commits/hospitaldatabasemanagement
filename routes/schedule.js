@@ -72,7 +72,7 @@ const scheduleSingleReminder = async (employeeId) => {
     reminderHour -= 1;
   }
 
-const cronTime = "*/1 * * * *"; // runs every minute
+  const cronTime = `${reminderMinute} ${reminderHour} * * *`;
 
   // If a job already exists for this employee, stop it before creating new
   if (cronJobs[employeeId]) {
