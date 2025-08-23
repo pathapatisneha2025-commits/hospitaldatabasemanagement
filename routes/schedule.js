@@ -110,5 +110,28 @@ const scheduleAllReminders = async () => {
 };
 
 scheduleAllReminders();
+// ---------- Get notifications by employeeId ----------
+router.get("/remindarnotifications/:employeeId", async (req, res) => {
+  const { employeeId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT id, title, message, created_at 
+       FROM remaindernotifications
+       WHERE employee_id = $1
+       ORDER BY created_at DESC`,
+      [employeeId]
+    );
+
+    res.json({
+      success: true,
+      notifications: result.rows,
+    });
+  } catch (err) {
+    console.error("❌ Fetch notifications error:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
 
 module.exports = router;
