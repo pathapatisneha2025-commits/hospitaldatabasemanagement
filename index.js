@@ -10,6 +10,7 @@ const taskRoutes = require("./routes/task");
 const leavesRoutes = require("./routes/leaves");
 const leavepolicies = require("./routes/leavepolicies");
 const notificationRoutes = require("./routes/notifications"); 
+const scheduleRoutes = require("./routes/schedule"); 
 
 // WebSocket setup
 const WebSocket = require("ws");
@@ -27,7 +28,8 @@ app.use("/attendance", attendanceRoutes);
 app.use("/task", taskRoutes);
 app.use("/leaves", leavesRoutes);
 app.use("/leavepolicies", leavepolicies);
-app.use("/notifications", notificationRoutes); // ✅ added
+app.use("/notifications", notificationRoutes); 
+app.use("/schedule", scheduleRoutes); 
 
 // Start HTTP server
 const server = app.listen(PORT, () => {
