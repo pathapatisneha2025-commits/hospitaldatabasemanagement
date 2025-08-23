@@ -35,7 +35,7 @@ const sendPushNotification = async (token, title, message) => {
 };
 
 // ---------- Save employee schedule ----------
-router.post("/schedule", async (req, res) => {
+router.post("/setreminder", async (req, res) => {
   const { employeeId, date, startTime, endTime, pushToken } = req.body;
 
   try {
@@ -86,7 +86,7 @@ const scheduleSingleReminder = async (employeeId) => {
 
     // Save to DB
     await pool.query(
-      `INSERT INTO notifications (employee_id, title, message, created_at) 
+      `INSERT INTO  remaindernotifications  (employee_id, title, message, created_at) 
        VALUES ($1, $2, $3, NOW())`,
       [row.employee_id, "Attendance Reminder", message]
     );
@@ -105,7 +105,7 @@ const scheduleSingleReminder = async (employeeId) => {
 
 // ---------- On server start → schedule reminders for all employees ----------
 const scheduleAllReminders = async () => {
-  const result = await pool.query("SELECT employee_id FROM schedules");
+  const result = await pool.query("SELECT employee_id FROM remainderschedules");
   result.rows.forEach((row) => scheduleSingleReminder(row.employee_id));
 };
 
