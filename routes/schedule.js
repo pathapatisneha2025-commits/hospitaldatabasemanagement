@@ -92,12 +92,16 @@ const cronTime = "*/1 * * * *"; // runs every minute
     );
 
     // Send push notification if token exists
-    if (row.push_token) {
-      await sendPushNotification(row.push_token, "Attendance Reminder", message);
-    }
+     if (row.push_token) {
+        await sendPushNotification(row.push_token, "Attendance Reminder", message);
+      }
 
-    console.log(`✅ Reminder sent to employee ${row.employee_id}`);
-  });
+      console.log(`✅ Reminder sent to employee ${row.employee_id}`);
+    },
+    {
+      timezone: "Asia/Kolkata",   // 👈 Important!
+    }
+  );
 
   // Save reference so we can cancel later if updated
   cronJobs[employeeId] = job;
