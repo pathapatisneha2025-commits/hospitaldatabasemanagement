@@ -85,11 +85,12 @@ const scheduleSingleReminder = async (employeeId) => {
   const message = ` your shift starts in 15 minutes. Don't forget to mark attendance.`;
 
     // Save to DB
-    await pool.query(
-      `INSERT INTO  remaindernotifications  (employee_id, title, message, created_at) 
-       VALUES ($1, $2, $3, NOW())`,
-      [row.employee_id, "Attendance Reminder", message]
-    );
+ await pool.query(
+  `INSERT INTO remaindernotifications (employee_id, title, message, created_at) 
+   VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'Asia/Kolkata'))`,
+  [row.employee_id, "Attendance Reminder", message]
+);
+
 
     // Send push notification if token exists
      if (row.push_token) {
@@ -119,13 +120,14 @@ router.get("/remindarnotifications/:employeeId", async (req, res) => {
   const { employeeId } = req.params;
 
   try {
-    const result = await pool.query(
-      `SELECT id, title, message, created_at 
-       FROM remaindernotifications
-       WHERE employee_id = $1
-       ORDER BY created_at DESC`,
-      [employeeId]
-    );
+   const result = await pool.query(
+  `SELECT id, title, message, created_at AT TIME ZONE 'Asia/Kolkata' AS created_at
+   FROM remaindernotifications
+   WHERE employee_id = $1
+   ORDER BY created_at DESC`,
+  [employeeId]
+);
+
 
     res.json({
       success: true,
