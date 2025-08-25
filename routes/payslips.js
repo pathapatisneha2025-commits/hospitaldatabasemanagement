@@ -15,9 +15,9 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   const query = `
   SELECT e.full_name,
          e.role,
-         e.basic_salary,
+         e.monthly_salary,
          COALESCE(SUM(l.salary_deduction), 0) AS deductions,
-         (e.basic_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
+         (e.monthly_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
   FROM employees e
   LEFT JOIN leaves l
     ON e.id = l.employee_id
@@ -32,7 +32,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
          AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
       )
   WHERE e.id = $3::int
-  GROUP BY e.id, e.full_name, e.role, e.basic_salary;
+  GROUP BY e.id, e.full_name, e.role, e.monthly_salary;
 `;
 
     const result = await pool.query(query, [year, month, employeeId]);
