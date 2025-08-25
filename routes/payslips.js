@@ -13,7 +13,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     }
 
   const query = `
-  SELECT e.employee_name,
+  SELECT e.employee_full_name,
          e.role,
          e.basic_salary,
          COALESCE(SUM(l.salary_deduction), 0) AS deductions,
@@ -32,7 +32,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
          AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
       )
   WHERE e.id = $3::int
-  GROUP BY e.id, e.employee_name, e.role, e.basic_salary;
+  GROUP BY e.id, e.employee_full_name, e.role, e.basic_salary;
 `;
 
     const result = await pool.query(query, [year, month, employeeId]);
