@@ -11,6 +11,8 @@ const leavesRoutes = require("./routes/leaves");
 const leavepolicies = require("./routes/leavepolicies");
 const notificationRoutes = require("./routes/notifications"); 
 const scheduleRoutes = require("./routes/schedule"); 
+const PayslipsRoutes = require("./routes/payslips"); 
+
 
 // WebSocket setup
 const WebSocket = require("ws");
@@ -30,6 +32,8 @@ app.use("/leaves", leavesRoutes);
 app.use("/leavepolicies", leavepolicies);
 app.use("/notifications", notificationRoutes); 
 app.use("/schedule", scheduleRoutes); 
+app.use("/payslips", PayslipsRoutes); 
+
 
 // Start HTTP server
 const server = app.listen(PORT, () => {

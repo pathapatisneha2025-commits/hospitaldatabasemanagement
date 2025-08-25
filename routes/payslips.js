@@ -1,0 +1,66 @@
+const express = require("express");
+const pool = require("../db"); // PostgreSQL connection
+const PDFDocument = require("pdfkit");
+
+const router = express.Router();
+
+router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
+  try {
+    const { year, month, employeeId } = req.params;
+
+    if (!year || !month || !employeeId) {
+      return res.status(400).json({ error: "Missing required params" });
+    }
+
+    const query = `
+      SELECT e.employee_name,
+             e. role,
+             e.basic_salary,
+             COALESCE(SUM(l.salary_deduction), 0) AS deductions,
+             (e.basic_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
+      FROM employees e
+      LEFT JOIN leaves l
+        ON e.employee_id = l.employee_id
+       AND l.year = $1
+       AND l.month = $2
+      WHERE e.employee_id = $3
+      GROUP BY e.employee_id, e.employee_name, e.role, e.basic_salary;
+    `;
+
+    const result = await pool.query(query, [year, month, employeeId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Payslip not found" });
+    }
+
+    const data = result.rows[0];
+
+    // Set headers for file download
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=payslip-${month}-${year}.pdf`
+    );
+
+    // Generate PDF
+    const doc = new PDFDocument();
+    doc.pipe(res);
+
+    doc.fontSize(18).text(`Payslip - ${month} ${year}`, { align: "center" });
+    doc.moveDown();
+
+    doc.fontSize(12).text(`Employee Name: ${data.employee_name}`);
+    doc.text(`Designation: ${data.designation}`);
+    doc.text(`Basic Salary: ₹${data.basic_salary}`);
+    doc.text(`Deductions: ₹${data.deductions}`);
+    doc.moveDown();
+    doc.fontSize(14).text(`Net Pay: ₹${data.net_pay}`, { underline: true });
+
+    doc.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+module.exports = router;
