@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db"); // PostgreSQL connection
 const PDFDocument = require("pdfkit");
+const path = require("path");
 
 const router = express.Router();
 
@@ -53,6 +54,8 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     // Generate PDF
     const doc = new PDFDocument();
     doc.pipe(res);
+     const fontPath = path.join(__dirname, "../fonts/NotoSans-Regular.ttf");
+    doc.font(fontPath);
 
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
