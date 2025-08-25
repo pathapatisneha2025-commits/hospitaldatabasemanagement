@@ -12,28 +12,28 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       return res.status(400).json({ error: "Missing required params" });
     }
 
-    const query = `
-      SELECT e.employee_name,
-             e.role,
-             e.basic_salary,
-             COALESCE(SUM(l.salary_deduction), 0) AS deductions,
-             (e.basic_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
-      FROM employees e
-      LEFT JOIN leaves l
-        ON e.id = l.employee_id
-       AND (
-            -- Leave starts in the same year+month
-            (EXTRACT(YEAR FROM l.start_date) = $1 AND EXTRACT(MONTH FROM l.start_date) = $2)
-            OR
-            (EXTRACT(YEAR FROM l.end_date) = $1 AND EXTRACT(MONTH FROM l.end_date) = $2)
-            OR
-            -- Leave spans across the whole month
-            (l.start_date <= make_date($1, $2, 1)
-             AND l.end_date >= (make_date($1, $2, 1) + interval '1 month - 1 day'))
-          )
-      WHERE e.id = $3
-      GROUP BY e.id, e.employee_name, e.role, e.basic_salary;
-    `;
+  const query = `
+  SELECT e.employee_name,
+         e.role,
+         e.basic_salary,
+         COALESCE(SUM(l.salary_deduction), 0) AS deductions,
+         (e.basic_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
+  FROM employees e
+  LEFT JOIN leaves l
+    ON e.id = l.employee_id
+   AND (
+        -- Leave starts in the same year+month
+        (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
+        OR
+        (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+        OR
+        -- Leave spans across the whole month
+        (l.start_date <= make_date($1::int, $2::int, 1)
+         AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+      )
+  WHERE e.id = $3::int
+  GROUP BY e.id, e.employee_name, e.role, e.basic_salary;
+`;
 
     const result = await pool.query(query, [year, month, employeeId]);
 
