@@ -20,11 +20,11 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
              (e.basic_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
       FROM employees e
       LEFT JOIN leaves l
-        ON e.employee_id = l.employee_id
+        ON e.id = l. employee_id
        AND l.year = $1
        AND l.month = $2
-      WHERE e.employee_id = $3
-      GROUP BY e.employee_id, e.employee_name, e.role, e.basic_salary;
+      WHERE e.id = $3
+      GROUP BY e.id, e.employee_name, e.role, e.basic_salary;
     `;
 
     const result = await pool.query(query, [year, month, employeeId]);
