@@ -14,15 +14,23 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     const query = `
       SELECT e.employee_name,
-             e. role,
+             e.role,
              e.basic_salary,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions,
              (e.basic_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
       FROM employees e
       LEFT JOIN leaves l
-        ON e.id = l. employee_id
-       AND l.year = $1
-       AND l.month = $2
+        ON e.id = l.employee_id
+       AND (
+            -- Leave starts in the same year+month
+            (EXTRACT(YEAR FROM l.start_date) = $1 AND EXTRACT(MONTH FROM l.start_date) = $2)
+            OR
+            (EXTRACT(YEAR FROM l.end_date) = $1 AND EXTRACT(MONTH FROM l.end_date) = $2)
+            OR
+            -- Leave spans across the whole month
+            (l.start_date <= make_date($1, $2, 1)
+             AND l.end_date >= (make_date($1, $2, 1) + interval '1 month - 1 day'))
+          )
       WHERE e.id = $3
       GROUP BY e.id, e.employee_name, e.role, e.basic_salary;
     `;
@@ -46,11 +54,11 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const doc = new PDFDocument();
     doc.pipe(res);
 
-    doc.fontSize(18).text(`Payslip - ${month} ${year}`, { align: "center" });
+    doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
 
     doc.fontSize(12).text(`Employee Name: ${data.employee_name}`);
-    doc.text(`Designation: ${data.designation}`);
+    doc.text(`Designation: ${data.role}`); // fixed field name (your table has 'role')
     doc.text(`Basic Salary: ₹${data.basic_salary}`);
     doc.text(`Deductions: ₹${data.deductions}`);
     doc.moveDown();
