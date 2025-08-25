@@ -59,7 +59,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     doc.fontSize(12).text(`Employee Name: ${data.employee_name}`);
     doc.text(`Designation: ${data.role}`); // fixed field name (your table has 'role')
-    doc.text(`Basic Salary: ₹${data.basic_salary}`);
+    doc.text(`Basic Salary: ₹${data.monthly_salary}`);
     doc.text(`Deductions: ₹${data.deductions}`);
     doc.moveDown();
     doc.fontSize(14).text(`Net Pay: ₹${data.net_pay}`, { underline: true });
