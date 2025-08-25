@@ -57,7 +57,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
 
-    doc.fontSize(12).text(`Employee Name: ${data.employee_name}`);
+    doc.fontSize(12).text(`Employee Name: ${data.full_name}`);
     doc.text(`Designation: ${data.role}`); // fixed field name (your table has 'role')
     doc.text(`Basic Salary: ₹${data.monthly_salary}`);
     doc.text(`Deductions: ₹${data.deductions}`);
