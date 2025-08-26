@@ -75,7 +75,7 @@ router.post("/salary-deduction", async (req, res) => {
   try {
     const { employeeId, employeeName, department, leaveDuration, startDate, endDate } = req.body;
 
-    // ✅ Fetch employee salary using ID
+    // ✅ Fetch employee salary using employeeId
     const result = await pool.query(
       "SELECT monthly_salary FROM employees WHERE id = $1",
       [employeeId]
@@ -89,44 +89,45 @@ router.post("/salary-deduction", async (req, res) => {
     const workingDays = 26;
     const workingHoursPerDay = 8;
 
-    // ✅ Fetch department leave policy (match department in both tables)
-    const { rows: [policy] } = await pool.query(
-      `SELECT lp.number_of_leaves::int AS allowed_leaves
-       FROM leave_policies lp
-       JOIN leaves l ON lp.department = l.department
-       WHERE l.department = $1
-       LIMIT 1`,
+    // ✅ Fetch leave policy using department (passed in request)
+    const policyResult = await pool.query(
+      `SELECT number_of_leaves AS allowed_leaves
+       FROM leave_policies
+       WHERE department = $1`,
       [department]
     );
 
-    if (!policy) {
+    if (policyResult.rows.length === 0) {
       return res.status(404).json({ message: "No leave policy found for this department" });
     }
 
-    const paidLeaves = policy.allowed_leaves;
+    const paidLeaves = parseInt(policyResult.rows[0].allowed_leaves, 10);
 
-    // Salary breakdown
     const perDaySalary = monthlySalary / workingDays;
     const perHourSalary = perDaySalary / workingHoursPerDay;
 
     let equivalentLeaveDays = 0;
 
-    // 🔹 Convert leave type into equivalent full days
+    // 🔹 Convert leave duration into days
     if (leaveDuration.toLowerCase() === "hourly") {
       const hours =
         (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
       equivalentLeaveDays = hours / workingHoursPerDay;
     } else if (leaveDuration.toLowerCase() === "halfday") {
       equivalentLeaveDays = 0.5;
-    } else if (leaveDuration.toLowerCase() === "fullday" || leaveDuration.toLowerCase() === "multipleday") {
+    } else if (leaveDuration.toLowerCase() === "fullday") {
       equivalentLeaveDays =
-        (new Date(endDate).setHours(0, 0, 0, 0) -
-          new Date(startDate).setHours(0, 0, 0, 0)) /
+        (new Date(endDate).setHours(0, 0, 0, 0) - new Date(startDate).setHours(0, 0, 0, 0)) /
+          (1000 * 60 * 60 * 24) +
+        1;
+    } else if (leaveDuration.toLowerCase() === "multipleday") {
+      equivalentLeaveDays =
+        (new Date(endDate).setHours(0, 0, 0, 0) - new Date(startDate).setHours(0, 0, 0, 0)) /
           (1000 * 60 * 60 * 24) +
         1;
     }
 
-    // 🔹 Get how many leaves already taken this month (for this employee)
+    // 🔹 Get leaves already taken this month (by employeeId)
     const leaveResult = await pool.query(
       `SELECT COALESCE(SUM(leavestaken), 0.0) as used_leaves
        FROM leaves 
@@ -141,10 +142,10 @@ router.post("/salary-deduction", async (req, res) => {
     // Total leaves including this request
     const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
 
-    // Remaining paid leaves (cannot go below 0)
+    // Remaining paid leaves
     const remainingPaidLeaves = Math.max(paidLeaves - totalUsedLeaves, 0);
 
-    // 🔹 Deduction only starts after paid leaves are exhausted
+    // Deduction if more than paid leaves
     let unpaidDays = 0;
     let salaryDeduction = 0;
 
@@ -161,10 +162,10 @@ router.post("/salary-deduction", async (req, res) => {
       perDaySalary: perDaySalary.toFixed(2),
       perHourSalary: perHourSalary.toFixed(2),
       equivalentLeaveDays,
-      usedLeaves,           // already taken before this request
-      totalUsedLeaves,      // new field: includes this request
+      usedLeaves,
+      totalUsedLeaves,
       remainingPaidLeaves,
-      paidLeaves, 
+      paidLeaves,
       unpaidDays,
       salaryDeduction: salaryDeduction.toFixed(2),
     });
@@ -173,6 +174,8 @@ router.post("/salary-deduction", async (req, res) => {
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
+
+
 
 
 
