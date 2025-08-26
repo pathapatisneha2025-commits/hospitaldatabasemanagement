@@ -88,16 +88,12 @@ router.post("/salary-deduction", async (req, res) => {
     const monthlySalary = result.rows[0].monthly_salary;
     const workingDays = 26;
     const workingHoursPerDay = 8;
-  const policyResult = await pool.query(
-  `SELECT lp.number_of_leaves AS allowed_leaves
-   FROM leaves l
-   JOIN leave_policies lp 
-     ON l.department = lp.department
-   WHERE l.employee_id = $1
-   LIMIT 1`,
-  [employeeId]
-);
-
+    const policyResult = await pool.query(
+      `SELECT DISTINCT lp.number_of_leaves AS allowed_leaves
+       FROM leaves l
+       JOIN leave_policies lp 
+         ON l.department = lp.department`
+    );
 
     if (policyResult.rows.length === 0) {
       return res.status(404).json({ message: "No leave policies found" });
