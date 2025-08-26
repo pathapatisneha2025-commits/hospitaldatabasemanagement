@@ -102,7 +102,7 @@ console.log("Policy Result:", policyResult.rows);
     }
 
     
-const paidLeaves = policyResult.rows[0].allowed_leaves;
+const paidLeaves = policyResult.allowed_leaves;
 
 
     const perDaySalary = monthlySalary / workingDays;
