@@ -95,6 +95,7 @@ JOIN leaves l
   ON lp.department = l.department;
 `
     );
+console.log("Policy Result:", policyResult.rows);
 
     if (policyResult.rows.length === 0) {
       return res.status(404).json({ message: "No leave policies found" });
