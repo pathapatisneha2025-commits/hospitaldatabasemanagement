@@ -73,7 +73,7 @@ router.post("/add", async (req, res) => {
 
 router.post("/salary-deduction", async (req, res) => {
   try {
-    const { employeeId, employeeName, leaveDuration, startDate, endDate } = req.body;
+    const { employeeId, employeeName, department, leaveDuration, startDate, endDate } = req.body;
 
     // ✅ Fetch employee salary using ID
     const result = await pool.query(
@@ -88,60 +88,55 @@ router.post("/salary-deduction", async (req, res) => {
     const monthlySalary = result.rows[0].monthly_salary;
     const workingDays = 26;
     const workingHoursPerDay = 8;
-    const policyResult = await pool.query(
-      `SELECT DISTINCT lp.number_of_leaves AS allowed_leaves
-       FROM leaves l
-       JOIN leave_policies lp 
-         ON l.department = lp.department`
+
+    // ✅ Fetch department leave policy (match department in both tables)
+    const { rows: [policy] } = await pool.query(
+      `SELECT lp.number_of_leaves::int AS allowed_leaves
+       FROM leave_policies lp
+       JOIN leaves l ON lp.department = l.department
+       WHERE l.department = $1
+       LIMIT 1`,
+      [department]
     );
 
-    if (policyResult.rows.length === 0) {
-      return res.status(404).json({ message: "No leave policies found" });
+    if (!policy) {
+      return res.status(404).json({ message: "No leave policy found for this department" });
     }
 
-    
-    const paidLeaves = parseInt(policyResult.rows[0].allowed_leaves, 10);
+    const paidLeaves = policy.allowed_leaves;
 
-
+    // Salary breakdown
     const perDaySalary = monthlySalary / workingDays;
     const perHourSalary = perDaySalary / workingHoursPerDay;
 
     let equivalentLeaveDays = 0;
 
-    // 🔹 Convert leave to equivalent full days
+    // 🔹 Convert leave type into equivalent full days
     if (leaveDuration.toLowerCase() === "hourly") {
       const hours =
         (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
       equivalentLeaveDays = hours / workingHoursPerDay;
     } else if (leaveDuration.toLowerCase() === "halfday") {
       equivalentLeaveDays = 0.5;
-    } else if (leaveDuration.toLowerCase() === "fullday") {
+    } else if (leaveDuration.toLowerCase() === "fullday" || leaveDuration.toLowerCase() === "multipleday") {
       equivalentLeaveDays =
         (new Date(endDate).setHours(0, 0, 0, 0) -
           new Date(startDate).setHours(0, 0, 0, 0)) /
           (1000 * 60 * 60 * 24) +
         1;
-    }else if (leaveDuration.toLowerCase() === "multipleday") {
-  equivalentLeaveDays =
-    (new Date(endDate).setHours(0, 0, 0, 0) -
-      new Date(startDate).setHours(0, 0, 0, 0)) /
-      (1000 * 60 * 60 * 24) +
-    1;
-}
+    }
 
-    // 🔹 Get how many leaves already taken this month
-  // 🔹 Get how many leaves already taken this month (check by id + name)
-const leaveResult = await pool.query(
-  `SELECT COALESCE(SUM(leavestaken), 0.0) as used_leaves
-   FROM leaves 
-   WHERE employee_id = $1
-     AND start_date >= date_trunc('month', CURRENT_DATE)
-     AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
-  [employeeId]
-);
+    // 🔹 Get how many leaves already taken this month (for this employee)
+    const leaveResult = await pool.query(
+      `SELECT COALESCE(SUM(leavestaken), 0.0) as used_leaves
+       FROM leaves 
+       WHERE employee_id = $1
+         AND start_date >= date_trunc('month', CURRENT_DATE)
+         AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
+      [employeeId]
+    );
 
-const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
-
+    const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
 
     // Total leaves including this request
     const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
@@ -161,6 +156,7 @@ const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
     res.json({
       employeeId,
       employeeName,
+      department,
       monthlySalary,
       perDaySalary: perDaySalary.toFixed(2),
       perHourSalary: perHourSalary.toFixed(2),
@@ -177,7 +173,6 @@ const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
-
 
 
 
