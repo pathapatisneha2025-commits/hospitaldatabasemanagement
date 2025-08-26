@@ -168,6 +168,7 @@ const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
       usedLeaves,           // already taken before this request
       totalUsedLeaves,      // new field: includes this request
       remainingPaidLeaves,
+      paidLeaves, 
       unpaidDays,
       salaryDeduction: salaryDeduction.toFixed(2),
     });
