@@ -90,9 +90,10 @@ router.post("/salary-deduction", async (req, res) => {
     const workingHoursPerDay = 8;
     const policyResult = await pool.query(
       `SELECT DISTINCT lp.number_of_leaves AS allowed_leaves
-       FROM leaves l
-       JOIN leave_policies lp 
-         ON l.department = lp.department`
+FROM leaves_policies lp
+JOIN leaves l 
+  ON lp.department = l.department;
+`
     );
 
     if (policyResult.rows.length === 0) {
