@@ -217,8 +217,10 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     monthlySalary
   } = req.body;
 
+  const file = req.file; // ✅ use this throughout
+
   try {
-    // Get current employee data
+    // ✅ Get current employee
     const existing = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
@@ -226,10 +228,10 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
 
     const existingEmployee = existing.rows[0];
 
-    // Handle image
-    const imageUrl = req.file ? req.file.path : existingEmployee.image;
+    // ✅ Handle image
+    const imageUrl = file ? file.path : existingEmployee.image;
 
-    // Handle password update if provided
+    // ✅ Handle password update if provided
     let hashedPassword = existingEmployee.password;
     if (password && confirmPassword) {
       if (password !== confirmPassword) {
@@ -241,39 +243,40 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-   const result = await pool.query(
-  `UPDATE employees
-   SET full_name = $1,
-       email = $2,
-       password = $3,
-       department = $4,
-       role = $5,
-       dob = $6,
-       image = $7,
-       monthly_salary = $8
-   WHERE id = $9
-   RETURNING *`,
-  [
-    fullName || existingEmployee.full_name,
-    email || existingEmployee.email,
-    hashedPassword,
-    department || existingEmployee.department,
-    role || existingEmployee.role,
-    dob || existingEmployee.dob,
-    imageUrl,
-    monthlySalary || existingEmployee.monthly_salary,
-    id
-  ]
-);
-
+    // ✅ Update employee
+    const result = await pool.query(
+      `UPDATE employees
+       SET full_name = $1,
+           email = $2,
+           password = $3,
+           department = $4,
+           role = $5,
+           dob = $6,
+           image = $7,
+           monthly_salary = $8
+       WHERE id = $9
+       RETURNING *`,
+      [
+        fullName || existingEmployee.full_name,
+        email || existingEmployee.email,
+        hashedPassword,
+        department || existingEmployee.department,
+        role || existingEmployee.role,
+        dob || existingEmployee.dob,
+        imageUrl,
+        monthlySalary || existingEmployee.monthly_salary,
+        id
+      ]
+    );
 
     res.json({ success: true, employee: result.rows[0] });
 
   } catch (error) {
-    console.error('Update error:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Update error:', error); // ✅ log full error
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
+
 // Delete employee by ID
 router.delete('/delete/:id', async (req, res) => {
   const { id } = req.params;
