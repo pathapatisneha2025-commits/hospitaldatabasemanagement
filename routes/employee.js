@@ -241,31 +241,31 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    const result = await pool.query(
-       `UPDATE employees
-       SET full_name = $1,
-           email = $2,
-           password = $3,
-           department = $4,
-           role = $5,
-           dob = $6,
-           image = $7,
-           monthly_salary = $8
-       WHERE id = $9
-       RETURNING *`,
-      [
-        fullName || existingEmployee.full_name,
-        email || existingEmployee.email,
-        hashedPassword,
-        department || existingEmployee.department,
-        role || existingEmployee.role,
-        dob || existingEmployee.dob,
-                monthlySalary || existingEmployee.monthly_salary,
+   const result = await pool.query(
+  `UPDATE employees
+   SET full_name = $1,
+       email = $2,
+       password = $3,
+       department = $4,
+       role = $5,
+       dob = $6,
+       image = $7,
+       monthly_salary = $8
+   WHERE id = $9
+   RETURNING *`,
+  [
+    fullName || existingEmployee.full_name,
+    email || existingEmployee.email,
+    hashedPassword,
+    department || existingEmployee.department,
+    role || existingEmployee.role,
+    dob || existingEmployee.dob,
+    imageUrl,
+    monthlySalary || existingEmployee.monthly_salary,
+    id
+  ]
+);
 
-        imageUrl,
-        id
-      ]
-    );
 
     res.json({ success: true, employee: result.rows[0] });
 
