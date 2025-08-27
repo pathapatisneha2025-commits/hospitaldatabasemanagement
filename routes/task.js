@@ -177,31 +177,36 @@ router.get("/employee/:empId", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignto, priority, due_date } = req.body;
+    const { title, description, assignto, priority, due_date, due_time } = req.body;
 
-    // Basic validation
-    if (!title || !assignto || !priority || !due_date) {
-      return res.status(400).json({ error: "Please fill all required fields" });
-    }
-
+    // ✅ Update query with due_time
     const updatedTask = await pool.query(
       `UPDATE tasks 
-       SET title = $1, description = $2, assignto = $3, priority = $4, due_date = $5
-       WHERE id = $6
+       SET title = $1, 
+           description = $2, 
+           assignto = $3, 
+           priority = $4, 
+           due_date = $5,
+           due_time = $6
+       WHERE id = $7
        RETURNING *`,
-      [title, description || null, assignto, priority, due_date, id]
+      [title, description || null, assignto, priority, due_date, due_time, id]
     );
 
     if (updatedTask.rows.length === 0) {
       return res.status(404).json({ error: "Task not found" });
     }
 
-    res.status(200).json({ message: "Task updated successfully", task: updatedTask.rows[0] });
+    res.status(200).json({
+      message: "Task updated successfully",
+      task: updatedTask.rows[0]
+    });
   } catch (err) {
-    console.error(err.message);
+    console.error("Update error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ============================
 // Delete task by ID
