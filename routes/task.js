@@ -174,12 +174,30 @@ router.get("/employee/:empId", async (req, res) => {
 
 // Update task by ID
 // ============================
+const { DateTime } = require("luxon");
+
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, assignto, priority, due_date, due_time } = req.body;
 
-    // ✅ Update query with due_time
+    // ✅ Current time in Asia/Kolkata
+    const now = DateTime.now().setZone("Asia/Kolkata");
+
+    // ✅ Default status
+    let newStatus = "pending";
+
+    if (due_date && due_time) {
+      // Parse due date+time in Asia/Kolkata
+      const dueDateTime = DateTime.fromISO(`${due_date}T${due_time}`, { zone: "Asia/Kolkata" });
+
+      // ✅ Compare in the same timezone
+      if (dueDateTime < now) {
+        newStatus = "overdue";
+      }
+    }
+
+    // ✅ Update DB
     const updatedTask = await pool.query(
       `UPDATE tasks 
        SET title = $1, 
@@ -187,10 +205,11 @@ router.put("/update/:id", async (req, res) => {
            assignto = $3, 
            priority = $4, 
            due_date = $5,
-           due_time = $6
-       WHERE id = $7
+           due_time = $6,
+           status = $7
+       WHERE id = $8
        RETURNING *`,
-      [title, description || null, assignto, priority, due_date, due_time, id]
+      [title, description || null, assignto, priority, due_date, due_time, newStatus, id]
     );
 
     if (updatedTask.rows.length === 0) {
@@ -206,6 +225,7 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 // ============================
