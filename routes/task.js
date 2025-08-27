@@ -180,7 +180,6 @@ router.put("/update/:id", async (req, res) => {
     const { id } = req.params;
     const { title, description, assignto, priority, due_date, due_time } = req.body;
 
-    // ✅ Update and recalc status in one query
     const updatedTask = await pool.query(
       `UPDATE tasks 
        SET title = $1, 
@@ -190,9 +189,9 @@ router.put("/update/:id", async (req, res) => {
            due_date = $5,
            due_time = $6,
            status = CASE 
-                      WHEN due_date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')
-                        OR (due_date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-                            AND due_time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
+                      WHEN $5 < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')
+                        OR ($5 = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+                            AND $6 < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
                       THEN 'overdue'
                       ELSE 'pending'
                     END
@@ -214,6 +213,7 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 // ============================
