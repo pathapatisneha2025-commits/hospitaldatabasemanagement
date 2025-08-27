@@ -174,7 +174,6 @@ router.get("/employee/:empId", async (req, res) => {
 
 // Update task by ID
 // ============================
-
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -189,9 +188,9 @@ router.put("/update/:id", async (req, res) => {
            due_date = $5,
            due_time = $6,
            status = CASE 
-                      WHEN $5 < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')
-                        OR ($5 = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-                            AND $6 < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
+                      WHEN $5::date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')
+                        OR ($5::date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
+                            AND $6::time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
                       THEN 'overdue'
                       ELSE 'pending'
                     END
@@ -213,6 +212,7 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
