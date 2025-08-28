@@ -4,9 +4,14 @@ const PDFDocument = require("pdfkit");
 
 const router = express.Router();
 
-router.get("/all/:year/:month", async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
-    const { year, month } = req.params;
+    // Get current date in Asia/Kolkata timezone
+    const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const today = new Date(now);
+
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1; // JS months are 0-based
 
     const query = `
       SELECT e.id AS employee_id,
@@ -15,7 +20,7 @@ router.get("/all/:year/:month", async (req, res) => {
              e.monthly_salary AS basicsalary,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions,
              (e.monthly_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay,
-             to_char(make_date($1::int, $2::int, 1), 'MonthYYYY') AS date
+             to_char(make_date($1::int, $2::int, 1), 'Month YYYY') AS date
       FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
@@ -40,6 +45,7 @@ router.get("/all/:year/:month", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
