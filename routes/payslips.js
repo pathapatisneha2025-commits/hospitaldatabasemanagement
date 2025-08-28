@@ -78,6 +78,44 @@ router.post("/status/:employeeId", async (req, res) => {
   }
 });
 
+router.get("/status/:employeeId", async (req, res) => {
+  const { employeeId } = req.params;
+
+  try {
+    // Current year/month in Asia/Kolkata timezone
+    const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const today = new Date(now);
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+
+    const query = `
+      SELECT status, created_at, updated_at
+      FROM payslip_status
+      WHERE employee_id = $1
+        AND year = $2
+        AND month = $3
+      LIMIT 1
+    `;
+
+    const result = await pool.query(query, [employeeId, year, month]);
+
+    if (result.rows.length === 0) {
+      return res.json({ employeeId, year, month, status: "pending" });
+    }
+
+    res.json({
+      employeeId,
+      year,
+      month,
+      status: result.rows[0].status,
+      created_at: result.rows[0].created_at,
+      updated_at: result.rows[0].updated_at,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
