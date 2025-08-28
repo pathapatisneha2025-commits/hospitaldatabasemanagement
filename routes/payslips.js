@@ -15,7 +15,7 @@ router.get("/all/:year/:month", async (req, res) => {
              e.monthly_salary AS basicsalary,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions,
              (e.monthly_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay,
-             to_char(make_date($1::int, $2::int, 1), 'Month YYYY') AS date
+             to_char(make_date($1::int, $2::int, 1), 'MonthYYYY') AS date
       FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
