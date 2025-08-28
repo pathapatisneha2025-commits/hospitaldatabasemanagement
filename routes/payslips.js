@@ -20,8 +20,9 @@ router.get("/all", async (req, res) => {
              e.monthly_salary AS basicsalary,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions,
              (e.monthly_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay,
-             to_char(make_date($1::int, $2::int, 1), 'Month YYYY') AS date
-      FROM employees e
+             to_char(make_date($1::int, $2::int, 1), 'Month YYYY') AS date,
+             COALESCE(ps.status, 'pending') AS status
+         FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
        AND (
@@ -34,7 +35,11 @@ router.get("/all", async (req, res) => {
             (l.start_date <= make_date($1::int, $2::int, 1)
              AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
           )
-      GROUP BY e.id, e.full_name, e.role, e.monthly_salary
+              LEFT JOIN payslip_status ps
+        ON e.id = ps.employee_id
+       AND ps.year = $1
+       AND ps.month = $2
+      GROUP BY e.id, e.full_name, e.role, e.monthly_salary,ps.status
       ORDER BY e.full_name;
     `;
 
@@ -47,6 +52,31 @@ router.get("/all", async (req, res) => {
 });
 
 
+router.post("/status/:employeeId", async (req, res) => {
+  const { employeeId } = req.params;
+  const { status } = req.body; // expects any status value
+
+  try {
+    // Use current year and month in Asia/Kolkata timezone
+    const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const today = new Date(now);
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1; // JS months are 0-based
+
+    const query = `
+      INSERT INTO payslip_status (employee_id, year, month, status)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (employee_id, year, month)
+      DO UPDATE SET status = EXCLUDED.status
+    `;
+
+    await pool.query(query, [employeeId, year, month, status]);
+    res.json({ message: `Status updated to ${status}` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
