@@ -74,15 +74,11 @@ router.post("/add", async (req, res) => {
 router.get("/all", async (req, res) => {
   try {
     // Step 1: Update overdue tasks
-    await pool.query(`
+   await pool.query(`
       UPDATE tasks
       SET status = 'overdue'
       WHERE status = 'pending'
-      AND (
-        due_date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-        OR (due_date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-            AND due_time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
-      );
+      AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
     `);
 
     // Step 2: Fetch all tasks
@@ -126,15 +122,14 @@ router.get("/employee/:empId", async (req, res) => {
     const { empId } = req.params;
 
     // Step 1: Update overdue tasks for this employee
-    await pool.query(
+       await pool.query(
       `
       UPDATE tasks
       SET status = 'overdue'
       WHERE status = 'pending'
       AND assignto = (SELECT email FROM employees WHERE id = $1)
-      AND (
-        (due_date::timestamp + due_time::interval) < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
-      );`,
+      AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
+      `,
       [empId]
     );
 
