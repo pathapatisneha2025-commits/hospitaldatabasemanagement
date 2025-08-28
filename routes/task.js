@@ -188,9 +188,7 @@ router.put("/update/:id", async (req, res) => {
            due_date = $5,
            due_time = $6,
            status = CASE 
-                      WHEN $5::date < (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')
-                        OR ($5::date = (CURRENT_DATE AT TIME ZONE 'Asia/Kolkata') 
-                            AND $6::time < (CURRENT_TIME AT TIME ZONE 'Asia/Kolkata'))
+                      WHEN ($5::date + $6::time) < (NOW() AT TIME ZONE 'Asia/Kolkata')
                       THEN 'overdue'
                       ELSE 'pending'
                     END
