@@ -260,8 +260,16 @@ router.get('/all', async (req, res) => {
 
     const employees = result.rows.map(emp => ({
       ...emp,
-      temporary_addresses: emp.temporary_addresses ? JSON.parse(emp.temporary_addresses) : [],
-      permanent_addresses: emp.permanent_addresses ? JSON.parse(emp.permanent_addresses) : []
+      temporary_addresses: emp.temporary_addresses
+        ? typeof emp.temporary_addresses === 'string'
+          ? JSON.parse(emp.temporary_addresses)
+          : emp.temporary_addresses
+        : [],
+      permanent_addresses: emp.permanent_addresses
+        ? typeof emp.permanent_addresses === 'string'
+          ? JSON.parse(emp.permanent_addresses)
+          : emp.permanent_addresses
+        : []
     }));
 
     res.status(200).json({ success: true, employees });
@@ -270,6 +278,7 @@ router.get('/all', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 // Fetch employee by ID
 router.get('/:id', async (req, res) => {
