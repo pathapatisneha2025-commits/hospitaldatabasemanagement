@@ -281,13 +281,13 @@ router.get('/all', async (req, res) => {
 
 
 // Fetch employee by ID
+// Fetch employee by ID
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
     const result = await pool.query(
-      `SELECT id, full_name, email, department, role, dob, image, monthly_salary,status
-       FROM employees WHERE id = $1`,
+      `SELECT * FROM employees WHERE id = $1`,
       [id]
     );
 
@@ -295,7 +295,24 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    res.status(200).json({ success: true, employee: result.rows[0] });
+    const emp = result.rows[0];
+
+    // Parse addresses just like in /all route
+    const employee = {
+      ...emp,
+      temporary_addresses: emp.temporary_addresses
+        ? typeof emp.temporary_addresses === 'string'
+          ? JSON.parse(emp.temporary_addresses)
+          : emp.temporary_addresses
+        : [],
+      permanent_addresses: emp.permanent_addresses
+        ? typeof emp.permanent_addresses === 'string'
+          ? JSON.parse(emp.permanent_addresses)
+          : emp.permanent_addresses
+        : []
+    };
+
+    res.status(200).json({ success: true, employee });
   } catch (error) {
     console.error('Error fetching employee by ID:', error.message);
     res.status(500).json({ success: false, message: error.message });
@@ -310,16 +327,38 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     email,
     password,
     confirmPassword,
+    mobile,
+    familyNumber,
+    age,
+    experience,
+    bloodGroup,
+    aadhar,
+    pan,
+    esiNumber,
+    reportingManager,
     department,
     role,
     dob,
-    monthlySalary
+    scheduleIn,
+    scheduleOut,
+    breakTime,
+    monthlySalary,
+    jobDescription,
+    employmentType,
+    category,
+    ifsc,
+    branchName,
+    bankName,
+    accountNumber,
+    temporaryAddresses,
+    permanentAddresses,
+    dateOfJoining
   } = req.body;
 
-  const file = req.file; // ✅ use this throughout
+  const file = req.file;
 
   try {
-    // ✅ Get current employee
+    // Get current employee
     const existing = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
@@ -327,10 +366,10 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
 
     const existingEmployee = existing.rows[0];
 
-    // ✅ Handle image
+    // Handle image
     const imageUrl = file ? file.path : existingEmployee.image;
 
-    // ✅ Handle password update if provided
+    // Handle password update
     let hashedPassword = existingEmployee.password;
     if (password && confirmPassword) {
       if (password !== confirmPassword) {
@@ -342,39 +381,103 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // ✅ Update employee
+    // Handle addresses safely
+    const tempAddresses = temporaryAddresses
+      ? JSON.stringify(JSON.parse(temporaryAddresses))
+      : existingEmployee.temporary_addresses;
+    const permAddresses = permanentAddresses
+      ? JSON.stringify(JSON.parse(permanentAddresses))
+      : existingEmployee.permanent_addresses;
+
+    // Update employee
     const result = await pool.query(
       `UPDATE employees
        SET full_name = $1,
            email = $2,
            password = $3,
-           department = $4,
-           role = $5,
-           dob = $6,
-           image = $7,
-           monthly_salary = $8
-       WHERE id = $9
+           mobile = $4,
+           family_number = $5,
+           age = $6,
+           experience = $7,
+           blood_group = $8,
+           aadhar = $9,
+           pan = $10,
+           esi_number = $11,
+           reporting_manager = $12,
+           department = $13,
+           role = $14,
+           dob = $15,
+           schedule_in = $16,
+           schedule_out = $17,
+           break_time = $18,
+           monthly_salary = $19,
+           job_description = $20,
+           employment_type = $21,
+           category = $22,
+           ifsc = $23,
+           branch_name = $24,
+           bank_name = $25,
+           account_number = $26,
+           image = $27,
+           temporary_addresses = $28,
+           permanent_addresses = $29,
+           date_of_joining = $30
+       WHERE id = $31
        RETURNING *`,
       [
         fullName || existingEmployee.full_name,
         email || existingEmployee.email,
         hashedPassword,
+        mobile || existingEmployee.mobile,
+        familyNumber || existingEmployee.family_number,
+        age || existingEmployee.age,
+        experience || existingEmployee.experience,
+        bloodGroup || existingEmployee.blood_group,
+        aadhar || existingEmployee.aadhar,
+        pan || existingEmployee.pan,
+        esiNumber || existingEmployee.esi_number,
+        reportingManager || existingEmployee.reporting_manager,
         department || existingEmployee.department,
         role || existingEmployee.role,
         dob || existingEmployee.dob,
-        imageUrl,
+        scheduleIn || existingEmployee.schedule_in,
+        scheduleOut || existingEmployee.schedule_out,
+        breakTime || existingEmployee.break_time,
         monthlySalary || existingEmployee.monthly_salary,
+        jobDescription || existingEmployee.job_description,
+        employmentType || existingEmployee.employment_type,
+        category || existingEmployee.category,
+        ifsc || existingEmployee.ifsc,
+        branchName || existingEmployee.branch_name,
+        bankName || existingEmployee.bank_name,
+        accountNumber || existingEmployee.account_number,
+        imageUrl,
+        tempAddresses,
+        permAddresses,
+        dateOfJoining || existingEmployee.date_of_joining,
         id
       ]
     );
 
-    res.json({ success: true, employee: result.rows[0] });
+    // Parse addresses before returning
+    const updatedEmployee = {
+      ...result.rows[0],
+      temporary_addresses: result.rows[0].temporary_addresses
+        ? JSON.parse(result.rows[0].temporary_addresses)
+        : [],
+      permanent_addresses: result.rows[0].permanent_addresses
+        ? JSON.parse(result.rows[0].permanent_addresses)
+        : []
+    };
+
+    res.json({ success: true, employee: updatedEmployee });
 
   } catch (error) {
-    console.error('Update error:', error); // ✅ log full error
+    console.error('Update error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
+
 
 // Delete employee by ID
 router.delete('/delete/:id', async (req, res) => {
