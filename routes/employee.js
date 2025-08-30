@@ -32,10 +32,32 @@ router.post('/register', upload.single('image'), async (req, res) => {
       email,
       password,
       confirmPassword,
+      mobile,
+      familyNumber,
+      age,
+      experience,
+      bloodGroup,
+      aadhar,
+      pan,
+      esiNumber,
+      reportingManager,
       department,
       role,
       dob,
-      monthlySalary 
+      scheduleIn,
+      scheduleOut,
+      breakTime,
+      monthlySalary,
+      jobDescription,
+      employmentType,
+      category,
+      ifsc,
+      branchName,
+      bankName,
+      accountNumber,
+      temporaryAddresses,
+      permanentAddresses,
+      dateOfJoining
     } = req.body;
 
     const file = req.file;
@@ -53,13 +75,62 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const imageUrl = file.path; // Local image path
+    // local file path (or Cloudinary URL if you later integrate)
+    const profileImage = file.path;
 
     const result = await pool.query(
-      `INSERT INTO employees 
-        (full_name, email, password, department, role, dob, image, monthly_salary, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [fullName, email, hashedPassword, department, role, dob, imageUrl, monthlySalary, "pending"]
+      `INSERT INTO employees (
+        full_name, email, password, mobile, family_number,
+        age, experience, blood_group, aadhar, pan, esi_number,
+        reporting_manager, department, role, dob, schedule_in, schedule_out, break_time,
+        monthly_salary, job_description, employment_type, category,
+        ifsc, branch_name, bank_name, account_number,
+        profile_image, temporary_addresses, permanent_addresses, date_of_joining,
+        status
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23, $24, $25, $26,
+        $27, $28, $29, $30,
+        $31
+      )
+      RETURNING *`,
+      [
+        fullName,
+        email,
+        hashedPassword,
+        mobile,
+        familyNumber,
+        age,
+        experience,
+        bloodGroup,
+        aadhar,
+        pan,
+        esiNumber,
+        reportingManager,
+        department,
+        role,
+        dob,
+        scheduleIn,
+        scheduleOut,
+        breakTime,
+        monthlySalary,
+        jobDescription,
+        employmentType,
+        category,
+        ifsc,
+        branchName,
+        bankName,
+        accountNumber,
+        profileImage,
+        temporaryAddresses ? JSON.parse(temporaryAddresses) : null,
+        permanentAddresses ? JSON.parse(permanentAddresses) : null,
+        dateOfJoining,
+        "pending"
+      ]
     );
 
     res.status(201).json({ success: true, employee: result.rows[0] });
@@ -68,6 +139,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 router.post("/update-status", async (req, res) => {
   try {
     const { id, status } = req.body;
