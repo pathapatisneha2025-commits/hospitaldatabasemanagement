@@ -358,39 +358,40 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
   const file = req.file;
 
   try {
-    // Get current employee
-    const existing = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
-    if (existing.rows.length === 0) {
+    // Fetch existing employee
+    const existingRes = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+    if (existingRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
-
-    const existingEmployee = existing.rows[0];
+    const existingEmployee = existingRes.rows[0];
 
     // Handle image
     const imageUrl = file ? file.path : existingEmployee.image;
 
-    // Handle password update
+    // Handle password
     let hashedPassword = existingEmployee.password;
     if (password && confirmPassword) {
       if (password !== confirmPassword) {
-        return res.status(400).json({
-          success: false,
-          message: 'Password and Confirm Password do not match',
-        });
+        return res.status(400).json({ success: false, message: 'Password and Confirm Password do not match' });
       }
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // Handle addresses safely
+    // Handle addresses safely (string or object)
     const tempAddresses = temporaryAddresses
-      ? JSON.stringify(JSON.parse(temporaryAddresses))
+      ? typeof temporaryAddresses === 'string'
+        ? JSON.stringify(JSON.parse(temporaryAddresses))
+        : JSON.stringify(temporaryAddresses)
       : existingEmployee.temporary_addresses;
+
     const permAddresses = permanentAddresses
-      ? JSON.stringify(JSON.parse(permanentAddresses))
+      ? typeof permanentAddresses === 'string'
+        ? JSON.stringify(JSON.parse(permanentAddresses))
+        : JSON.stringify(permanentAddresses)
       : existingEmployee.permanent_addresses;
 
     // Update employee
-    const result = await pool.query(
+    const updateRes = await pool.query(
       `UPDATE employees
        SET full_name = $1,
            email = $2,
@@ -459,16 +460,15 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
       ]
     );
 
+    const updatedEmployee = updateRes.rows[0];
+
     // Parse addresses before returning
-    const updatedEmployee = {
-      ...result.rows[0],
-      temporary_addresses: result.rows[0].temporary_addresses
-        ? JSON.parse(result.rows[0].temporary_addresses)
-        : [],
-      permanent_addresses: result.rows[0].permanent_addresses
-        ? JSON.parse(result.rows[0].permanent_addresses)
-        : []
-    };
+    updatedEmployee.temporary_addresses = updatedEmployee.temporary_addresses
+      ? JSON.parse(updatedEmployee.temporary_addresses)
+      : [];
+    updatedEmployee.permanent_addresses = updatedEmployee.permanent_addresses
+      ? JSON.parse(updatedEmployee.permanent_addresses)
+      : [];
 
     res.json({ success: true, employee: updatedEmployee });
 
