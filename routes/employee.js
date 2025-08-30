@@ -75,8 +75,8 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // local file path (or Cloudinary URL if you later integrate)
-    const profileImage = file.path;
+    // store the uploaded image as 'image'
+    const image = file.path;
 
     const result = await pool.query(
       `INSERT INTO employees (
@@ -85,7 +85,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
         reporting_manager, department, role, dob, schedule_in, schedule_out, break_time,
         monthly_salary, job_description, employment_type, category,
         ifsc, branch_name, bank_name, account_number,
-        profile_image, temporary_addresses, permanent_addresses, date_of_joining,
+        image, temporary_addresses, permanent_addresses, date_of_joining,
         status
       )
       VALUES (
@@ -125,7 +125,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
         branchName,
         bankName,
         accountNumber,
-        profileImage,
+        image,  // <-- changed here
         temporaryAddresses ? JSON.parse(temporaryAddresses) : null,
         permanentAddresses ? JSON.parse(permanentAddresses) : null,
         dateOfJoining,
@@ -139,6 +139,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 router.post("/update-status", async (req, res) => {
   try {
