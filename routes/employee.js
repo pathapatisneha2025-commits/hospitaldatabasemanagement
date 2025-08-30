@@ -377,17 +377,17 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // Handle addresses safely (string or object)
+    // Handle addresses safely (as objects)
     const tempAddresses = temporaryAddresses
       ? typeof temporaryAddresses === 'string'
-        ? JSON.stringify(JSON.parse(temporaryAddresses))
-        : JSON.stringify(temporaryAddresses)
+        ? JSON.parse(temporaryAddresses)
+        : temporaryAddresses
       : existingEmployee.temporary_addresses;
 
     const permAddresses = permanentAddresses
       ? typeof permanentAddresses === 'string'
-        ? JSON.stringify(JSON.parse(permanentAddresses))
-        : JSON.stringify(permanentAddresses)
+        ? JSON.parse(permanentAddresses)
+        : permanentAddresses
       : existingEmployee.permanent_addresses;
 
     // Update employee
@@ -462,14 +462,7 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
 
     const updatedEmployee = updateRes.rows[0];
 
-    // Parse addresses before returning
-    updatedEmployee.temporary_addresses = updatedEmployee.temporary_addresses
-      ? JSON.parse(updatedEmployee.temporary_addresses)
-      : [];
-    updatedEmployee.permanent_addresses = updatedEmployee.permanent_addresses
-      ? JSON.parse(updatedEmployee.permanent_addresses)
-      : [];
-
+    // No need to parse addresses; they are already objects
     res.json({ success: true, employee: updatedEmployee });
 
   } catch (error) {
