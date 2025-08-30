@@ -256,13 +256,21 @@ module.exports = router;
 // Fetch all employees
 router.get('/all', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, full_name, email, department, role, dob, image,monthly_salary,status FROM employees');
-    res.status(200).json({ success: true, employees: result.rows });
+    const result = await pool.query(`SELECT * FROM employees`);
+
+    const employees = result.rows.map(emp => ({
+      ...emp,
+      temporary_addresses: emp.temporary_addresses ? JSON.parse(emp.temporary_addresses) : [],
+      permanent_addresses: emp.permanent_addresses ? JSON.parse(emp.permanent_addresses) : []
+    }));
+
+    res.status(200).json({ success: true, employees });
   } catch (error) {
     console.error('Error fetching employees:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 // Fetch employee by ID
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
