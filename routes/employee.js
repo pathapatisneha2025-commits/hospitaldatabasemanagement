@@ -78,6 +78,15 @@ router.post('/register', upload.single('image'), async (req, res) => {
     // store the uploaded image as 'image'
     const image = file.path;
 
+    // safely handle JSON fields
+    const tempAddresses = temporaryAddresses 
+      ? JSON.stringify(JSON.parse(temporaryAddresses)) 
+      : null;
+
+    const permAddresses = permanentAddresses 
+      ? JSON.stringify(JSON.parse(permanentAddresses)) 
+      : null;
+
     const result = await pool.query(
       `INSERT INTO employees (
         full_name, email, password, mobile, family_number,
@@ -125,9 +134,9 @@ router.post('/register', upload.single('image'), async (req, res) => {
         branchName,
         bankName,
         accountNumber,
-        image,  // <-- changed here
-        temporaryAddresses ? JSON.parse(temporaryAddresses) : null,
-        permanentAddresses ? JSON.parse(permanentAddresses) : null,
+        image,       // uploaded image
+        tempAddresses,
+        permAddresses,
         dateOfJoining,
         "pending"
       ]
