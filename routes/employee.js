@@ -378,17 +378,13 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     }
 
     // Handle addresses safely (as objects)
-    const tempAddresses = temporaryAddresses
-      ? typeof temporaryAddresses === 'string'
-        ? JSON.parse(temporaryAddresses)
-        : temporaryAddresses
-      : existingEmployee.temporary_addresses;
+    const tempAddresses = temporaryAddresses 
+      ? JSON.stringify(JSON.parse(temporaryAddresses)) 
+      : null;
 
-    const permAddresses = permanentAddresses
-      ? typeof permanentAddresses === 'string'
-        ? JSON.parse(permanentAddresses)
-        : permanentAddresses
-      : existingEmployee.permanent_addresses;
+    const permAddresses = permanentAddresses 
+      ? JSON.stringify(JSON.parse(permanentAddresses)) 
+      : null;
 
     // Update employee
     const updateRes = await pool.query(
