@@ -73,7 +73,7 @@ router.post("/add", async (req, res) => {
 
 router.post("/salary-deduction", async (req, res) => {
   try {
-    const { employeeId, employeeName, department, leaveDuration, startDate, endDate } = req.body;
+    const { employeeId, employeeName, leaveDuration, startDate, endDate } = req.body;
 
     // ✅ Fetch employee salary using employeeId
     const result = await pool.query(
