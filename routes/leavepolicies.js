@@ -3,26 +3,39 @@ const router = express.Router();
 const pool = require("../db"); // PostgreSQL pool connection
 
 // POST API to create a leave policy
-router.post("/add", async (req, res) => {
+router.post("/add", async (req, res) => { 
   try {
-    const { department, number_of_leaves, yearly_totalleaves } = req.body;
+    const { number_of_leaves, yearly_totalleaves, employee_name, employee_email } = req.body;
 
-    if (!department || !number_of_leaves || yearly_totalleaves === undefined) {
+    // Validate required fields
+    if (number_of_leaves === undefined || yearly_totalleaves === undefined || !employee_name || !employee_email) {
       return res.status(400).json({ 
-        error: "Department, number_of_leaves, and yearly_totalleaves are required" 
+        error: "number_of_leaves, yearly_totalleaves, employee_name, and employee_email are required" 
       });
     }
 
-    const query = `
-      INSERT INTO leave_policies (department, number_of_leaves, yearly_totalleaves) 
-      VALUES ($1, $2, $3) 
+    // Fetch employee ID based on email
+    const employeeQuery = `SELECT id FROM employees WHERE email = $1`;
+    const employeeResult = await pool.query(employeeQuery, [employee_email]);
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found with the provided email" });
+    }
+
+    const employee_id = employeeResult.rows[0].id;
+
+    // Insert into leave_policies (store employee_id, not email)
+    const insertQuery = `
+      INSERT INTO leave_policies (number_of_leaves, yearly_totalleaves, employee_id, employee_name) 
+      VALUES ($1, $2, $3, $4) 
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [
-      department,
+    const result = await pool.query(insertQuery, [
       number_of_leaves,
       yearly_totalleaves,
+      employee_id,
+      employee_name,
     ]);
 
     res.status(201).json({
@@ -34,6 +47,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 // GET API - fetch all leave policies
 router.get("/all", async (req, res) => {

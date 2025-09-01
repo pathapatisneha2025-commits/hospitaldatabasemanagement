@@ -86,15 +86,21 @@ router.post("/salary-deduction", async (req, res) => {
     }
 
     const monthlySalary = result.rows[0].monthly_salary;
-    const workingDays = 26;
-    const workingHoursPerDay = 8;
 
-    // ✅ Fetch leave policy using department (passed in request)
-    const policyResult = await pool.query(
+    // ✅ Calculate working days in current month
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const workingDays = totalDaysInMonth - 4; // Excluding weekly offs
+    const workingHoursPerDay = 10;
+
+    // ✅ Fetch leave policy using department
+const policyResult = await pool.query(
       `SELECT number_of_leaves AS allowed_leaves
        FROM leave_policies
-       WHERE department = $1`,
-      [department]
+       WHERE employee_id = $1`,
+      [employeeId]
     );
 
     if (policyResult.rows.length === 0) {
@@ -103,15 +109,11 @@ router.post("/salary-deduction", async (req, res) => {
 
     const paidLeaves = parseInt(policyResult.rows[0].allowed_leaves, 10);
 
-    const perDaySalary = monthlySalary / workingDays;
-    const perHourSalary = perDaySalary / workingHoursPerDay;
-
     let equivalentLeaveDays = 0;
 
     // 🔹 Convert leave duration into days
     if (leaveDuration.toLowerCase() === "hourly") {
-      const hours =
-        (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
+      const hours = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
       equivalentLeaveDays = hours / workingHoursPerDay;
     } else if (leaveDuration.toLowerCase() === "halfday") {
       equivalentLeaveDays = 0.5;
@@ -127,7 +129,7 @@ router.post("/salary-deduction", async (req, res) => {
         1;
     }
 
-    // 🔹 Get leaves already taken this month (by employeeId)
+    // 🔹 Get leaves already taken this month
     const leaveResult = await pool.query(
       `SELECT COALESCE(SUM(leavestaken), 0.0) as used_leaves
        FROM leaves 
@@ -138,20 +140,29 @@ router.post("/salary-deduction", async (req, res) => {
     );
 
     const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
-
-    // Total leaves including this request
     const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
 
     // Remaining paid leaves
     const remainingPaidLeaves = Math.max(paidLeaves - totalUsedLeaves, 0);
 
-    // Deduction if more than paid leaves
     let unpaidDays = 0;
     let salaryDeduction = 0;
+    let deductionPerDay = 0; // ✅ initialize
 
     if (totalUsedLeaves > paidLeaves) {
       unpaidDays = totalUsedLeaves - paidLeaves;
-      salaryDeduction = unpaidDays * perDaySalary;
+
+      // ✅ Deduction slab
+      if (monthlySalary >= 4500 && monthlySalary <= 7500) {
+        deductionPerDay = 700;
+      } else if (monthlySalary >= 7501 && monthlySalary <= 9500) {
+        deductionPerDay = 1400;
+      } else if (monthlySalary >= 9501) {
+        deductionPerDay = 2800;
+      }
+
+      // ✅ Direct per-day deduction
+      salaryDeduction = deductionPerDay * unpaidDays;
     }
 
     res.json({
@@ -159,21 +170,22 @@ router.post("/salary-deduction", async (req, res) => {
       employeeName,
       department,
       monthlySalary,
-      perDaySalary: perDaySalary.toFixed(2),
-      perHourSalary: perHourSalary.toFixed(2),
+      workingDays,   // ✅ kept in response
       equivalentLeaveDays,
       usedLeaves,
       totalUsedLeaves,
       remainingPaidLeaves,
       paidLeaves,
       unpaidDays,
-      salaryDeduction: salaryDeduction.toFixed(2),
+      deductionPerDay, // ✅ added to response
+      salaryDeduction,
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
+
 
 
 
