@@ -168,7 +168,6 @@ const policyResult = await pool.query(
     res.json({
       employeeId,
       employeeName,
-      department,
       monthlySalary,
       workingDays,   // ✅ kept in response
       equivalentLeaveDays,
