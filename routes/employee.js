@@ -257,20 +257,7 @@ module.exports = router;
 router.get('/all', async (req, res) => {
   try {
     const result = await pool.query(`SELECT * FROM employees`);
-
-    const employees = result.rows.map(emp => ({
-      ...emp,
-      temporary_addresses: emp.temporary_addresses
-        ? typeof emp.temporary_addresses === 'string'
-          ? JSON.parse(emp.temporary_addresses)
-          : emp.temporary_addresses
-        : [],
-      permanent_addresses: emp.permanent_addresses
-        ? typeof emp.permanent_addresses === 'string'
-          ? JSON.parse(emp.permanent_addresses)
-          : emp.permanent_addresses
-        : []
-    }));
+    const employees = result.rows; // this contains all employees
 
     res.status(200).json({ success: true, employees });
   } catch (error) {
@@ -278,6 +265,7 @@ router.get('/all', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 
 // Fetch employee by ID
