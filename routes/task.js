@@ -12,52 +12,58 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ error: "Please fill all required fields" });
     }
 
-    // Step 1: Get employeeId from email
+    
+    const assignees = Array.isArray(assignto) ? assignto : [assignto];
+
+    // Step 1: Get employee IDs for all emails
     const employeeResult = await pool.query(
-      `SELECT id FROM employees WHERE email = $1 LIMIT 1`,
-      [assignto]
+      `SELECT id, email FROM employees WHERE email = ANY($1::text[])`,
+      [assignees]
     );
 
     if (employeeResult.rows.length === 0) {
-      return res.status(404).json({ error: "Employee not found with this email" });
+      return res.status(404).json({ error: "No employees found with given emails" });
     }
 
-    const employeeId = employeeResult.rows[0].id;
+    const employeeIds = employeeResult.rows.map(emp => emp.id);
 
-    // Step 2: Insert task
+    // Step 2: Insert task (save emails as array in assignto)
     const newTask = await pool.query(
       `INSERT INTO tasks (title, description, assignto, priority, due_date, due_time, status) 
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [title, description || null, assignto, priority, due_date, due_time, "pending"]
+      [title, description || null, assignees, priority, due_date, due_time, "pending"]
     );
 
     const task = newTask.rows[0];
 
-    // Step 3: Save notification with employeeId
-    const notificationResult = await pool.query(
-      `INSERT INTO notifications (employee_id, message, task_id)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [employeeId, `A new task "${title}" has been assigned to you.`, task.id]
-    );
-
-    const notification = notificationResult.rows[0];
-
-    // Step 4: Send WebSocket notification if online
-    const ws = clients.get(employeeId.toString());
-    if (ws && ws.readyState === ws.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "taskAssigned",
-          notification,
-        })
+    // Step 3: Create notifications for each employee
+    const notifications = [];
+    for (const employeeId of employeeIds) {
+      const notificationResult = await pool.query(
+        `INSERT INTO notifications (employee_id, message, task_id)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [employeeId, `A new task "${title}" has been assigned to you.`, task.id]
       );
+      const notification = notificationResult.rows[0];
+      notifications.push(notification);
+
+      // Step 4: Send WebSocket notification if online
+      const ws = clients.get(employeeId.toString());
+      if (ws && ws.readyState === ws.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "taskAssigned",
+            notification,
+          })
+        );
+      }
     }
 
     res.status(201).json({
       message: "Task created successfully",
-      notification_message: "Notification sent successfully",
+      notifications_sent: notifications.length,
       task,
-      notification,
+      notifications,
     });
 
   } catch (err) {
