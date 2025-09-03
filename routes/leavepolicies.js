@@ -91,26 +91,39 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { department, number_of_leaves, yearly_totalleaves } = req.body;
+    const { number_of_leaves, yearly_totalleaves, employee_name, employee_email } = req.body;
 
-    if (!department || !number_of_leaves || yearly_totalleaves === undefined) {
-      return res.status(400).json({ 
-        error: "Department, number_of_leaves, and yearly_totalleaves are required" 
+    // Validate required fields
+    if (number_of_leaves === undefined || yearly_totalleaves === undefined || !employee_name || !employee_email) {
+      return res.status(400).json({
+        error: "number_of_leaves, yearly_totalleaves, employee_name, and employee_email are required"
       });
     }
 
+    // Fetch employee ID based on email
+    const employeeQuery = `SELECT id FROM employees WHERE email = $1`;
+    const employeeResult = await pool.query(employeeQuery, [employee_email]);
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found with the provided email" });
+    }
+
+    const employee_id = employeeResult.rows[0].id;
+
+    // Update leave policy
     const query = `
       UPDATE leave_policies 
-      SET department = $1, number_of_leaves = $2, yearly_totalleaves = $3
-      WHERE id = $4 
+      SET number_of_leaves = $1, yearly_totalleaves = $2, employee_id = $3, employee_name = $4
+      WHERE id = $5
       RETURNING *;
     `;
 
     const result = await pool.query(query, [
-      department,
       number_of_leaves,
       yearly_totalleaves,
-      id,
+      employee_id,
+      employee_name,
+      id
     ]);
 
     if (result.rows.length === 0) {
