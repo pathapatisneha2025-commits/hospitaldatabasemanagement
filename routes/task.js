@@ -188,6 +188,9 @@ router.put("/update/:id", async (req, res) => {
     const { id } = req.params;
     const { title, description, assignto, priority, due_date, due_time } = req.body;
 
+    // Ensure assignto is always an array
+    const assignees = Array.isArray(assignto) ? assignto : [assignto];
+
     const updatedTask = await pool.query(
       `UPDATE tasks 
        SET title = $1, 
@@ -203,7 +206,7 @@ router.put("/update/:id", async (req, res) => {
                     END
        WHERE id = $7
        RETURNING *`,
-      [title, description || null, assignto, priority, due_date || null, due_time || null, id]
+      [title, description || null, assignees, priority, due_date || null, due_time || null, id]
     );
 
     if (updatedTask.rows.length === 0) {
