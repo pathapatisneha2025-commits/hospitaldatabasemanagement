@@ -79,29 +79,29 @@ router.post("/add", async (req, res) => {
 // ============================
 router.get("/all", async (req, res) => {
   try {
-    // Step 1: Update overdue tasks
-   await pool.query(`
+    // Step 1: Update overdue tasks (for all employees)
+    await pool.query(`
       UPDATE tasks
       SET status = 'overdue'
       WHERE status = 'pending'
       AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
     `);
 
-    // Step 2: Fetch all tasks
+    // Step 2: Fetch all tasks (join properly on assignto array)
     const tasks = await pool.query(
       `SELECT t.*
        FROM tasks t
-       LEFT JOIN employees e ON t.assignto = e.email
+       LEFT JOIN employees e ON e.email = ANY(t.assignto)
        ORDER BY t.due_date ASC, t.due_time ASC`
     );
 
     // Step 3: Format date (keep only YYYY-MM-DD)
     const formatted = tasks.rows.map(task => ({
       ...task,
-      due_date: task.due_date.toISOString().split("T")[0]
+      due_date: task.due_date ? task.due_date.toISOString().split("T")[0] : null
     }));
 
-    // Step 4: Return only tasks (no overdue_updated)
+    // Step 4: Return only tasks
     res.status(200).json({
       success: true,
       count: formatted.length,
@@ -117,6 +117,7 @@ router.get("/all", async (req, res) => {
 
 
 
+
 // ============================
 // Get task by ID
 // ============================
@@ -125,15 +126,22 @@ router.get("/all", async (req, res) => {
 // ============================
 router.get("/employee/:empId", async (req, res) => {
   try {
-    const { empId } = req.params;
+    const empId = parseInt(req.params.empId, 10); // ensure number
+    if (isNaN(empId)) {
+      return res.status(400).json({ error: "Invalid employee ID" });
+    }
 
     // Step 1: Update overdue tasks for this employee
-       await pool.query(
+    await pool.query(
       `
       UPDATE tasks
       SET status = 'overdue'
       WHERE status = 'pending'
-      AND assignto = (SELECT email FROM employees WHERE id = $1)
+      AND EXISTS (
+        SELECT 1 FROM employees e
+        WHERE e.id = $1
+        AND e.email = ANY(tasks.assignto)
+      )
       AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
       `,
       [empId]
@@ -143,7 +151,7 @@ router.get("/employee/:empId", async (req, res) => {
     const tasks = await pool.query(
       `SELECT t.*
        FROM tasks t
-       JOIN employees e ON t.assignto = e.email
+       JOIN employees e ON e.email = ANY(t.assignto)
        WHERE e.id = $1
        ORDER BY t.due_date ASC, t.due_time ASC`,
       [empId]
@@ -156,7 +164,7 @@ router.get("/employee/:empId", async (req, res) => {
     // Step 3: Format date (YYYY-MM-DD only)
     const formatted = tasks.rows.map(task => ({
       ...task,
-      due_date: task.due_date.toISOString().split("T")[0]
+      due_date: task.due_date ? task.due_date.toISOString().split("T")[0] : null
     }));
 
     // Step 4: Return employee tasks
