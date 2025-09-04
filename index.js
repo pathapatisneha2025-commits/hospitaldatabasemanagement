@@ -12,6 +12,9 @@ const leavepolicies = require("./routes/leavepolicies");
 const notificationRoutes = require("./routes/notifications"); 
 const scheduleRoutes = require("./routes/schedule"); 
 const PayslipsRoutes = require("./routes/payslips"); 
+const Department = require("./routes/department"); 
+const Role = require("./routes/role"); 
+
 
 
 // WebSocket setup
@@ -33,6 +36,9 @@ app.use("/leavepolicies", leavepolicies);
 app.use("/notifications", notificationRoutes); 
 app.use("/schedule", scheduleRoutes); 
 app.use("/payslips", PayslipsRoutes); 
+app.use("/department", Department); 
+app.use("/department", Role); 
+
 
 
 // Start HTTP server
