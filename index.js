@@ -37,7 +37,7 @@ app.use("/notifications", notificationRoutes);
 app.use("/schedule", scheduleRoutes); 
 app.use("/payslips", PayslipsRoutes); 
 app.use("/department", Department); 
-app.use("/department", Role); 
+app.use("/role", Role); 
 
 
 
