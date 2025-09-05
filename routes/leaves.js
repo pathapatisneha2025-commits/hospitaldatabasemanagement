@@ -158,35 +158,37 @@ router.post("/salary-deduction", async (req, res) => {
     }
 
     // ✅ Final deduction calculation
-    let unpaidDays = 0;
-    let salaryDeduction = 0;
-    let totalPenalty = 0;
+    // ✅ Final deduction calculation
+let unpaidDays = 0;
+let salaryDeduction = 0;
+let totalPenalty = 0;
+let UnauthorizedLeaves = 0; // 👈 declare outside the if block
 
-    if (leaveStatus.toLowerCase() === "cancelled") {
-      // Check attendance for "off duty"
-      const attendanceResult = await pool.query(
-        `SELECT COUNT(*) AS off_duty_days
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND timestamp BETWEEN $2 AND $3`,
-        [employeeId, startDate, endDate]
-      );
+if (leaveStatus.toLowerCase() === "cancelled") {
+  // Check attendance for "off duty"
+  const attendanceResult = await pool.query(
+    `SELECT COUNT(*) AS off_duty_days
+     FROM attendance
+     WHERE employee_id = $1
+       AND status = 'Off Duty'
+       AND timestamp BETWEEN $2 AND $3`,
+    [employeeId, startDate, endDate]
+  );
 
-      const UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10);
+  UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
 
-      if (UnauthorizedLeaves > 0) {
-        if (remainingPaidLeaves > 0) {
-          // ✅ Only Unauthorized Leave penalty (no per-day deduction)
-          totalPenalty = unauthorizedPenalty * UnauthorizedLeaves;
-        } else {
-          // ✅ Per-day deduction + Unauthorized Leave penalty
-          unpaidDays = UnauthorizedLeaves;
-          salaryDeduction = deductionPerDay * unpaidDays;
-          totalPenalty = salaryDeduction + (unauthorizedPenalty * UnauthorizedLeaves);
-        }
-      }
+  if (UnauthorizedLeaves > 0) {
+    if (remainingPaidLeaves > 0) {
+      // Only Unauthorized Leave penalty (no per-day deduction)
+      totalPenalty = unauthorizedPenalty * UnauthorizedLeaves;
+    } else {
+      // Per-day deduction + Unauthorized Leave penalty
+      unpaidDays = UnauthorizedLeaves;
+      salaryDeduction = deductionPerDay * unpaidDays;
+      totalPenalty = salaryDeduction + (unauthorizedPenalty * UnauthorizedLeaves);
     }
+  }
+}
 
     res.json({
       employeeId,
