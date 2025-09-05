@@ -165,7 +165,7 @@ router.post("/salary-deduction", async (req, res) => {
     if (leaveStatus.toLowerCase() === "cancelled") {
       // Check attendance for "off duty"
       const attendanceResult = await pool.query(
-        `SELECT COUNT(*) AS UnauthorizedLeaves
+        `SELECT COUNT(*) AS off_duty_days
          FROM attendance
          WHERE employee_id = $1
            AND status = 'Off Duty'
@@ -173,9 +173,9 @@ router.post("/salary-deduction", async (req, res) => {
         [employeeId, startDate, endDate]
       );
 
-      const UnauthorizedLeaves = parseInt(attendanceResult.rows[0].UnauthorizedLeaves, 10);
+      const UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10);
 
-      if (offDutyDays > 0) {
+      if (UnauthorizedLeaves > 0) {
         if (remainingPaidLeaves > 0) {
           // ✅ Only Unauthorized Leave penalty (no per-day deduction)
           totalPenalty = unauthorizedPenalty * UnauthorizedLeaves;
