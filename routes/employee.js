@@ -410,7 +410,7 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
            temporary_addresses = $28,
            permanent_addresses = $29,
            date_of_joining = $30,
-           break_out = $31,
+           break_out = $31
        WHERE id = $32
        RETURNING *`,
       [
