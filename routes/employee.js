@@ -432,7 +432,6 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
         scheduleIn || existingEmployee.schedule_in,
         scheduleOut || existingEmployee.schedule_out,
         breakIn|| existingEmployee.break_in,
-         breakOut|| existingEmployee.break_out,
          monthlySalary || existingEmployee.monthly_salary,
         jobDescription || existingEmployee.job_description,
         employmentType || existingEmployee.employment_type,
@@ -445,6 +444,8 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
         tempAddresses,
         permAddresses,
         dateOfJoining || existingEmployee.date_of_joining,
+        breakOut|| existingEmployee.break_out,
+
         id
       ]
     );
