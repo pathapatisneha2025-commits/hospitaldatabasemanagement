@@ -331,7 +331,8 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     dob,
     scheduleIn,
     scheduleOut,
-    breakTime,
+    breakIn,
+    breakOut,
     monthlySalary,
     jobDescription,
     employmentType,
@@ -396,7 +397,7 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
            dob = $15,
            schedule_in = $16,
            schedule_out = $17,
-           break_time = $18,
+           break_in = $18,
            monthly_salary = $19,
            job_description = $20,
            employment_type = $21,
@@ -408,8 +409,9 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
            image = $27,
            temporary_addresses = $28,
            permanent_addresses = $29,
-           date_of_joining = $30
-       WHERE id = $31
+           date_of_joining = $30,
+           break_out = $31,
+       WHERE id = $32
        RETURNING *`,
       [
         fullName || existingEmployee.full_name,
@@ -429,8 +431,9 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
         dob || existingEmployee.dob,
         scheduleIn || existingEmployee.schedule_in,
         scheduleOut || existingEmployee.schedule_out,
-        breakTime || existingEmployee.break_time,
-        monthlySalary || existingEmployee.monthly_salary,
+        breakIn|| existingEmployee.break_in,
+         breakOut|| existingEmployee.break_out,
+         monthlySalary || existingEmployee.monthly_salary,
         jobDescription || existingEmployee.job_description,
         employmentType || existingEmployee.employment_type,
         category || existingEmployee.category,
