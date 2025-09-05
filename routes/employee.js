@@ -46,7 +46,8 @@ router.post('/register', upload.single('image'), async (req, res) => {
       dob,
       scheduleIn,
       scheduleOut,
-      breakTime,
+     breakIn,      // renamed column
+      breakOut,
       monthlySalary,
       jobDescription,
       employmentType,
@@ -91,7 +92,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       `INSERT INTO employees (
         full_name, email, password, mobile, family_number,
         age, experience, blood_group, aadhar, pan, esi_number,
-        reporting_manager, department, role, dob, schedule_in, schedule_out, break_time,
+        reporting_manager, department, role, dob, schedule_in, schedule_out, break_in, break_out,
         monthly_salary, job_description, employment_type, category,
         ifsc, branch_name, bank_name, account_number,
         image, temporary_addresses, permanent_addresses, date_of_joining,
@@ -104,7 +105,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
         $19, $20, $21, $22,
         $23, $24, $25, $26,
         $27, $28, $29, $30,
-        $31
+        $31,$32
       )
       RETURNING *`,
       [
@@ -125,7 +126,8 @@ router.post('/register', upload.single('image'), async (req, res) => {
         dob,
         scheduleIn,
         scheduleOut,
-        breakTime,
+         breakIn,
+        breakOut,
         monthlySalary,
         jobDescription,
         employmentType,
