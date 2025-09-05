@@ -168,12 +168,12 @@ router.post("/salary-deduction", async (req, res) => {
         `SELECT COUNT(*) AS off_duty_days
          FROM attendance
          WHERE employee_id = $1
-           AND status = 'offduty'
+           AND status = 'OffDuty'
            AND timestamp BETWEEN $2 AND $3`,
         [employeeId, startDate, endDate]
       );
 
-      const offDutyDays = parseInt(attendanceResult.rows[0].off_duty_days, 10);
+      const UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10);
 
       if (offDutyDays > 0) {
         if (remainingPaidLeaves > 0) {
@@ -201,6 +201,7 @@ router.post("/salary-deduction", async (req, res) => {
       salaryDeduction,
       totalPenalty,
       leaveStatus, 
+      UnauthorizedLeaves
     });
   } catch (error) {
     console.error(error);
