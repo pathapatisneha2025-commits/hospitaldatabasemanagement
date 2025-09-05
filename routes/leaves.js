@@ -167,15 +167,17 @@ let UnauthorizedLeaves = 0; // 👈 declare outside the if block
 if (leaveStatus.toLowerCase() === "cancelled") {
   // Check attendance for "off duty"
   const attendanceResult = await pool.query(
-    `SELECT COUNT(*) AS off_duty_days
-     FROM attendance
-     WHERE employee_id = $1
-       AND status = 'Off Duty'
-       AND timestamp BETWEEN $2 AND $3`,
-    [employeeId, startDate, endDate]
-  );
+  `SELECT COUNT(*) AS off_duty_days
+   FROM attendance
+   WHERE employee_id = $1
+     AND status ILIKE 'Off Duty'
+     AND timestamp >= $2::date
+     AND timestamp < ($3::date + interval '1 day')`,
+  [employeeId, startDate, endDate]
+);
 
-  UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
+UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
+
 
   if (UnauthorizedLeaves > 0) {
     if (remainingPaidLeaves > 0) {
