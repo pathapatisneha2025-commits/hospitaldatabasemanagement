@@ -200,7 +200,7 @@ router.post("/salary-deduction", async (req, res) => {
       unpaidDays,
       salaryDeduction,
       totalPenalty,
-      leaveStatus, // ✅ now returned from DB
+      leaveStatus, 
     });
   } catch (error) {
     console.error(error);
