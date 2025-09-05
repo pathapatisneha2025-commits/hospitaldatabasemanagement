@@ -178,12 +178,12 @@ router.post("/salary-deduction", async (req, res) => {
       if (offDutyDays > 0) {
         if (remainingPaidLeaves > 0) {
           // ✅ Only Unauthorized Leave penalty (no per-day deduction)
-          totalPenalty = unauthorizedPenalty * offDutyDays;
+          totalPenalty = unauthorizedPenalty * UnauthorizedLeaves;
         } else {
           // ✅ Per-day deduction + Unauthorized Leave penalty
-          unpaidDays = offDutyDays;
+          unpaidDays = UnauthorizedLeaves;
           salaryDeduction = deductionPerDay * unpaidDays;
-          totalPenalty = salaryDeduction + (unauthorizedPenalty * offDutyDays);
+          totalPenalty = salaryDeduction + (unauthorizedPenalty * UnauthorizedLeaves);
         }
       }
     }
