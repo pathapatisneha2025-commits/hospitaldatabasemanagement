@@ -244,26 +244,37 @@ router.get("/by-employee/:id", async (req, res) => {
 
     // 3️⃣ Calculate unpaid days per leave
     let cumulativeUsed = 0;
+    let cumulativeUnpaid = 0;
     const leavesWithUnpaid = leaveResult.rows.map((leave) => {
       const leaveTaken = parseFloat(leave.leavestaken);
 
       cumulativeUsed += leaveTaken;
 
-      // Unpaid days = cumulative used - allowed (cumulative), capped to leaveTaken
-      let unpaid_days = Math.max(cumulativeUsed - allowedLeaves, 0);
-      unpaid_days = unpaid_days > leaveTaken ? leaveTaken : unpaid_days;
+      // Total unpaid so far = cumulative used - allowed leaves
+      let totalUnpaidSoFar = Math.max(cumulativeUsed - allowedLeaves, 0);
 
-      // Optional: round to 2 decimals
+      // Unpaid days for this leave = totalUnpaidSoFar - already counted unpaid
+      let unpaid_days = totalUnpaidSoFar - cumulativeUnpaid;
+
+      // Update cumulative unpaid
+      cumulativeUnpaid += unpaid_days;
+
+      // Round to 2 decimals
       unpaid_days = parseFloat(unpaid_days.toFixed(2));
 
-      return { ...leave, unpaid_days };
+      // Optional: calculate salary deduction if needed
+      let salary_deduction = leave.salary_deduction
+        ? parseFloat(leave.salary_deduction)
+        : 0;
+
+      return { ...leave, unpaid_days, salary_deduction };
     });
 
     // 4️⃣ Total monthly used leaves
     const usedLeavesMonth = leaveResult.rows.reduce((sum, l) => sum + parseFloat(l.leavestaken), 0);
 
     // 5️⃣ Total unpaid leaves
-    const totalUnpaid = Math.max(usedLeavesMonth - allowedLeaves, 0);
+    const totalUnpaid = parseFloat(Math.max(usedLeavesMonth - allowedLeaves, 0).toFixed(2));
 
     res.status(200).json({
       message: "Leave records fetched successfully.",
@@ -272,6 +283,7 @@ router.get("/by-employee/:id", async (req, res) => {
       unpaidLeaves: totalUnpaid,
       leaves: leavesWithUnpaid
     });
+
   } catch (error) {
     console.error("Error fetching leaves by employee ID:", error);
     res.status(500).json({ error: "Internal server error" });
