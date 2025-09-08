@@ -186,15 +186,15 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       if (leave.leave_type.toLowerCase() === "halfday") {
         unauthorizedLeaves += 0.5;
       } else {
-        const attendanceResult = await pool.query(
-          `SELECT COUNT(*) AS off_duty_days
-           FROM attendance
-           WHERE employee_id = $1
-             AND status ILIKE 'Off Duty'
-             AND timestamp >= $2::date
-             AND timestamp <= $3::date`,
-          [employeeId, leave.start_date, leave.end_date]
-        );
+       const attendanceResult = await pool.query(
+  `SELECT COUNT(*) AS off_duty_days
+   FROM attendance
+   WHERE employee_id = $1
+     AND status ILIKE 'Off Duty'
+     AND timestamp::date BETWEEN $2::date AND $3::date`,
+  [employeeId, leave.start_date, leave.end_date]
+);
+
         unauthorizedLeaves += parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
       }
     }
