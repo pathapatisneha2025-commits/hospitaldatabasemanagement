@@ -241,7 +241,8 @@ router.get("/by-employee/:id", async (req, res) => {
       WHERE employee_id = $1;
     `;
     const policyResult = await pool.query(policyQuery, [id]);
-    const allowedLeaves = policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
+    const allowedLeaves =
+      policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
 
     // 3️⃣ Monthly leave usage (this month only)
     const monthlyLeaveResult = await pool.query(
@@ -254,29 +255,17 @@ router.get("/by-employee/:id", async (req, res) => {
     );
     const usedLeavesMonth = parseFloat(monthlyLeaveResult.rows[0].used_leaves);
 
-    // 4️⃣ Calculate unpaid leaves per leave record (include all statuses)
-    const leavesWithUnpaid = leaveResult.rows.map(leave => {
-      const leavestaken = parseFloat(leave.leavestaken);
-      const unpaidLeaves = Math.max(leavestaken - allowedLeaves, 0); // simple calculation
+    // 4️⃣ Unpaid leaves = used - allowed
+    const unpaidLeaves = Math.max(usedLeavesMonth - allowedLeaves, 0);
 
-      return {
-        ...leave,
-        unpaidLeaves
-      };
-    });
-
-    // 5️⃣ Overall unpaid leaves for the month
-    const unpaidLeavesMonth = leavesWithUnpaid.reduce((sum, leave) => sum + leave.unpaidLeaves, 0);
-
-    // 6️⃣ Return everything
+    // 5️⃣ Return everything
     res.status(200).json({
       message: "Leave records fetched successfully.",
       allowedLeaves,
-      usedLeavesMonth,
-      unpaidLeaves: unpaidLeavesMonth,
-      leaves: leavesWithUnpaid
+      usedLeavesMonth,   // current month usage
+      unpaidLeaves,      // excess beyond allowed
+      leaves: leaveResult.rows
     });
-
   } catch (error) {
     console.error("Error fetching leaves by employee ID:", error);
     res.status(500).json({ error: "Internal server error" });
