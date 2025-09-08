@@ -13,7 +13,6 @@ router.get("/all", async (req, res) => {
     const year = today.getFullYear();
     const month = today.getMonth() + 1; // JS months are 0-based
 
-    // 1️⃣ Get all employees + salary deductions (as before)
     const query = `
       SELECT e.id AS employee_id,
              e.full_name AS employee,
@@ -23,87 +22,29 @@ router.get("/all", async (req, res) => {
              (e.monthly_salary - COALESCE(MAX(l.salary_deduction), 0)) AS net_pay,
              to_char(make_date($1::int, $2::int, 1), 'Month YYYY') AS date,
              COALESCE(ps.status, 'pending') AS status
-      FROM employees e
+         FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
        AND (
+            -- Leave starts in the same year+month
             (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
             OR
             (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
             OR
+            -- Leave spans across the whole month
             (l.start_date <= make_date($1::int, $2::int, 1)
              AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
           )
-      LEFT JOIN payslip_status ps
+              LEFT JOIN payslip_status ps
         ON e.id = ps.employee_id
        AND ps.year = $1
        AND ps.month = $2
-      GROUP BY e.id, e.full_name, e.role, e.monthly_salary, ps.status
+      GROUP BY e.id, e.full_name, e.role, e.monthly_salary,ps.status
       ORDER BY e.full_name;
     `;
 
     const result = await pool.query(query, [year, month]);
-    let payslips = result.rows;
-
-    // 2️⃣ Loop employees and calculate unauthorized leaves + penalty
-    for (let slip of payslips) {
-      let unauthorizedLeaves = 0;
-      let unauthorizedPenaltyTotal = 0;
-
-      // 🔎 Fetch all cancelled leaves for this employee in this month
-      const cancelledLeaves = await pool.query(
-        `SELECT id, start_date, end_date, leave_type
-         FROM leaves
-         WHERE employee_id = $1
-           AND status ILIKE 'cancelled'
-           AND (
-              (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
-              OR
-              (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
-           )`,
-        [slip.employee_id, year, month]
-      );
-
-      // Deduction slab (same logic as in /salary-deduction)
-      let unauthorizedPenalty = 0;
-      if (slip.basicsalary >= 4500 && slip.basicsalary <= 7500) {
-        unauthorizedPenalty = 35;
-      } else if (slip.basicsalary >= 7501 && slip.basicsalary <= 9500) {
-        unauthorizedPenalty = 70;
-      } else if (slip.basicsalary >= 9501) {
-        unauthorizedPenalty = 105;
-      }
-
-      // 3️⃣ Process each cancelled leave
-      for (let leave of cancelledLeaves.rows) {
-        if (leave.leave_type.toLowerCase() === "halfday") {
-          unauthorizedLeaves += 0.5;
-        } else {
-          // Count "Off Duty" days in attendance for that leave period
-          const attendanceResult = await pool.query(
-            `SELECT COUNT(*) AS off_duty_days
-             FROM attendance
-             WHERE employee_id = $1
-               AND status ILIKE 'Off Duty'
-               AND timestamp >= $2::date
-               AND timestamp <= $3::date`,
-            [slip.employee_id, leave.start_date, leave.end_date]
-          );
-
-          unauthorizedLeaves += parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
-        }
-      }
-
-      // 4️⃣ Unauthorized penalty
-      unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenalty;
-
-      // 5️⃣ Update slip object
-      slip.unauthorized_leaves = unauthorizedLeaves;
-      slip.unauthorized_penalty = unauthorizedPenaltyTotal;
-      slip.net_pay = slip.basicsalary - slip.deductions - unauthorizedPenaltyTotal;
-    }
-
-    res.json(payslips);
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -184,45 +125,92 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       return res.status(400).json({ error: "Missing required params" });
     }
 
-  const query = `
-  SELECT e.full_name,
-         e.role,
-         e.monthly_salary,
-         COALESCE(SUM(l.salary_deduction), 0) AS deductions,
-         (e.monthly_salary - COALESCE(SUM(l.salary_deduction), 0)) AS net_pay
-  FROM employees e
-  LEFT JOIN leaves l
-    ON e.id = l.employee_id
-   AND (
-        -- Leave starts in the same year+month
-        (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
-        OR
-        (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
-        OR
-        -- Leave spans across the whole month
-        (l.start_date <= make_date($1::int, $2::int, 1)
-         AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
-      )
-  WHERE e.id = $3::int
-  GROUP BY e.id, e.full_name, e.role, e.monthly_salary;
-`;
+    // 1️⃣ Base employee + deductions
+    const query = `
+      SELECT e.full_name,
+             e.role,
+             e.monthly_salary,
+             COALESCE(SUM(l.salary_deduction), 0) AS deductions
+      FROM employees e
+      LEFT JOIN leaves l
+        ON e.id = l.employee_id
+       AND (
+            (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
+            OR
+            (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+            OR
+            (l.start_date <= make_date($1::int, $2::int, 1)
+             AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+          )
+      WHERE e.id = $3::int
+      GROUP BY e.id, e.full_name, e.role, e.monthly_salary;
+    `;
 
     const result = await pool.query(query, [year, month, employeeId]);
-
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Payslip not found" });
     }
 
     const data = result.rows[0];
 
-    // Set headers for file download
+    // 2️⃣ Unauthorized leave penalty calculation
+    let unauthorizedLeaves = 0;
+    let unauthorizedPenaltyTotal = 0;
+
+    // Get cancelled leaves
+    const cancelledLeaves = await pool.query(
+      `SELECT start_date, end_date, leave_type
+       FROM leaves
+       WHERE employee_id = $1
+         AND status ILIKE 'cancelled'
+         AND (
+            (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
+            OR
+            (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
+         )`,
+      [employeeId, year, month]
+    );
+
+    // Deduction slab → unauthorized penalty
+    let unauthorizedPenalty = 0;
+    if (data.monthly_salary >= 4500 && data.monthly_salary <= 7500) {
+      unauthorizedPenalty = 35;
+    } else if (data.monthly_salary >= 7501 && data.monthly_salary <= 9500) {
+      unauthorizedPenalty = 70;
+    } else if (data.monthly_salary >= 9501) {
+      unauthorizedPenalty = 105;
+    }
+
+    // Loop over cancelled leaves
+    for (let leave of cancelledLeaves.rows) {
+      if (leave.leave_type.toLowerCase() === "halfday") {
+        unauthorizedLeaves += 0.5;
+      } else {
+        const attendanceResult = await pool.query(
+          `SELECT COUNT(*) AS off_duty_days
+           FROM attendance
+           WHERE employee_id = $1
+             AND status ILIKE 'Off Duty'
+             AND timestamp >= $2::date
+             AND timestamp <= $3::date`,
+          [employeeId, leave.start_date, leave.end_date]
+        );
+        unauthorizedLeaves += parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
+      }
+    }
+
+    unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenalty;
+
+    // 3️⃣ Net Pay = salary - deductions - unauthorized penalty
+    const netPay = data.monthly_salary - data.deductions - unauthorizedPenaltyTotal;
+
+    // 4️⃣ Generate PDF
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename=payslip-${month}-${year}.pdf`
     );
 
-    // Generate PDF
     const doc = new PDFDocument();
     doc.pipe(res);
 
@@ -230,11 +218,14 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.moveDown();
 
     doc.fontSize(12).text(`Employee Name: ${data.full_name}`);
-    doc.text(`Designation: ${data.role}`); // fixed field name (your table has 'role')
+    doc.text(`Designation: ${data.role}`);
     doc.text(`Basic Salary: ${data.monthly_salary}`);
     doc.text(`Deductions: ${data.deductions}`);
+    doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
+    doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
     doc.moveDown();
-    doc.fontSize(14).text(`Net Pay: ${data.net_pay}`, { underline: true });
+
+    doc.fontSize(14).text(`Net Pay: ${netPay}`, { underline: true });
 
     doc.end();
   } catch (err) {
@@ -242,5 +233,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 module.exports = router;
