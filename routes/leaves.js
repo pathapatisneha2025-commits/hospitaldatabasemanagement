@@ -233,7 +233,7 @@ router.get("/by-employee/:id", async (req, res) => {
       return res.status(404).json({ message: "No leave records found for this employee." });
     }
 
-    // 2️⃣ Allowed leaves
+    // 2️⃣ Get allowed leaves from policy
     const policyQuery = `
       SELECT number_of_leaves AS allowed_leaves
       FROM leave_policies
@@ -242,18 +242,16 @@ router.get("/by-employee/:id", async (req, res) => {
     const policyResult = await pool.query(policyQuery, [id]);
     const allowedLeaves = policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
 
-    // 3️⃣ Calculate unpaid days per leave
+    // 3️⃣ Calculate cumulative unpaid days per leave
     let cumulativeUsed = 0;
     const leavesWithUnpaid = leaveResult.rows.map((leave) => {
       const leaveTaken = parseFloat(leave.leavestaken);
 
       cumulativeUsed += leaveTaken;
 
-      // Unpaid days = cumulative used - allowed (cumulative), capped to leaveTaken
-      let unpaid_days = Math.max(cumulativeUsed - allowedLeaves, 0);
-      unpaid_days = unpaid_days > leaveTaken ? leaveTaken : unpaid_days;
-
-      // Optional: round to 2 decimals
+      // Unpaid days = cumulative used - allowed leaves (cumulative)
+      let unpaid_days = cumulativeUsed - allowedLeaves;
+      unpaid_days = unpaid_days < 0 ? 0 : unpaid_days;
       unpaid_days = parseFloat(unpaid_days.toFixed(2));
 
       return { ...leave, unpaid_days };
@@ -262,7 +260,7 @@ router.get("/by-employee/:id", async (req, res) => {
     // 4️⃣ Total monthly used leaves
     const usedLeavesMonth = leaveResult.rows.reduce((sum, l) => sum + parseFloat(l.leavestaken), 0);
 
-    // 5️⃣ Total unpaid leaves
+    // 5️⃣ Total unpaid leaves (overall)
     const totalUnpaid = Math.max(usedLeavesMonth - allowedLeaves, 0);
 
     res.status(200).json({
@@ -277,6 +275,7 @@ router.get("/by-employee/:id", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 
 //  READ ALL - Get all leaves
