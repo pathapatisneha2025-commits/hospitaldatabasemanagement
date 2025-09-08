@@ -190,7 +190,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   `SELECT COUNT(*) AS off_duty_days
    FROM attendance
    WHERE employee_id = $1
-     AND status ILIKE 'Off Duty'
+     AND status ILIKE 'Absent'
      AND timestamp::date BETWEEN $2::date AND $3::date`,
   [employeeId, leave.start_date, leave.end_date]
 );

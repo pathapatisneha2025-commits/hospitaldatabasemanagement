@@ -169,7 +169,7 @@ router.post("/salary-deduction", async (req, res) => {
           `SELECT COUNT(*) AS off_duty_days
            FROM attendance
            WHERE employee_id = $1
-             AND status ILIKE 'Off Duty'
+             AND status ILIKE 'Absent'
              AND timestamp >= $2::date
              AND timestamp < ($3::date + interval '1 day')`,
           [employeeId, startDate, endDate]
