@@ -130,7 +130,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       SELECT e.full_name,
              e.role,
              e.monthly_salary,
-             COALESCE(SUM(l.salary_deduction), 0) AS deductions
+             COALESCE(MAX(l.salary_deduction), 0) AS deductions
       FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
