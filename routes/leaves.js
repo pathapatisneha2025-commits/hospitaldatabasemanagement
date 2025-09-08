@@ -219,12 +219,13 @@ router.get("/by-employee/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1️⃣ Get leave records
+    // 1️⃣ Get leave records (ordered by date)
     const leaveQuery = `
       SELECT l.*
       FROM leaves l
       JOIN employees e ON e.full_name = l.employee_name
-      WHERE e.id = $1;
+      WHERE e.id = $1
+      ORDER BY l.start_date, l.id;
     `;
     const leaveResult = await pool.query(leaveQuery, [id]);
 
@@ -234,44 +235,48 @@ router.get("/by-employee/:id", async (req, res) => {
       });
     }
 
-    // 2️⃣ Allowed leaves (from leave_policies)
+    // 2️⃣ Allowed leaves
     const policyQuery = `
       SELECT number_of_leaves AS allowed_leaves
       FROM leave_policies
       WHERE employee_id = $1;
     `;
     const policyResult = await pool.query(policyQuery, [id]);
-    const allowedLeaves =
-      policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
+    const allowedLeaves = policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
 
-    // 3️⃣ Monthly leave usage (this month only)
-    const monthlyLeaveResult = await pool.query(
-      `SELECT COALESCE(SUM(leavestaken), 0.0) AS used_leaves
-       FROM leaves
-       WHERE employee_id = $1
-       AND start_date >= date_trunc('month', CURRENT_DATE)
-         AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
-      [id]
-    );
-    const usedLeavesMonth = parseFloat(monthlyLeaveResult.rows[0].used_leaves);
+    // 3️⃣ Monthly leave usage so far
+    let cumulativeUsed = 0;
 
-    // 4️⃣ Unpaid leaves = used - allowed
-    const unpaidLeaves = Math.max(usedLeavesMonth - allowedLeaves, 0);
+    const leavesWithUnpaid = leaveResult.rows.map((leave) => {
+      const leaveTaken = parseFloat(leave.leavestaken);
+      const unpaidBefore = Math.max(cumulativeUsed - allowedLeaves, 0);
+      cumulativeUsed += leaveTaken;
+      const unpaidAfter = Math.max(cumulativeUsed - allowedLeaves, 0);
 
-    // 5️⃣ Return everything
+      // Unpaid for this leave
+      const unpaid_days = parseFloat((unpaidAfter - unpaidBefore).toFixed(2));
+
+      return { ...leave, unpaid_days };
+    });
+
+    // 4️⃣ Total monthly used leaves
+    const usedLeavesMonth = cumulativeUsed;
+
+    // 5️⃣ Total unpaid leaves
+    const totalUnpaid = Math.max(usedLeavesMonth - allowedLeaves, 0);
+
     res.status(200).json({
       message: "Leave records fetched successfully.",
       allowedLeaves,
-      usedLeavesMonth,   // current month usage
-      unpaidLeaves,      // excess beyond allowed
-      leaves: leaveResult.rows
+      usedLeavesMonth,
+      unpaidLeaves: totalUnpaid,
+      leaves: leavesWithUnpaid
     });
   } catch (error) {
     console.error("Error fetching leaves by employee ID:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 
 //  READ ALL - Get all leaves
 router.get("/all", async (req, res) => {
