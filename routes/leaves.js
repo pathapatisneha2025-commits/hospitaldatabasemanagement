@@ -219,24 +219,52 @@ router.get("/by-employee/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = `
+    // 1️⃣ Get leave records
+    const leaveQuery = `
       SELECT l.*
       FROM leaves l
       JOIN employees e ON e.full_name = l.employee_name
       WHERE e.id = $1;
     `;
+    const leaveResult = await pool.query(leaveQuery, [id]);
 
-    const result = await pool.query(query, [id]);
-
-    if (result.rows.length === 0) {
+    if (leaveResult.rows.length === 0) {
       return res.status(404).json({
         message: "No leave records found for this employee."
       });
     }
 
+    // 2️⃣ Allowed leaves (from leave_policies)
+    const policyQuery = `
+      SELECT number_of_leaves AS allowed_leaves
+      FROM leave_policies
+      WHERE employee_id = $1;
+    `;
+    const policyResult = await pool.query(policyQuery, [id]);
+    const allowedLeaves =
+      policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
+
+    // 3️⃣ Monthly leave usage (this month only)
+    const monthlyLeaveResult = await pool.query(
+      `SELECT COALESCE(SUM(leavestaken), 0.0) AS used_leaves
+       FROM leaves
+       WHERE employee_id = $1
+       AND start_date >= date_trunc('month', CURRENT_DATE)
+         AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
+      [id]
+    );
+    const usedLeavesMonth = parseFloat(monthlyLeaveResult.rows[0].used_leaves);
+
+    // 4️⃣ Unpaid leaves = used - allowed
+    const unpaidLeaves = Math.max(usedLeavesMonth - allowedLeaves, 0);
+
+    // 5️⃣ Return everything
     res.status(200).json({
       message: "Leave records fetched successfully.",
-      leaves: result.rows
+      allowedLeaves,
+      usedLeavesMonth,   // current month usage
+      unpaidLeaves,      // excess beyond allowed
+      leaves: leaveResult.rows
     });
   } catch (error) {
     console.error("Error fetching leaves by employee ID:", error);
