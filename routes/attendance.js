@@ -120,13 +120,12 @@ router.post('/mark-attendance', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
-    // Step 1: Decide status based on verification
-    let status = 'Off Duty';
-    if (locationVerified === true && faceVerified === true) {
-      status = 'On Duty';
-    }
+    // Step 1: Decide status
+    const status = (locationVerified === true && faceVerified === true)
+      ? 'On Duty'
+      : 'Absent';
 
-    // Step 2: Insert attendance record (no salary tracking here)
+    // Step 2: Insert attendance record
     await pool.query(
       `INSERT INTO attendance
         (employee_id, timestamp, image_url, status)
@@ -148,6 +147,7 @@ router.post('/mark-attendance', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 // ✅ LOGOUT API
 router.post('/logout', async (req, res) => {
   try {
