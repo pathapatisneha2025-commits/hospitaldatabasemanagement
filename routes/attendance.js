@@ -38,54 +38,44 @@ router.post('/verify-face', upload.single('image'), async (req, res) => {
 
     const capturedUrl = req.file.path;
 
-    // Fetch stored face descriptor from DB
-    const result = await pool.query(
-      'SELECT face_descriptor FROM employees WHERE id = $1',
-      [employeeId]
-    );
+    // Fetch registered image URL from DB
+    const result = await pool.query('SELECT image FROM employees WHERE id = $1', [employeeId]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Employee not found',
+       message: 'Employee not found',
       });
     }
 
-    const registeredDescriptor = JSON.parse(result.rows[0].face_descriptor);
+    const registeredUrl = result.rows[0].image;
 
-    if (!registeredDescriptor) {
-      return res.status(500).json({
-        success: false,
-        message: 'No face descriptor stored for this employee',
-      });
-    }
-
-    // Compute descriptor for captured image only
+    // Get face descriptors
+    const registeredDescriptor = await getFaceDescriptorFromUrl(registeredUrl);
     const capturedDescriptor = await getFaceDescriptorFromUrl(capturedUrl);
-    if (!capturedDescriptor) {
+
+    if (!registeredDescriptor || !capturedDescriptor) {
       return res.status(400).json({
         success: false,
-        message: 'No face detected in captured image',
+        message: 'Could not detect face in one or both images',
       });
     }
 
     // Compare descriptors
     const distance = euclideanDistance(registeredDescriptor, capturedDescriptor);
-    const isMatch = distance < 0.6; // threshold
+    const isMatch = distance < 0.6;
 
     res.json({
       success: true,
       match: isMatch,
-      capturedUrl,
+        capturedUrl,
       distance,
     });
-
   } catch (error) {
     console.error('Face verification error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // Office coordinates (example)
 const OFFICE_LAT =  14.683436;

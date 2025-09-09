@@ -6,7 +6,6 @@ const multer = require('multer');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
-const { loadModels, getFaceDescriptorFromUrl, euclideanDistance } = require('../utils/faceUtils');
 
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
@@ -47,7 +46,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       dob,
       scheduleIn,
       scheduleOut,
-      breakIn,
+     breakIn,      // renamed column
       breakOut,
       monthlySalary,
       jobDescription,
@@ -77,6 +76,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // store the uploaded image as 'image'
     const image = file.path;
 
     // safely handle JSON fields
@@ -88,13 +88,6 @@ router.post('/register', upload.single('image'), async (req, res) => {
       ? JSON.stringify(JSON.parse(permanentAddresses)) 
       : null;
 
-    // ----------- Compute Face Descriptor -----------
-    const faceDescriptor = await getFaceDescriptorFromUrl(image);
-    if (!faceDescriptor) {
-      return res.status(400).json({ success: false, message: 'No face detected in the uploaded image' });
-    }
-
-    // ----------- Insert employee with face descriptor -----------
     const result = await pool.query(
       `INSERT INTO employees (
         full_name, email, password, mobile, family_number,
@@ -102,16 +95,17 @@ router.post('/register', upload.single('image'), async (req, res) => {
         reporting_manager, department, role, dob, schedule_in, schedule_out, break_in, break_out,
         monthly_salary, job_description, employment_type, category,
         ifsc, branch_name, bank_name, account_number,
-        image, face_descriptor, temporary_addresses, permanent_addresses, date_of_joining,
+        image, temporary_addresses, permanent_addresses, date_of_joining,
         status
       )
       VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17, $18, $19,
-        $20, $21, $22, $23, $24, $25, $26,
-        $27, $28, $29, $30, $31,
-        $32, $33
+        $12, $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23, $24, $25, $26,
+        $27, $28, $29, $30,
+        $31,$32
       )
       RETURNING *`,
       [
@@ -132,7 +126,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
         dob,
         scheduleIn,
         scheduleOut,
-        breakIn,
+         breakIn,
         breakOut,
         monthlySalary,
         jobDescription,
@@ -142,24 +136,20 @@ router.post('/register', upload.single('image'), async (req, res) => {
         branchName,
         bankName,
         accountNumber,
-        image,
-        JSON.stringify(faceDescriptor), // store descriptor
+        image,       // uploaded image
         tempAddresses,
         permAddresses,
         dateOfJoining,
-        "pending"   // now matches $33
+        "pending"
       ]
     );
 
     res.status(201).json({ success: true, employee: result.rows[0] });
-
   } catch (error) {
     console.error('Registration error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-
 
 
 router.post("/update-status", async (req, res) => {
