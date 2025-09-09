@@ -14,6 +14,8 @@ const scheduleRoutes = require("./routes/schedule");
 const PayslipsRoutes = require("./routes/payslips"); 
 const Department = require("./routes/department"); 
 const Role = require("./routes/role"); 
+const Patient = require("./routes/patient"); 
+
 
 
 
@@ -38,6 +40,8 @@ app.use("/schedule", scheduleRoutes);
 app.use("/payslips", PayslipsRoutes); 
 app.use("/department", Department); 
 app.use("/role", Role); 
+app.use("/patient", Patient); 
+
 
 
 
