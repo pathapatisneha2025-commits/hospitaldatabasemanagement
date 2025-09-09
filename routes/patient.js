@@ -95,4 +95,23 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
+router.get("/all", async (req, res) => {
+  try {
+    const query = `
+      SELECT * 
+      FROM patients
+      ORDER BY id ASC;
+    `;
+    const result = await db.query(query);
+
+    res.json({
+      message: "All patients fetched successfully",
+      patients: result.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 module.exports = router;
