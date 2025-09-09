@@ -4,7 +4,8 @@ const db = require("../db");
 
 const router = express.Router();
 
-// 1️⃣ REGISTER API
+
+// REGISTER API
 router.post("/register", async (req, res) => {
   try {
     const { first_name, last_name, gender, phone_number, email, password, confirm_password } = req.body;
@@ -13,21 +14,30 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "Passwords do not match" });
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Insert + return new patient info
     const query = `
       INSERT INTO patients (first_name, last_name, gender, phone_number, email, password, confirm_password)
-      VALUES ($1, $2, $3, $4, $5, $6, $7);
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, first_name, last_name, gender, phone_number, email, created_at;
     `;
 
     const values = [first_name, last_name, gender, phone_number, email, hashedPassword, hashedPassword];
-    await db.query(query, values);
+    const result = await db.query(query, values);
 
-    res.status(201).json({ message: "Patient registered successfully" });
+    const newPatient = result.rows[0];
+
+    res.status(201).json({
+      message: "Patient registered successfully",
+      patient: newPatient
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // 2️⃣ LOGIN API (no token, just success + patient info)
 router.post("/login", async (req, res) => {
