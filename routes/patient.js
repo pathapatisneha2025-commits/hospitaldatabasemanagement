@@ -21,7 +21,7 @@ router.post("/register", async (req, res) => {
     const query = `
       INSERT INTO patients (first_name, last_name, gender, phone_number, email, password, confirm_password)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, first_name, last_name, gender, phone_number, email, created_at;
+      RETURNING id, first_name, last_name, gender, phone_number, email;
     `;
 
     const values = [first_name, last_name, gender, phone_number, email, hashedPassword, hashedPassword];
