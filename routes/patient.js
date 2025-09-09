@@ -114,4 +114,85 @@ router.get("/all", async (req, res) => {
 });
 
 
+// UPDATE Patient by ID (with password support)
+router.put("/update/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { first_name, last_name, gender, phone_number, email, password, confirm_password } = req.body;
+
+    // Fetch existing patient
+    const existing = await db.query("SELECT * FROM patients WHERE id = $1", [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    let hashedPassword = existing.rows[0].password;
+
+    // If password is provided, validate & hash
+    if (password || confirm_password) {
+      if (!password || !confirm_password) {
+        return res.status(400).json({ message: "Both password and confirm_password are required" });
+      }
+      if (password !== confirm_password) {
+        return res.status(400).json({ message: "Passwords do not match" });
+      }
+
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    const query = `
+      UPDATE patients
+      SET first_name = $1,
+          last_name = $2,
+          gender = $3,
+          phone_number = $4,
+          email = $5,
+          password = $6,
+          confirm_password = $7
+      WHERE id = $8
+      RETURNING id, first_name, last_name, gender, phone_number, email;
+    `;
+
+    const values = [
+      first_name || existing.rows[0].first_name,
+      last_name || existing.rows[0].last_name,
+      gender || existing.rows[0].gender,
+      phone_number || existing.rows[0].phone_number,
+      email || existing.rows[0].email,
+      hashedPassword,
+      hashedPassword, // store hash in confirm_password as well
+      id
+    ];
+
+    const result = await db.query(query, values);
+
+    res.json({
+      message: "Patient updated successfully",
+      patient: result.rows[0]
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// DELETE Patient by ID
+router.delete("/delete/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = `DELETE FROM patients WHERE id = $1 RETURNING id;`;
+    const result = await db.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    res.json({ message: "Patient deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
