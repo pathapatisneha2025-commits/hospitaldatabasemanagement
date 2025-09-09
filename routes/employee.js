@@ -88,7 +88,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
       ? JSON.stringify(JSON.parse(permanentAddresses)) 
       : null;
 
-    // ----------- NEW: Compute Face Descriptor -----------
+    // ----------- Compute Face Descriptor -----------
     const faceDescriptor = await getFaceDescriptorFromUrl(image);
     if (!faceDescriptor) {
       return res.status(400).json({ success: false, message: 'No face detected in the uploaded image' });
@@ -111,7 +111,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
         $12, $13, $14, $15, $16, $17, $18, $19,
         $20, $21, $22, $23, $24, $25, $26,
         $27, $28, $29, $30, $31,
-        $32
+        $32, $33
       )
       RETURNING *`,
       [
@@ -147,7 +147,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
         tempAddresses,
         permAddresses,
         dateOfJoining,
-        "pending"
+        "pending"   // now matches $33
       ]
     );
 
@@ -158,6 +158,7 @@ router.post('/register', upload.single('image'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 
 
