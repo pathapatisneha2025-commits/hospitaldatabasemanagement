@@ -185,22 +185,24 @@ router.post("/salary-deduction", async (req, res) => {
     const totalPenalty = salaryDeduction + unauthorizedPenaltyTotal;
 
     // 11️⃣ Return response
-    res.json({
-      employeeId,
-      employeeName,
-      monthlySalary,
-      paidLeaves,
-      usedLeaves,
-      remainingPaidLeaves,
-      deductionPerDay,
-      unauthorizedPenalty,
-      unpaidDays,
-      salaryDeduction,
-      UnauthorizedLeaves,
-      unauthorizedPenaltyTotal,
-      totalPenalty,
-      leaveStatus
-    });
+   // 11️⃣ Return response
+res.json({
+  employeeId,
+  employeeName,
+  monthlySalary: parseFloat(monthlySalary).toFixed(2),
+  paidLeaves: parseFloat(paidLeaves).toFixed(2),
+  usedLeaves: parseFloat(usedLeaves).toFixed(2),
+  remainingPaidLeaves: parseFloat(remainingPaidLeaves).toFixed(2),
+  deductionPerDay: parseFloat(deductionPerDay).toFixed(2),
+  unauthorizedPenalty: parseFloat(unauthorizedPenalty).toFixed(2),
+  unpaidDays: parseFloat(unpaidDays).toFixed(2),
+  salaryDeduction: parseFloat(salaryDeduction).toFixed(2),
+  UnauthorizedLeaves: parseFloat(UnauthorizedLeaves).toFixed(2),
+  unauthorizedPenaltyTotal: parseFloat(unauthorizedPenaltyTotal).toFixed(2),
+  totalPenalty: parseFloat(totalPenalty).toFixed(2),
+  leaveStatus
+});
+
 
   } catch (error) {
     console.error(error);
