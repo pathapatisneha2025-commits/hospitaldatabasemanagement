@@ -1,2 +1,5 @@
 deepface
 tensorflow
+tf-keras
+fastapi
+uvicorn
