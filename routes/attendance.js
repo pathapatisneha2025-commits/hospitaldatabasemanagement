@@ -26,25 +26,48 @@ const upload = multer({ storage });
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
+    const file = req.file;
 
-    if (!employeeId || !req.file?.path) {
-      return res
-        .status(400)
-        .json({ success: false, message: "employeeId and image file are required" });
+    // ✅ Check if file is uploaded
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Image is required",
+      });
     }
 
-    const capturedUrl = req.file.path;
+    const image = file.path;
 
-    // Fetch registered image from DB
-    const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
+    // ✅ Check employeeId
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "employeeId is required",
+      });
+    }
+
+    const capturedUrl = image;
+
+    // ✅ Fetch registered image from DB
+    const result = await pool.query(
+      "SELECT image FROM employees WHERE id = $1",
+      [employeeId]
+    );
+
     if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, message: "Employee not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Employee not found" });
     }
 
     const registeredUrl = result.rows[0].image;
 
     // ✅ Call Python script
-    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
+    const python = spawn("python", [
+      "face_recognizer.py",
+      registeredUrl,
+      capturedUrl,
+    ]);
 
     let data = "";
     python.stdout.on("data", (chunk) => {
@@ -66,7 +89,9 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
         });
       } catch (e) {
         console.error("Parse error:", e.message);
-        res.status(500).json({ success: false, message: "Face verification failed" });
+        res
+          .status(500)
+          .json({ success: false, message: "Face verification failed" });
       }
     });
   } catch (error) {
