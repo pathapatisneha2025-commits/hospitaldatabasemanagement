@@ -36,7 +36,7 @@ async function downloadImage(url) {
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
-    if (!employeeId || !req.file?.path) {
+    if (!employeeId ||!req.file|| !req.file?.path) {
       return res
         .status(400)
         .json({ success: false, message: "employeeId and image file are required" });
