@@ -37,45 +37,34 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
     if (!employeeId ||!req.file|| !req.file?.path) {
-      return res
-        .status(400)
-        .json({ success: false, message: "employeeId and image file are required" });
+      return res.status(400).json({ success: false, message: "employeeId and image file are required" });
     }
 
     const capturedUrl = req.file.path;
 
-    // Fetch registered image URL from DB
+    // Fetch registered image from DB
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
     const registeredUrl = result.rows[0].image;
 
-    // Download captured image locally
-    const capturedLocal = await downloadImage(capturedUrl);
-
-    // Call Python script
-    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedLocal]);
+    // ✅ Call Python 3.11
+    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
 
     let output = "";
-    python.stdout.on("data", (chunk) => (output += chunk.toString()));
-    python.stderr.on("data", (err) => console.error("Python error:", err.toString()));
+    python.stdout.on("data", chunk => output += chunk.toString());
+    python.stderr.on("data", err => console.error("Python error:", err.toString()));
 
     python.on("close", () => {
       try {
         const result = JSON.parse(output);
-
-        // Delete temp file after processing
-        fs.unlink(capturedLocal, (err) => {
-          if (err) console.error("Failed to delete temp file:", err.message);
-        });
-
         res.json({
           success: true,
           match: result.match,
           distance: result.distance,
           capturedUrl,
-          error: result.error || null,
+          error: result.error || null
         });
       } catch (e) {
         console.error("Parse error:", e.message);
