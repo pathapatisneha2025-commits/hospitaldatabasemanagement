@@ -36,11 +36,19 @@ async function downloadImage(url) {
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
-    if (!employeeId ||!req.file|| !req.file?.path) {
-      return res.status(400).json({ success: false, message: "employeeId and image file are required" });
+
+    // Validate employeeId
+    if (!employeeId) {
+      return res.status(400).json({ success: false, message: "employeeId is required" });
     }
 
-    const capturedUrl = req.file.path;
+    // Validate uploaded file
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ success: false, message: "Image file is required" });
+    }
+
+    // ✅ For Cloudinary, use req.file.path or req.file.url
+    const capturedUrl = req.file.path || req.file.url;
 
     // Fetch registered image from DB
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
@@ -49,12 +57,12 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     }
     const registeredUrl = result.rows[0].image;
 
-    // ✅ Call Python 3.11
+    // Call Python script
     const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
 
     let output = "";
-    python.stdout.on("data", chunk => output += chunk.toString());
-    python.stderr.on("data", err => console.error("Python error:", err.toString()));
+    python.stdout.on("data", (chunk) => (output += chunk.toString()));
+    python.stderr.on("data", (err) => console.error("Python error:", err.toString()));
 
     python.on("close", () => {
       try {
@@ -64,7 +72,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
           match: result.match,
           distance: result.distance,
           capturedUrl,
-          error: result.error || null
+          error: result.error || null,
         });
       } catch (e) {
         console.error("Parse error:", e.message);
