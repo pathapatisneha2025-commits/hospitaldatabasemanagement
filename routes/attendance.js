@@ -5,6 +5,9 @@ const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
 const { spawn } = require("child_process");
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 // ✅ Cloudinary storage
 const storage = new CloudinaryStorage({
@@ -16,39 +19,63 @@ const storage = new CloudinaryStorage({
 });
 const upload = multer({ storage });
 
-// ✅ Face verification using Python script
+// ✅ Helper: download image from URL to local temp file
+async function downloadImage(url) {
+  const localPath = path.join("/tmp", `img_${Date.now()}.jpg`);
+  const writer = fs.createWriteStream(localPath);
+  const response = await axios.get(url, { responseType: "stream" });
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on("finish", () => resolve(localPath));
+    writer.on("error", reject);
+  });
+}
+
+// ✅ Face verification route
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
     if (!employeeId || !req.file?.path) {
-      return res.status(400).json({ success: false, message: "employeeId and image file are required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "employeeId and image file are required" });
     }
 
     const capturedUrl = req.file.path;
 
-    // Fetch registered image from DB
+    // Fetch registered image URL from DB
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
     const registeredUrl = result.rows[0].image;
 
+    // Download captured image locally
+    const capturedLocal = await downloadImage(capturedUrl);
+
     // Call Python script
-const python = spawn("python", ["face_recognizer.py", `"${registeredUrl}"`, `"${capturedUrl}"`], { shell: true });
+    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedLocal]);
 
     let output = "";
-    python.stdout.on("data", chunk => output += chunk.toString());
-    python.stderr.on("data", err => console.error("Python error:", err.toString()));
+    python.stdout.on("data", (chunk) => (output += chunk.toString()));
+    python.stderr.on("data", (err) => console.error("Python error:", err.toString()));
 
     python.on("close", () => {
       try {
         const result = JSON.parse(output);
+
+        // Delete temp file after processing
+        fs.unlink(capturedLocal, (err) => {
+          if (err) console.error("Failed to delete temp file:", err.message);
+        });
+
         res.json({
           success: true,
           match: result.match,
           distance: result.distance,
           capturedUrl,
-          error: result.error || null
+          error: result.error || null,
         });
       } catch (e) {
         console.error("Parse error:", e.message);
@@ -60,6 +87,8 @@ const python = spawn("python", ["face_recognizer.py", `"${registeredUrl}"`, `"${
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
 
 
 // ✅ Location verification
