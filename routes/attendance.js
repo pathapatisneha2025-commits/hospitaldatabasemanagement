@@ -51,7 +51,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const registeredUrl = result.rows[0].image;
 
     // spawn Python
-    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
+    const python = spawn("python3.11", ["face_recognizer.py", registeredUrl, capturedUrl]);
 
     let data = "";
     python.stdout.on("data", (chunk) => (data += chunk.toString()));
