@@ -1,37 +1,37 @@
-import sys
-import json
+from flask import Flask, request, jsonify
+from deepface import DeepFace
 import os
 
-# Force CPU
+# Force CPU (avoid GPU issues)
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-# Suppress TensorFlow info/warnings
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-from deepface import DeepFace
+app = Flask(__name__)
 
+@app.route("/verify", methods=["POST"])
+def verify_face():
+    data = request.json
+    registered_url = data.get("registeredUrl")
+    captured_url = data.get("capturedUrl")
 
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(json.dumps({"error": "Missing arguments"}))
-        sys.exit(1)
-
-    registered_url = sys.argv[1]
-    captured_url = sys.argv[2]
+    if not registered_url or not captured_url:
+        return jsonify({"error": "Missing URLs"}), 400
 
     try:
-        # ✅ force backend to 'opencv' (lighter, avoids heavy GPU libs)
         result = DeepFace.verify(
             registered_url,
             captured_url,
             enforce_detection=False,
             detector_backend="opencv"
         )
-        output = {
+        return jsonify({
             "match": result["verified"],
-            "distance": float(result["distance"]),
-        }
-        print(json.dumps(output))
+            "distance": float(result["distance"])
+        })
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    # Listen on Render-assigned PORT
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

@@ -6,6 +6,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
 const { spawn } = require("child_process");
 const path = require("path");
+const axios = require("axios");
 
 // ✅ Cloudinary storage
 // storage config (reuse for both routes)
@@ -28,52 +29,30 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
     const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ success: false, message: "Image is required" });
-    }
+    if (!file) return res.status(400).json({ success: false, message: "Image required" });
+    if (!employeeId) return res.status(400).json({ success: false, message: "Employee ID required" });
 
     const capturedUrl = file.path;
-     console.log("Uploaded file:", file);
-    console.log("Captured URL:", capturedUrl);
-    console.log("Employee ID:", employeeId);
 
-    if (!employeeId) {
-      return res.status(400).json({ success: false, message: "employeeId is required" });
-    }
-
-    // fetch from DB
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
-    if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, message: "Employee not found" });
-    }
+    if (result.rowCount === 0) return res.status(404).json({ success: false, message: "Employee not found" });
 
     const registeredUrl = result.rows[0].image;
 
-    // spawn Python
-    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
-
-    let data = "";
-    python.stdout.on("data", (chunk) => (data += chunk.toString()));
-python.stderr.on("data", (err) => {
-  console.error("Python error:", err.toString());
-  data += err.toString(); // in case Python only outputs error
-});
-
-    python.on("close", () => {
-      try {
-        const parsed = JSON.parse(data);
-        res.json({ success: true, ...parsed, capturedUrl });
-      } catch (e) {
-        console.error("Parse error:", e.message);
-        res.status(500).json({ success: false, message: "Face verification failed" });
-      }
+    // Call Python service over HTTP
+    const pythonResponse = await axios.post("https://<pythonfaceapi>.onrender.com/verify", {
+      registeredUrl,
+      capturedUrl
     });
+
+    res.json({ success: true, ...pythonResponse.data });
+
   } catch (error) {
     console.error("Face verification error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // ✅ Location verification
 const OFFICE_LAT = 14.683566097002268;
