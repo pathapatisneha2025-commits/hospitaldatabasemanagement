@@ -8,52 +8,42 @@ const { spawn } = require("child_process");
 const path = require("path");
 
 // ✅ Cloudinary storage
+// storage config (reuse for both routes)
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "employee_faces",
+    folder: "employee_faces",   // ✅ separate folder for face captures
     allowed_formats: ["jpg", "jpeg", "png", "webp"],
     public_id: (req, file) => {
       const nameWithoutExt = path.parse(file.originalname).name;
-      return `${Date.now()}-${nameWithoutExt}`;
+      return Date.now() + "-" + nameWithoutExt;
     },
   },
 });
 
 const upload = multer({ storage });
 
-// ✅ Face verification route
+// 🚀 VERIFY FACE ROUTE
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const { employeeId } = req.body;
     const file = req.file;
 
-    console.log("req.file:", req.file); // 👈 Debug
+    console.log("req.file:", req.file); // Debug Cloudinary response
 
     if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: "Image is required",
-      });
+      return res.status(400).json({ success: false, message: "Image is required" });
     }
 
-    // CloudinaryStorage returns `path` as URL
-    const capturedUrl = file.path || file.filename || null;
-
-    if (!capturedUrl) {
-      return res.status(500).json({ success: false, message: "Upload failed" });
-    }
+    // ✅ Cloudinary returns URL in `file.path`
+    const capturedUrl = file.path;
 
     if (!employeeId) {
       return res.status(400).json({ success: false, message: "employeeId is required" });
     }
 
     // ✅ Fetch registered image from DB
-    const result = await pool.query(
-      "SELECT image FROM employees WHERE id = $1",
-      [employeeId]
-    );
-
+    const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
@@ -64,21 +54,16 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
 
     let data = "";
-    python.stdout.on("data", (chunk) => {
-      data += chunk.toString();
-    });
-
-    python.stderr.on("data", (err) => {
-      console.error("Python error:", err.toString());
-    });
+    python.stdout.on("data", (chunk) => (data += chunk.toString()));
+    python.stderr.on("data", (err) => console.error("Python error:", err.toString()));
 
     python.on("close", () => {
       try {
-        const result = JSON.parse(data);
+        const parsed = JSON.parse(data);
         res.json({
           success: true,
-          match: result.match,
-          distance: result.distance,
+          match: parsed.match,
+          distance: parsed.distance,
           capturedUrl,
         });
       } catch (e) {
@@ -91,11 +76,6 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
-
-
-
-
 
 
 // ✅ Location verification
