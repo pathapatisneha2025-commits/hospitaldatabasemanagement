@@ -1,6 +1,5 @@
-flask
-deepface
-tensorflow-cpu
-opencv-python-headless
-tf-keras
+deepface==0.0.93
+opencv-python-headless==4.8.1.78
+tensorflow-cpu==2.10.0
 numpy
+Flask
