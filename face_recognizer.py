@@ -22,7 +22,10 @@ def resize_image(url, size=(160, 160)):
     temp_path = "/tmp/resized.jpg"
     img.save(temp_path)
     return temp_path
-
+@app.route("/version")
+def version():
+    return jsonify({"python_version": sys.version})
+    
 @app.route("/verify", methods=["POST"])
 def verify_face():
     data = request.json
