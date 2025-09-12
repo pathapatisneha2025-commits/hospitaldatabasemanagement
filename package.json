@@ -4,8 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "npm rebuild canvas && npm run postbuild",
-    "postbuild": "echo \"Installing Node and Python deps\" && npm install && pip install -r requirements.txt"
+    "build": "echo \"No build step required for this app\""
   },
   "keywords": [],
   "author": "",

@@ -52,7 +52,10 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
     let data = "";
     python.stdout.on("data", (chunk) => (data += chunk.toString()));
-    python.stderr.on("data", (err) => console.error("Python error:", err.toString()));
+python.stderr.on("data", (err) => {
+  console.error("Python error:", err.toString());
+  data += err.toString(); // in case Python only outputs error
+});
 
     python.on("close", () => {
       try {

@@ -1,6 +1,10 @@
 import sys
 import json
 from deepface import DeepFace
+import os
+
+# ✅ Disable GPU in TensorFlow/DeepFace
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
@@ -11,7 +15,13 @@ if __name__ == "__main__":
     captured_url = sys.argv[2]
 
     try:
-        result = DeepFace.verify(registered_url, captured_url)
+        # ✅ force backend to 'opencv' (lighter, avoids heavy GPU libs)
+        result = DeepFace.verify(
+            registered_url,
+            captured_url,
+            enforce_detection=False,
+            detector_backend="opencv"
+        )
         output = {
             "match": result["verified"],
             "distance": float(result["distance"]),
