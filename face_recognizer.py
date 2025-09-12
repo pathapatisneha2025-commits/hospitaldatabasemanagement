@@ -1,10 +1,15 @@
 import sys
 import json
-from deepface import DeepFace
 import os
 
-# ✅ Disable GPU in TensorFlow/DeepFace
+# Force CPU
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+# Suppress TensorFlow info/warnings
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+from deepface import DeepFace
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
