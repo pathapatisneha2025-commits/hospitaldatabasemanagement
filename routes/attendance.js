@@ -40,7 +40,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const registeredUrl = result.rows[0].image;
 
     // Call Python service over HTTP
-    const pythonResponse = await axios.post("https://<pythonfaceapi>.onrender.com/verify", {
+    const pythonResponse = await axios.post("https://pythonfaceapi.onrender.com/verify", {
       registeredUrl,
       capturedUrl
     });
