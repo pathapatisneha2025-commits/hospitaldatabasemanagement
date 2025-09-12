@@ -5,8 +5,6 @@ const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
 const { spawn } = require("child_process");
-const axios = require("axios");
-const fs = require("fs");
 const path = require("path");
 
 // ✅ Cloudinary storage
@@ -14,91 +12,87 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "employee_faces",
-    allowed_formats: ["jpg", "jpeg", "png"],
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name;
+      return `${Date.now()}-${nameWithoutExt}`;
+    },
   },
 });
+
 const upload = multer({ storage });
 
-// ✅ Helper: download image from URL to local temp file
-
-
 // ✅ Face verification route
-  router.post("/verify-face", upload.single("image"), async (req, res) => {
-    try {
-      const { employeeId } = req.body;
-      const file = req.file;
+router.post("/verify-face", upload.single("image"), async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    const file = req.file;
 
-      // ✅ Check if file is uploaded
-      if (!file) {
-        return res.status(400).json({
-          success: false,
-          message: "Image is required",
-        });
-      }
+    console.log("req.file:", req.file); // 👈 Debug
 
-      const image = file.path;
-
-      // ✅ Check employeeId
-      if (!employeeId) {
-        return res.status(400).json({
-          success: false,
-          message: "employeeId is required",
-        });
-      }
-
-      const capturedUrl = image;
-
-      // ✅ Fetch registered image from DB
-      const result = await pool.query(
-        "SELECT image FROM employees WHERE id = $1",
-        [employeeId]
-      );
-
-      if (result.rowCount === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Employee not found" });
-      }
-
-      const registeredUrl = result.rows[0].image;
-
-      // ✅ Call Python script
-      const python = spawn("python", [
-        "face_recognizer.py",
-        registeredUrl,
-        capturedUrl,
-      ]);
-
-      let data = "";
-      python.stdout.on("data", (chunk) => {
-        data += chunk.toString();
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Image is required",
       });
-
-      python.stderr.on("data", (err) => {
-        console.error("Python error:", err.toString());
-      });
-
-      python.on("close", () => {
-        try {
-          const result = JSON.parse(data);
-          res.json({
-            success: true,
-            match: result.match,
-            distance: result.distance,
-            capturedUrl,
-          });
-        } catch (e) {
-          console.error("Parse error:", e.message);
-          res
-            .status(500)
-            .json({ success: false, message: "Face verification failed" });
-        }
-      });
-    } catch (error) {
-      console.error("Face verification error:", error.message);
-      res.status(500).json({ success: false, message: "Server error" });
     }
-  });
+
+    // CloudinaryStorage returns `path` as URL
+    const capturedUrl = file.path || file.filename || null;
+
+    if (!capturedUrl) {
+      return res.status(500).json({ success: false, message: "Upload failed" });
+    }
+
+    if (!employeeId) {
+      return res.status(400).json({ success: false, message: "employeeId is required" });
+    }
+
+    // ✅ Fetch registered image from DB
+    const result = await pool.query(
+      "SELECT image FROM employees WHERE id = $1",
+      [employeeId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    const registeredUrl = result.rows[0].image;
+
+    // ✅ Call Python script
+    const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
+
+    let data = "";
+    python.stdout.on("data", (chunk) => {
+      data += chunk.toString();
+    });
+
+    python.stderr.on("data", (err) => {
+      console.error("Python error:", err.toString());
+    });
+
+    python.on("close", () => {
+      try {
+        const result = JSON.parse(data);
+        res.json({
+          success: true,
+          match: result.match,
+          distance: result.distance,
+          capturedUrl,
+        });
+      } catch (e) {
+        console.error("Parse error:", e.message);
+        res.status(500).json({ success: false, message: "Face verification failed" });
+      }
+    });
+  } catch (error) {
+    console.error("Face verification error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 
 
 
