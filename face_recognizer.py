@@ -1,31 +1,13 @@
 from flask import Flask, request, jsonify
 from deepface import DeepFace
-from PIL import Image
-import requests
-from io import BytesIO
-import os
+import os, sys
 
-# Force CPU & suppress TF warnings
+# Force CPU (avoid GPU issues)
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 app = Flask(__name__)
 
-# ✅ Preload a lighter model once
-model = DeepFace.build_model("OpenFace")  # lighter than Facenet
-
-def resize_image(url, size=(160, 160)):
-    """Download and resize image to reduce memory usage."""
-    response = requests.get(url)
-    img = Image.open(BytesIO(response.content)).convert("RGB")
-    img = img.resize(size)
-    temp_path = "/tmp/resized.jpg"
-    img.save(temp_path)
-    return temp_path
-@app.route("/version")
-def version():
-    return jsonify({"python_version": sys.version})
-    
 @app.route("/verify", methods=["POST"])
 def verify_face():
     data = request.json
@@ -36,26 +18,27 @@ def verify_face():
         return jsonify({"error": "Missing URLs"}), 400
 
     try:
-        # ✅ Resize images to reduce memory footprint
-        reg_path = resize_image(registered_url)
-        cap_path = resize_image(captured_url)
-
-        # ✅ Use lighter model & opencv backend
         result = DeepFace.verify(
-            reg_path,
-            cap_path,
-            model=model,
+            registered_url,
+            captured_url,
             enforce_detection=False,
             detector_backend="opencv"
         )
-
         return jsonify({
             "match": result["verified"],
             "distance": float(result["distance"])
         })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ✅ New route to check Python version
+@app.route("/version", methods=["GET"])
+def version():
+    return jsonify({
+        "python_version": sys.version
+    })
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
