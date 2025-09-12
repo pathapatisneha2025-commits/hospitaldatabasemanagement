@@ -3,4 +3,4 @@ deepface==0.0.92
 tensorflow-cpu==2.20.0
 opencv-python-headless==4.10.0.84
 tf-keras==2.20.0
-numpy==1.26.4
+numpy>=2.1.0
