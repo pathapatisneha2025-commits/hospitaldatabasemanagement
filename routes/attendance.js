@@ -34,6 +34,9 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     }
 
     const capturedUrl = file.path;
+     console.log("Uploaded file:", file);
+    console.log("Captured URL:", capturedUrl);
+    console.log("Employee ID:", employeeId);
 
     if (!employeeId) {
       return res.status(400).json({ success: false, message: "employeeId is required" });
