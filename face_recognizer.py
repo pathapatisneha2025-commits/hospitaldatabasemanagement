@@ -1,19 +1,23 @@
-from flask import Flask, request, jsonify
+import sys
+import json
 from deepface import DeepFace
 
-app = Flask(__name__)
+def main():
+    if len(sys.argv) != 3:
+        print(json.dumps({"error": "Usage: face_recognizer.py <registered_url> <captured_url>"}))
+        sys.exit(1)
 
-@app.route("/verify", methods=["POST"])
-def verify():
-    data = request.json
-    registered_url = data.get("registered_url")
-    captured_url = data.get("captured_url")
+    registered_url, captured_url = sys.argv[1], sys.argv[2]
 
     try:
-        result = DeepFace.verify(registered_url, captured_url)
-        return jsonify(result)
+        # DeepFace handles downloading, detection, and embeddings internally
+        result = DeepFace.verify(registered_url, captured_url, enforce_detection=True)
+        print(json.dumps({
+            "match": result["verified"],
+            "distance": result["distance"]
+        }))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(json.dumps({"match": False, "distance": None, "error": str(e)}))
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()
