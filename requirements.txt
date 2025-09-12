@@ -1,5 +1,6 @@
+flask
 deepface
 tensorflow
 tf-keras
-fastapi
-uvicorn
+opencv-python
+numpy
