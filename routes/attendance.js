@@ -23,82 +23,82 @@ const upload = multer({ storage });
 
 
 // ✅ Face verification route
-router.post("/verify-face", upload.single("image"), async (req, res) => {
-  try {
-    const { employeeId } = req.body;
-    const file = req.file;
+  router.post("/verify-face", upload.single("image"), async (req, res) => {
+    try {
+      const { employeeId } = req.body;
+      const file = req.file;
 
-    // ✅ Check if file is uploaded
-    if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: "Image is required",
-      });
-    }
-
-    const image = file.path;
-
-    // ✅ Check employeeId
-    if (!employeeId) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeId is required",
-      });
-    }
-
-    const capturedUrl = image;
-
-    // ✅ Fetch registered image from DB
-    const result = await pool.query(
-      "SELECT image FROM employees WHERE id = $1",
-      [employeeId]
-    );
-
-    if (result.rowCount === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Employee not found" });
-    }
-
-    const registeredUrl = result.rows[0].image;
-
-    // ✅ Call Python script
-    const python = spawn("python", [
-      "face_recognizer.py",
-      registeredUrl,
-      capturedUrl,
-    ]);
-
-    let data = "";
-    python.stdout.on("data", (chunk) => {
-      data += chunk.toString();
-    });
-
-    python.stderr.on("data", (err) => {
-      console.error("Python error:", err.toString());
-    });
-
-    python.on("close", () => {
-      try {
-        const result = JSON.parse(data);
-        res.json({
-          success: true,
-          match: result.match,
-          distance: result.distance,
-          capturedUrl,
+      // ✅ Check if file is uploaded
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "Image is required",
         });
-      } catch (e) {
-        console.error("Parse error:", e.message);
-        res
-          .status(500)
-          .json({ success: false, message: "Face verification failed" });
       }
-    });
-  } catch (error) {
-    console.error("Face verification error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
+
+      const image = file.path;
+
+      // ✅ Check employeeId
+      if (!employeeId) {
+        return res.status(400).json({
+          success: false,
+          message: "employeeId is required",
+        });
+      }
+
+      const capturedUrl = image;
+
+      // ✅ Fetch registered image from DB
+      const result = await pool.query(
+        "SELECT image FROM employees WHERE id = $1",
+        [employeeId]
+      );
+
+      if (result.rowCount === 0) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Employee not found" });
+      }
+
+      const registeredUrl = result.rows[0].image;
+
+      // ✅ Call Python script
+      const python = spawn("python", [
+        "face_recognizer.py",
+        registeredUrl,
+        capturedUrl,
+      ]);
+
+      let data = "";
+      python.stdout.on("data", (chunk) => {
+        data += chunk.toString();
+      });
+
+      python.stderr.on("data", (err) => {
+        console.error("Python error:", err.toString());
+      });
+
+      python.on("close", () => {
+        try {
+          const result = JSON.parse(data);
+          res.json({
+            success: true,
+            match: result.match,
+            distance: result.distance,
+            capturedUrl,
+          });
+        } catch (e) {
+          console.error("Parse error:", e.message);
+          res
+            .status(500)
+            .json({ success: false, message: "Face verification failed" });
+        }
+      });
+    } catch (error) {
+      console.error("Face verification error:", error.message);
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
 
 
 
