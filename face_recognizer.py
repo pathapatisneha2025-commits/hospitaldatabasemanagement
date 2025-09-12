@@ -1,14 +1,12 @@
 import sys
 import json
+from deepface import DeepFace
 import os
 
 # ✅ Disable GPU in TensorFlow/DeepFace
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TF warnings
 
-from deepface import DeepFace
-
-if _name_ == "_main_":
+if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(json.dumps({"error": "Missing arguments"}))
         sys.exit(1)
@@ -17,17 +15,16 @@ if _name_ == "_main_":
     captured_url = sys.argv[2]
 
     try:
-        # ✅ Force CPU + lightweight backend
+        # ✅ force backend to 'opencv' (lighter, avoids heavy GPU libs)
         result = DeepFace.verify(
             registered_url,
             captured_url,
             enforce_detection=False,
-            detector_backend="opencv",   # or "ssd", "mtcnn" if you want
-            model_name="VGG-Face"        # lighter than Facenet512
+            detector_backend="opencv"
         )
         output = {
-            "match": bool(result.get("verified", False)),
-            "distance": float(result.get("distance", 0.0)),
+            "match": result["verified"],
+            "distance": float(result["distance"]),
         }
         print(json.dumps(output))
     except Exception as e:
