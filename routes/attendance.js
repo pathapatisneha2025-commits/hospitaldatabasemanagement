@@ -29,20 +29,17 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const { employeeId } = req.body;
     const file = req.file;
 
-    console.log("req.file:", req.file); // Debug Cloudinary response
-
     if (!file) {
       return res.status(400).json({ success: false, message: "Image is required" });
     }
 
-    // ✅ Cloudinary returns URL in `file.path`
     const capturedUrl = file.path;
 
     if (!employeeId) {
       return res.status(400).json({ success: false, message: "employeeId is required" });
     }
 
-    // ✅ Fetch registered image from DB
+    // fetch from DB
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Employee not found" });
@@ -50,7 +47,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
     const registeredUrl = result.rows[0].image;
 
-    // ✅ Call Python script
+    // spawn Python
     const python = spawn("python", ["face_recognizer.py", registeredUrl, capturedUrl]);
 
     let data = "";
@@ -60,12 +57,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     python.on("close", () => {
       try {
         const parsed = JSON.parse(data);
-        res.json({
-          success: true,
-          match: parsed.match,
-          distance: parsed.distance,
-          capturedUrl,
-        });
+        res.json({ success: true, ...parsed, capturedUrl });
       } catch (e) {
         console.error("Parse error:", e.message);
         res.status(500).json({ success: false, message: "Face verification failed" });
@@ -76,7 +68,6 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 // ✅ Location verification
 const OFFICE_LAT = 14.683566097002268;
