@@ -7,6 +7,7 @@ const cloudinary = require("../cloudinary");
 const { spawn } = require("child_process");
 const path = require("path");
 const axios = require("axios");
+const rekognition = require("../awsConfig");
 
 // ✅ Cloudinary storage
 // storage config (reuse for both routes)
@@ -34,18 +35,41 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
     const capturedUrl = file.path;
 
+    // Get registered employee face URL
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
     if (result.rowCount === 0) return res.status(404).json({ success: false, message: "Employee not found" });
 
     const registeredUrl = result.rows[0].image;
 
-    // Call Python service over HTTP
-    const pythonResponse = await axios.post("https://pythonfaceapi.onrender.com/verify", {
-      registeredUrl,
+    // ✅ Download both images from Cloudinary as bytes
+    const [registeredImg, capturedImg] = await Promise.all([
+      axios.get(registeredUrl, { responseType: "arraybuffer" }),
+      axios.get(capturedUrl, { responseType: "arraybuffer" })
+    ]);
+
+    // ✅ Call AWS Rekognition CompareFaces
+    const params = {
+      SourceImage: { Bytes: Buffer.from(registeredImg.data) },
+      TargetImage: { Bytes: Buffer.from(capturedImg.data) },
+      SimilarityThreshold: 80 // Minimum confidence level
+    };
+
+    const rekognitionResult = await rekognition.compareFaces(params).promise();
+
+    let faceVerified = false;
+    let confidence = 0;
+
+    if (rekognitionResult.FaceMatches && rekognitionResult.FaceMatches.length > 0) {
+      faceVerified = true;
+      confidence = rekognitionResult.FaceMatches[0].Similarity;
+    }
+
+    return res.json({
+      success: true,
+      faceVerified,
+      confidence,
       capturedUrl
     });
-
-    res.json({ success: true, ...pythonResponse.data });
 
   } catch (error) {
     console.error("Face verification error:", error.message);
