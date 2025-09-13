@@ -199,13 +199,16 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     // 3️⃣ Late Penalty calculation (5-min blocks, first 3 lates free)
     const lateResult = await pool.query(
       `SELECT DATE(a.timestamp) AS day,
-              FLOOR(EXTRACT(EPOCH FROM (a.timestamp::time - e.schedule_in)) / 300) AS blocks
-       FROM attendance a
-       JOIN employees e ON a.employee_id = e.id
-       WHERE a.employee_id = $1
-         AND EXTRACT(YEAR FROM a.timestamp) = $2
-         AND EXTRACT(MONTH FROM a.timestamp) = $3
-         AND a.timestamp::time > e.schedule_in`,
+       FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
+FROM attendance a
+JOIN employees e ON a.employee_id = e.id
+WHERE a.employee_id = $1
+  AND EXTRACT(YEAR FROM a.timestamp) = $2
+  AND EXTRACT(MONTH FROM a.timestamp) = $3
+  AND a.status ILIKE 'On Duty'
+GROUP BY DATE(a.timestamp), e.schedule_in
+HAVING MIN(a.timestamp)::time > e.schedule_in;
+`,
       [employeeId, year, month]
     );
 
