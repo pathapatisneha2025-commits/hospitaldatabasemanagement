@@ -122,120 +122,155 @@ router.get("/status/:employeeId", async (req, res) => {
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
+    if (!year || !month || !employeeId) {
+      return res.status(400).json({ error: "Missing required params" });
+    }
 
-    // ✅ Get employee info
-    const empResult = await pool.query(
-      "SELECT id, name, salary, schedule_in, schedule_out FROM employees WHERE id = $1",
-      [employeeId]
-    );
-    if (empResult.rows.length === 0) return res.status(404).send("Employee not found");
-    const employee = empResult.rows[0];
+    // 1️⃣ Base employee + deductions
+    const query = `
+      SELECT e.full_name,
+             e.role,
+             e.monthly_salary,
+             COALESCE(SUM(l.salary_deduction), 0) AS deductions
+      FROM employees e
+      LEFT JOIN leaves l
+        ON e.id = l.employee_id
+       AND (
+            (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
+            OR
+            (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+            OR
+            (l.start_date <= make_date($1::int, $2::int, 1)
+             AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+          )
+      WHERE e.id = $3::int
+      GROUP BY e.id, e.full_name, e.role, e.monthly_salary;
+    `;
+    const result = await pool.query(query, [year, month, employeeId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Payslip not found" });
+    }
 
-    // ✅ Total working hours (On Duty → Off Duty)
-    const hoursResult = await pool.query(
-      `SELECT 
-          SUM(EXTRACT(EPOCH FROM (next_time - timestamp)) / 3600) AS total_hours
-       FROM (
-          SELECT 
-            a.employee_id,
-            a.timestamp,
-            a.status,
-            LEAD(a.timestamp) OVER (
-              PARTITION BY a.employee_id, DATE(a.timestamp) 
-              ORDER BY a.timestamp
-            ) AS next_time,
-            LEAD(a.status) OVER (
-              PARTITION BY a.employee_id, DATE(a.timestamp) 
-              ORDER BY a.timestamp
-            ) AS next_status
-          FROM attendance a
-          WHERE a.employee_id = $1
-            AND EXTRACT(YEAR FROM a.timestamp) = $2
-            AND EXTRACT(MONTH FROM a.timestamp) = $3
-       ) t
-       WHERE t.status ILIKE 'On Duty'
-         AND t.next_status ILIKE 'Off Duty';`,
-      [employeeId, year, month]
-    );
+    const data = result.rows[0];
 
-    const totalHours = hoursResult.rows[0]?.total_hours || 0;
+    // 2️⃣ Unauthorized leave penalty calculation
+    let unauthorizedLeaves = 0;
+    let unauthorizedPenaltyTotal = 0;
 
-    // ✅ Expected monthly hours (assuming 9 hrs × 30 days = 270)
-    const expectedHours = 270;
-
-    // ✅ Proportional incentive calculation
-    const proportionalIncentive = (employee.salary / expectedHours) * totalHours;
-
-    // ✅ Late penalty calculation (first On Duty of each day vs schedule_in)
-    const lateResult = await pool.query(
-      `SELECT SUM(FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300)) AS late_blocks
-       FROM attendance a
-       JOIN employees e ON a.employee_id = e.id
-       WHERE a.employee_id = $1
-         AND EXTRACT(YEAR FROM a.timestamp) = $2
-         AND EXTRACT(MONTH FROM a.timestamp) = $3
-         AND a.status ILIKE 'On Duty'
-       GROUP BY DATE(a.timestamp), e.schedule_in
-       HAVING MIN(a.timestamp)::time > e.schedule_in;`,
-      [employeeId, year, month]
-    );
-
-    const totalLateBlocks = lateResult.rows.reduce((sum, r) => sum + Number(r.late_blocks), 0);
-
-    // ✅ Late penalty per block based on salary range
-    let latePenaltyPerBlock = 0;
-    if (employee.salary >= 4500 && employee.salary <= 7500) latePenaltyPerBlock = 25;
-    else if (employee.salary >= 7501 && employee.salary <= 9500) latePenaltyPerBlock = 50;
-    else if (employee.salary >= 9501) latePenaltyPerBlock = 75;
-
-    const latePenalty = totalLateBlocks * latePenaltyPerBlock;
-
-    // ✅ Unauthorized leave penalty
-    const leaveResult = await pool.query(
-      `SELECT COUNT(DISTINCT DATE(timestamp)) AS leave_days
-       FROM attendance
+    const cancelledLeaves = await pool.query(
+      `SELECT start_date, end_date, leave_type
+       FROM leaves
        WHERE employee_id = $1
-         AND status ILIKE 'Absent'
-         AND EXTRACT(YEAR FROM timestamp) = $2
-         AND EXTRACT(MONTH FROM timestamp) = $3`,
+         AND status ILIKE 'cancelled'
+         AND (
+            (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
+            OR
+            (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
+         )`,
       [employeeId, year, month]
     );
 
-    const leaveDays = leaveResult.rows[0]?.leave_days || 0;
-    const allowedLeaves = 2;
-    const extraLeaves = Math.max(0, leaveDays - allowedLeaves);
+    let unauthorizedPenalty = 0;
+    if (data.monthly_salary >= 4500 && data.monthly_salary <= 7500) {
+      unauthorizedPenalty = 35;
+    } else if (data.monthly_salary >= 7501 && data.monthly_salary <= 9500) {
+      unauthorizedPenalty = 70;
+    } else if (data.monthly_salary >= 9501) {
+      unauthorizedPenalty = 105;
+    }
 
-    const leavePenalty = extraLeaves * (employee.salary / 30);
+    for (let leave of cancelledLeaves.rows) {
+      if (leave.leave_type.toLowerCase() === "halfday") {
+        unauthorizedLeaves = Number((unauthorizedLeaves + 0.5).toFixed(1));
+      } else {
+        const attendanceResult = await pool.query(
+          `SELECT COUNT(*) AS off_duty_days
+           FROM attendance
+           WHERE employee_id = $1
+             AND status ILIKE 'Absent'
+             AND timestamp::date BETWEEN $2::date AND $3::date`,
+          [employeeId, leave.start_date, leave.end_date]
+        );
+        unauthorizedLeaves += parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
+      }
+    }
+    unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenalty;
 
-    // ✅ Net pay = Base Salary + Incentive - Penalties
-    const netPay = employee.salary + proportionalIncentive - latePenalty - leavePenalty;
-
-    // ✅ Generate PDF
-    const doc = new PDFDocument();
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=payslip_${employeeId}_${month}_${year}.pdf`
+    // 3️⃣ Late Penalty calculation (5-min blocks, first 3 lates free)
+    const lateResult = await pool.query(
+      `SELECT DATE(a.timestamp) AS day,
+       FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
+FROM attendance a
+JOIN employees e ON a.employee_id = e.id
+WHERE a.employee_id = $1
+  AND EXTRACT(YEAR FROM a.timestamp) = $2
+  AND EXTRACT(MONTH FROM a.timestamp) = $3
+  AND a.status ILIKE 'On Duty'
+GROUP BY DATE(a.timestamp), e.schedule_in
+HAVING MIN(a.timestamp)::time > e.schedule_in;
+`,
+      [employeeId, year, month]
     );
+
+    const lateRows = lateResult.rows || [];
+
+    // sort by day (to pick first 3 late days free)
+    lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
+
+    let totalBlocks = 0;
+    lateRows.forEach((row, idx) => {
+      const blocks = parseInt(row.blocks, 10) || 0;
+      if (idx < 3) {
+        // First 3 late days = free
+        return;
+      }
+      totalBlocks += blocks;
+    });
+
+    let perLatePenalty = 0;
+    if (data.monthly_salary >= 4500 && data.monthly_salary <= 7500) {
+      perLatePenalty = 25;
+    } else if (data.monthly_salary >= 7501 && data.monthly_salary <= 9500) {
+      perLatePenalty = 50;
+    } else if (data.monthly_salary >= 9501) {
+      perLatePenalty = 75;
+    }
+
+    const latePenalty = totalBlocks * perLatePenalty;
+
+    // 4️⃣ Net Pay
+    const netPay = Math.max(
+      0,
+      data.monthly_salary - data.deductions - unauthorizedPenaltyTotal - latePenalty
+    );
+
+    // 5️⃣ Generate PDF
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=payslip-${month}-${year}.pdf`);
+
+    const doc = new PDFDocument();
     doc.pipe(res);
 
-    doc.fontSize(18).text("Employee Payslip", { align: "center" });
+    doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
-    doc.fontSize(12).text(`Employee ID: ${employee.id}`);
-    doc.text(`Name: ${employee.name}`);
-    doc.text(`Month: ${month}-${year}`);
-    doc.text(`Base Salary: ${employee.salary.toFixed(2)}`);
-    doc.text(`Total Hours Worked: ${totalHours.toFixed(2)} hrs`);
-    doc.text(`Incentives (Proportional): ${proportionalIncentive.toFixed(2)}`);
-    doc.text(`Late Penalty: -${latePenalty.toFixed(2)}`);
-    doc.text(`Leave Penalty: -${leavePenalty.toFixed(2)}`);
+
+    doc.fontSize(12).text(`Employee Name: ${data.full_name}`);
+    doc.text(`Designation: ${data.role}`);
+    doc.text(`Basic Salary: ${data.monthly_salary}`);
+    doc.text(`Deductions: ${data.deductions}`);
+    doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
+    doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
+    doc.text(`Late Days (Total): ${lateRows.length}`);
+    doc.text(`Late Blocks (5-min each, after 3 free days): ${totalBlocks}`);
+    doc.text(`Late Penalty (@ ${perLatePenalty} per 5 min): ${latePenalty}`);
     doc.moveDown();
-    doc.fontSize(14).text(`Net Pay: ${netPay.toFixed(2)}`, { align: "right" });
+
+    doc.fontSize(14).text(`Net Pay: ${netPay}`, { underline: true });
 
     doc.end();
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server error");
+    res.status(500).json({ error: "Server error" });
   }
 });
 
