@@ -117,10 +117,13 @@ router.get("/status/:employeeId", async (req, res) => {
   }
 });
 
+const PDFDocument = require("pdfkit");
+
+const PDFDocument = require("pdfkit");
+
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
-
     if (!year || !month || !employeeId) {
       return res.status(400).json({ error: "Missing required params" });
     }
@@ -130,7 +133,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       SELECT e.full_name,
              e.role,
              e.monthly_salary,
-             COALESCE(MAX(l.salary_deduction), 0) AS deductions
+             COALESCE(SUM(l.salary_deduction), 0) AS deductions
       FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
@@ -145,7 +148,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       WHERE e.id = $3::int
       GROUP BY e.id, e.full_name, e.role, e.monthly_salary;
     `;
-
     const result = await pool.query(query, [year, month, employeeId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Payslip not found" });
@@ -157,7 +159,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     let unauthorizedLeaves = 0;
     let unauthorizedPenaltyTotal = 0;
 
-    // Get cancelled leaves
     const cancelledLeaves = await pool.query(
       `SELECT start_date, end_date, leave_type
        FROM leaves
@@ -171,7 +172,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       [employeeId, year, month]
     );
 
-    // Deduction slab → unauthorized penalty
     let unauthorizedPenalty = 0;
     if (data.monthly_salary >= 4500 && data.monthly_salary <= 7500) {
       unauthorizedPenalty = 35;
@@ -181,35 +181,71 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       unauthorizedPenalty = 105;
     }
 
-    // Loop over cancelled leaves
     for (let leave of cancelledLeaves.rows) {
       if (leave.leave_type.toLowerCase() === "halfday") {
-        unauthorizedLeaves += 0.5;
+        unauthorizedLeaves = Number((unauthorizedLeaves + 0.5).toFixed(1));
       } else {
-       const attendanceResult = await pool.query(
-  `SELECT COUNT(*) AS off_duty_days
-   FROM attendance
-   WHERE employee_id = $1
-     AND status ILIKE 'Absent'
-     AND timestamp::date BETWEEN $2::date AND $3::date`,
-  [employeeId, leave.start_date, leave.end_date]
-);
-
+        const attendanceResult = await pool.query(
+          `SELECT COUNT(*) AS off_duty_days
+           FROM attendance
+           WHERE employee_id = $1
+             AND status ILIKE 'Absent'
+             AND timestamp::date BETWEEN $2::date AND $3::date`,
+          [employeeId, leave.start_date, leave.end_date]
+        );
         unauthorizedLeaves += parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
       }
     }
-
     unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenalty;
 
-    // 3️⃣ Net Pay = salary - deductions - unauthorized penalty
-    const netPay = data.monthly_salary - data.deductions - unauthorizedPenaltyTotal;
-
-    // 4️⃣ Generate PDF
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=payslip-${month}-${year}.pdf`
+    // 3️⃣ Late Penalty calculation (5-min blocks, first 3 lates free)
+    const lateResult = await pool.query(
+      `SELECT DATE(a.timestamp) AS day,
+              FLOOR(EXTRACT(EPOCH FROM (a.timestamp::time - e.schedule_in)) / 300) AS blocks
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       WHERE a.employee_id = $1
+         AND EXTRACT(YEAR FROM a.timestamp) = $2
+         AND EXTRACT(MONTH FROM a.timestamp) = $3
+         AND a.timestamp::time > e.schedule_in`,
+      [employeeId, year, month]
     );
+
+    const lateRows = lateResult.rows || [];
+
+    // sort by day (to pick first 3 late days free)
+    lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
+
+    let totalBlocks = 0;
+    lateRows.forEach((row, idx) => {
+      const blocks = parseInt(row.blocks, 10) || 0;
+      if (idx < 3) {
+        // First 3 late days = free
+        return;
+      }
+      totalBlocks += blocks;
+    });
+
+    let perLatePenalty = 0;
+    if (data.monthly_salary >= 4500 && data.monthly_salary <= 7500) {
+      perLatePenalty = 25;
+    } else if (data.monthly_salary >= 7501 && data.monthly_salary <= 9500) {
+      perLatePenalty = 50;
+    } else if (data.monthly_salary >= 9501) {
+      perLatePenalty = 75;
+    }
+
+    const latePenalty = totalBlocks * perLatePenalty;
+
+    // 4️⃣ Net Pay
+    const netPay = Math.max(
+      0,
+      data.monthly_salary - data.deductions - unauthorizedPenaltyTotal - latePenalty
+    );
+
+    // 5️⃣ Generate PDF
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=payslip-${month}-${year}.pdf`);
 
     const doc = new PDFDocument();
     doc.pipe(res);
@@ -223,6 +259,9 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.text(`Deductions: ${data.deductions}`);
     doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
     doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
+    doc.text(`Late Days (Total): ${lateRows.length}`);
+    doc.text(`Late Blocks (5-min each, after 3 free days): ${totalBlocks}`);
+    doc.text(`Late Penalty (@ ${perLatePenalty} per 5 min): ${latePenalty}`);
     doc.moveDown();
 
     doc.fontSize(14).text(`Net Pay: ${netPay}`, { underline: true });
@@ -233,6 +272,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 module.exports = router;
