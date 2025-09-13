@@ -117,9 +117,7 @@ router.get("/status/:employeeId", async (req, res) => {
   }
 });
 
-const PDFDocument = require("pdfkit");
 
-const PDFDocument = require("pdfkit");
 
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
