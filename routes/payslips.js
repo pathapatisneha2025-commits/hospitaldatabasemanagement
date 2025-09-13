@@ -126,7 +126,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       return res.status(400).json({ error: "Missing required params" });
     }
 
-    // 1️⃣ Full employee info + deductions + bank details + image
+    // 1️⃣ Full employee info + deductions + bank details
     const query = `
       SELECT e.full_name,
              e.role,
@@ -135,7 +135,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
              e.branch_name,
              e.bank_name,
              e.account_number,
-             e.image,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions
       FROM employees e
       LEFT JOIN leaves l
@@ -150,7 +149,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
           )
       WHERE e.id = $3::int
       GROUP BY e.id, e.full_name, e.role, e.monthly_salary,
-               e.ifsc, e.branch_name, e.bank_name, e.account_number, e.image;
+               e.ifsc, e.branch_name, e.bank_name, e.account_number;
     `;
     const result = await pool.query(query, [year, month, employeeId]);
     if (result.rows.length === 0) {
@@ -286,21 +285,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     // Net Pay
     doc.fontSize(14).text(`Net Pay: ${netPay.toFixed(2)}`, { underline: true });
-    doc.moveDown();
-
-    // Employee image
-    if (employee.image) {
-      try {
-        if (employee.image.startsWith("http")) {
-          const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          doc.image(Buffer.from(response.data), { fit: [100, 100], align: "center" });
-        } else {
-          doc.image(employee.image, { fit: [100, 100], align: "center" });
-        }
-      } catch (err) {
-        console.warn("Image load failed:", err.message);
-      }
-    }
 
     doc.end();
   } catch (err) {
@@ -308,6 +292,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
