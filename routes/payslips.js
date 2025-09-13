@@ -118,16 +118,14 @@ router.get("/status/:employeeId", async (req, res) => {
 });
 
 
+
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
 
-    // ✅ Get employee info (with bank details & image)
+    // ✅ Get employee info
     const empResult = await pool.query(
-      `SELECT id, name, salary, schedule_in, schedule_out,
-              ifsc, branch_name, bank_name, account_number, image
-       FROM employees 
-       WHERE id = $1`,
+      "SELECT id, name, salary, schedule_in, schedule_out FROM employees WHERE id = $1",
       [employeeId]
     );
     if (empResult.rows.length === 0) return res.status(404).send("Employee not found");
@@ -162,13 +160,13 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     const totalHours = hoursResult.rows[0]?.total_hours || 0;
 
-    // ✅ Expected monthly hours (9 hrs × 30 days = 270)
+    // ✅ Expected monthly hours (assuming 9 hrs × 30 days = 270)
     const expectedHours = 270;
 
     // ✅ Proportional incentive calculation
     const proportionalIncentive = (employee.salary / expectedHours) * totalHours;
 
-    // ✅ Late penalty calculation
+    // ✅ Late penalty calculation (first On Duty of each day vs schedule_in)
     const lateResult = await pool.query(
       `SELECT SUM(FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300)) AS late_blocks
        FROM attendance a
@@ -184,6 +182,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     const totalLateBlocks = lateResult.rows.reduce((sum, r) => sum + Number(r.late_blocks), 0);
 
+    // ✅ Late penalty per block based on salary range
     let latePenaltyPerBlock = 0;
     if (employee.salary >= 4500 && employee.salary <= 7500) latePenaltyPerBlock = 25;
     else if (employee.salary >= 7501 && employee.salary <= 9500) latePenaltyPerBlock = 50;
@@ -205,9 +204,10 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const leaveDays = leaveResult.rows[0]?.leave_days || 0;
     const allowedLeaves = 2;
     const extraLeaves = Math.max(0, leaveDays - allowedLeaves);
+
     const leavePenalty = extraLeaves * (employee.salary / 30);
 
-    // ✅ Net pay
+    // ✅ Net pay = Base Salary + Incentive - Penalties
     const netPay = employee.salary + proportionalIncentive - latePenalty - leavePenalty;
 
     // ✅ Generate PDF
@@ -219,11 +219,8 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     );
     doc.pipe(res);
 
-    // Header
     doc.fontSize(18).text("Employee Payslip", { align: "center" });
     doc.moveDown();
-
-    // Employee basic info
     doc.fontSize(12).text(`Employee ID: ${employee.id}`);
     doc.text(`Name: ${employee.name}`);
     doc.text(`Month: ${month}-${year}`);
@@ -233,34 +230,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.text(`Late Penalty: -${latePenalty.toFixed(2)}`);
     doc.text(`Leave Penalty: -${leavePenalty.toFixed(2)}`);
     doc.moveDown();
-
-    // Bank details
-    doc.fontSize(12).text(`Bank Name: ${employee.bank_name || "N/A"}`);
-    doc.text(`Branch Name: ${employee.branch_name || "N/A"}`);
-    doc.text(`Account Number: ${employee.account_number || "N/A"}`);
-    doc.text(`IFSC Code: ${employee.ifsc || "N/A"}`);
-    doc.moveDown();
-
-    // Employee image (local path or URL)
-    if (employee.image) {
-      try {
-        if (employee.image.startsWith("http")) {
-          // If image is a URL → fetch it
-          const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          const imgBuffer = Buffer.from(response.data, "base64");
-          doc.image(imgBuffer, { fit: [100, 100], align: "left" });
-        } else {
-          // If image is local file path
-          doc.image(employee.image, { fit: [100, 100], align: "left" });
-        }
-      } catch (err) {
-        console.warn("Image load failed:", err.message);
-      }
-    }
-
-    doc.moveDown(2);
-
-    // Net pay
     doc.fontSize(14).text(`Net Pay: ${netPay.toFixed(2)}`, { align: "right" });
 
     doc.end();
@@ -269,7 +238,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
-
 
 
 
