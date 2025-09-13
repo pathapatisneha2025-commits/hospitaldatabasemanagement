@@ -79,8 +79,8 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 
 // ✅ Location verification
-const OFFICE_LAT = 14.683566097002268;
-const OFFICE_LNG = 77.57632597022224;
+const OFFICE_LAT =  17.67785195765331;
+const OFFICE_LNG = 83.19866166511059;
 const RADIUS_IN_METERS = 1000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
