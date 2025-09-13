@@ -28,16 +28,23 @@ const upload = multer({ storage });
 // 🚀 VERIFY FACE ROUTE
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
-    const { employeeId } = req.body;
+    const employeeId = parseInt(req.body.employeeId, 10);
     const file = req.file;
-    if (!file) return res.status(400).json({ success: false, message: "Image required" });
-    if (!employeeId) return res.status(400).json({ success: false, message: "Employee ID required" });
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: "Image required" });
+    }
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ success: false, message: "Valid Employee ID required" });
+    }
 
     const capturedUrl = file.path;
 
-    // Get registered employee face URL
+    // ✅ Get registered employee face URL
     const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
-    if (result.rowCount === 0) return res.status(404).json({ success: false, message: "Employee not found" });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
 
     const registeredUrl = result.rows[0].image;
 
@@ -51,23 +58,23 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const params = {
       SourceImage: { Bytes: Buffer.from(registeredImg.data) },
       TargetImage: { Bytes: Buffer.from(capturedImg.data) },
-      SimilarityThreshold: 80 // Minimum confidence level
+      SimilarityThreshold: 80 // Minimum similarity required
     };
 
     const rekognitionResult = await rekognition.compareFaces(params).promise();
 
     let faceVerified = false;
-    let confidence = 0;
+    let message = "Face not verified";
 
     if (rekognitionResult.FaceMatches && rekognitionResult.FaceMatches.length > 0) {
       faceVerified = true;
-      confidence = rekognitionResult.FaceMatches[0].Similarity;
+      message = "Face verified";
     }
 
     return res.json({
       success: true,
       faceVerified,
-      confidence,
+      message,
       capturedUrl
     });
 
@@ -76,6 +83,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 // ✅ Location verification
