@@ -1,8 +1,6 @@
 const express = require("express");
 const pool = require("../db"); // PostgreSQL connection
 const PDFDocument = require("pdfkit");
-require("pdfkit-table"); // pdfkit-table patches PDFDocument, no need to assign
-const axios = require("axios");
 
 const router = express.Router();
 
@@ -124,74 +122,55 @@ router.get("/status/:employeeId", async (req, res) => {
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
-    if (!year || !month || !employeeId) {
+    if (!year || !month || !employeeId)
       return res.status(400).json({ error: "Missing required params" });
-    }
 
-    // 🔹 Fetch employee data
+    // Fetch employee data
     const query = `
-      SELECT e.full_name,
-             e.role,
-             e.monthly_salary,
-             e.ifsc,
-             e.branch_name,
-             e.bank_name,
-             e.account_number,
-             e.image,
+      SELECT e.full_name, e.role, e.monthly_salary, e.ifsc, e.branch_name,
+             e.bank_name, e.account_number, e.image,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions
       FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
        AND (
             (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
-            OR
-            (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
-            OR
-            (l.start_date <= make_date($1::int, $2::int, 1)
-             AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+            OR (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+            OR (l.start_date <= make_date($1::int, $2::int, 1)
+                AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
           )
       WHERE e.id = $3::int
-      GROUP BY e.id, e.full_name, e.role, e.monthly_salary,
-               e.ifsc, e.branch_name, e.bank_name, e.account_number, e.image;
+      GROUP BY e.id, e.full_name, e.role, e.monthly_salary, e.ifsc,
+               e.branch_name, e.bank_name, e.account_number, e.image;
     `;
     const result = await pool.query(query, [year, month, employeeId]);
-    if (result.rows.length === 0) return res.status(404).json({ error: "Payslip not found" });
+    if (!result.rows.length) return res.status(404).json({ error: "Payslip not found" });
 
     const employee = result.rows[0];
     const baseSalary = Number(employee.monthly_salary) || 0;
     const deductions = Number(employee.deductions) || 0;
 
-    // 🔹 Monthly hours
+    // Monthly hours
     const monthRes = await pool.query(
-      `SELECT monthly_hours
-       FROM attendance
-       WHERE employee_id = $1
-         AND EXTRACT(YEAR FROM timestamp) = $2
+      `SELECT monthly_hours FROM attendance
+       WHERE employee_id = $1 AND EXTRACT(YEAR FROM timestamp) = $2
          AND EXTRACT(MONTH FROM timestamp) = $3
-       ORDER BY timestamp DESC
-       LIMIT 1`,
+       ORDER BY timestamp DESC LIMIT 1`,
       [employeeId, year, month]
     );
     const monthlyHours = parseFloat(monthRes.rows[0]?.monthly_hours || 0);
 
-    // 🔹 Incentives
     const expectedHours = 270;
     const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
 
-    // 🔹 Unauthorized leaves
+    // Unauthorized leaves
     const unauthorizedRes = await pool.query(
-      `SELECT COUNT(*) AS unauthorized_leaves
-       FROM leaves
-       WHERE employee_id = $1
-         AND status ILIKE 'unauthorized'
-         AND (
-            (EXTRACT(YEAR FROM start_date) = $2::int AND EXTRACT(MONTH FROM start_date) = $3::int)
-            OR
-            (EXTRACT(YEAR FROM end_date) = $2::int AND EXTRACT(MONTH FROM end_date) = $3::int)
-            OR
-            (start_date <= make_date($2::int, $3::int, 1)
-             AND end_date >= (make_date($2::int, $3::int, 1) + interval '1 month - 1 day'))
-          )`,
+      `SELECT COUNT(*) AS unauthorized_leaves FROM leaves
+       WHERE employee_id = $1 AND status ILIKE 'unauthorized'
+         AND ((EXTRACT(YEAR FROM start_date) = $2::int AND EXTRACT(MONTH FROM start_date) = $3::int)
+              OR (EXTRACT(YEAR FROM end_date) = $2::int AND EXTRACT(MONTH FROM end_date) = $3::int)
+              OR (start_date <= make_date($2::int, $3::int, 1)
+                  AND end_date >= (make_date($2::int, $3::int, 1) + interval '1 month - 1 day')));`,
       [employeeId, year, month]
     );
     const unauthorizedLeaves = Number(unauthorizedRes.rows[0]?.unauthorized_leaves || 0);
@@ -200,7 +179,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const latePenalty = 0;
     const netPay = Math.max(0, baseSalary + proportionalIncentive - deductions - unauthorizedPenaltyTotal - latePenalty);
 
-    // 🔹 Create PDF
+    // Create PDF
     const doc = new PDFDocument({ margin: 30, size: "A4" });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=payslip-${employeeId}-${month}-${year}.pdf`);
@@ -208,54 +187,48 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     // Header
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
+    doc.moveDown(1);
 
-    // Employee photo
+    // Employee photo (optional, centered)
+    const photoSize = 100;
     if (employee.image) {
       try {
+        let imgBuffer;
         if (employee.image.startsWith("http")) {
           const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          doc.image(Buffer.from(response.data), doc.page.width - 150, 40, { fit: [100, 100] });
+          imgBuffer = Buffer.from(response.data);
         } else {
-          doc.image(employee.image, doc.page.width - 150, 40, { fit: [100, 100] });
+          imgBuffer = employee.image;
         }
+        doc.image(imgBuffer, (doc.page.width - photoSize) / 2, doc.y, { fit: [photoSize, photoSize] });
+        doc.moveDown(2);
       } catch (err) {
         console.warn("Image load failed:", err.message);
       }
     }
 
-    doc.moveDown(6);
+    // Payslip details (no table)
+    const details = [
+      `Employee Name: ${employee.full_name}`,
+      `Role: ${employee.role}`,
+      `Bank: ${employee.bank_name || "N/A"}`,
+      `Branch: ${employee.branch_name || "N/A"}`,
+      `Account Number: ${employee.account_number || "N/A"}`,
+      `IFSC: ${employee.ifsc || "N/A"}`,
+      `Base Salary: ${baseSalary.toFixed(2)}`,
+      `Deductions (Leaves): ${deductions.toFixed(2)}`,
+      `Monthly Hours: ${monthlyHours.toFixed(2)}`,
+      `Expected Hours: ${expectedHours}`,
+      `Proportional Incentive: ${proportionalIncentive.toFixed(2)}`,
+      `Unauthorized Leaves: ${unauthorizedLeaves}`,
+      `Unauthorized Penalty: ${unauthorizedPenaltyTotal.toFixed(2)}`,
+      `Late Penalty: ${latePenalty.toFixed(2)}`,
+      `Net Pay: ${netPay.toFixed(2)}`,
+    ];
 
-    // 🔹 Table Data
-    const table = {
-      headers: ["Description", "Amount / Details"],
-      rows: [
-        ["Employee Name", employee.full_name],
-        ["Role", employee.role],
-        ["Bank", employee.bank_name || "N/A"],
-        ["Branch", employee.branch_name || "N/A"],
-        ["Account Number", employee.account_number || "N/A"],
-        ["IFSC", employee.ifsc || "N/A"],
-        ["Base Salary", baseSalary.toFixed(2)],
-        ["Deductions (Leaves)", deductions.toFixed(2)],
-        ["Monthly Hours", monthlyHours.toFixed(2)],
-        ["Expected Hours", expectedHours],
-        ["Proportional Incentive", proportionalIncentive.toFixed(2)],
-        ["Unauthorized Leaves", unauthorizedLeaves],
-        ["Unauthorized Penalty", unauthorizedPenaltyTotal.toFixed(2)],
-        ["Late Penalty", latePenalty.toFixed(2)],
-        ["Net Pay", netPay.toFixed(2)],
-      ],
-    };
-
-    doc.table(table, {
-      prepareHeader: () => doc.font("Helvetica-Bold").fontSize(12),
-      prepareRow: (row, i) => doc.font("Helvetica").fontSize(12),
-      padding: 5,
-      columnSpacing: 15,
-      width: doc.page.width - 60,
-      columnsSize: [200, 300],
-      border: { width: 0.5, color: "#000000" },
-      rowColors: ["#f6f6f6", "#ffffff"], // alternating row colors
+    details.forEach(line => {
+      doc.font("Helvetica").fontSize(12).text(line);
+      doc.moveDown(0.5);
     });
 
     doc.end();
