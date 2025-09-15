@@ -1,7 +1,7 @@
 const express = require("express");
 const pool = require("../db"); // PostgreSQL connection
 const PDFDocument = require("pdfkit");
-
+const axios = require("axios");
 const router = express.Router();
 
 router.get("/all", async (req, res) => {
