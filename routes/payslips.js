@@ -250,7 +250,22 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty
     );
 
-    // 7️⃣ Generate PDF into buffer
+    // 7️⃣ Preload employee image buffer
+    let employeeImageBuffer = null;
+    if (employee.image) {
+      try {
+        if (employee.image.startsWith("http")) {
+          const response = await axios.get(employee.image, { responseType: "arraybuffer" });
+          employeeImageBuffer = Buffer.from(response.data);
+        } else {
+          employeeImageBuffer = employee.image; // local path
+        }
+      } catch (err) {
+        console.warn("Image load failed:", err.message);
+      }
+    }
+
+    // 8️⃣ Generate PDF into buffer
     const doc = new PDFDocument();
     const buffers = [];
     doc.on("data", buffers.push.bind(buffers));
@@ -269,18 +284,9 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
 
-    // Employee image (safe handling)
-    if (employee.image) {
-      try {
-        if (employee.image.startsWith("http")) {
-          const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          doc.image(Buffer.from(response.data), doc.page.width - 120, 15, { width: 100, height: 100 });
-        } else {
-          doc.image(employee.image, doc.page.width - 120, 15, { width: 100, height: 100 });
-        }
-      } catch (err) {
-        console.warn("Image load failed:", err.message);
-      }
+    // Employee image
+    if (employeeImageBuffer) {
+      doc.image(employeeImageBuffer, doc.page.width - 120, 15, { width: 100, height: 100 });
     }
 
     // Employee info
