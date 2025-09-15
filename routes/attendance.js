@@ -204,7 +204,10 @@ router.post("/logout", async (req, res) => {
     const offDutyRow = insertResult.rows[0];
     const offDutyId = offDutyRow.id;
     const offDutyTimestamp = offDutyRow.timestamp;
-    const sessionHours = parseFloat(offDutyRow.session_hours.toFixed(2));
+
+    // ✅ Convert session_hours from string to number and round
+    const sessionHours = parseFloat(offDutyRow.session_hours);
+    const sessionHoursRounded = parseFloat(sessionHours.toFixed(2));
 
     // 3️⃣ Calculate daily total
     const dailyRes = await pool.query(
@@ -215,7 +218,7 @@ router.post("/logout", async (req, res) => {
          AND DATE(timestamp) = DATE($2)`,
       [employeeId, offDutyTimestamp]
     );
-    const dailyHours = parseFloat(dailyRes.rows[0].total.toFixed(2));
+    const dailyHours = parseFloat(parseFloat(dailyRes.rows[0].total).toFixed(2));
 
     // 4️⃣ Calculate weekly total
     const weeklyRes = await pool.query(
@@ -226,7 +229,7 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const weeklyHours = parseFloat(weeklyRes.rows[0].total.toFixed(2));
+    const weeklyHours = parseFloat(parseFloat(weeklyRes.rows[0].total).toFixed(2));
 
     // 5️⃣ Calculate monthly total
     const monthlyRes = await pool.query(
@@ -237,7 +240,7 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const monthlyHours = parseFloat(monthlyRes.rows[0].total.toFixed(2));
+    const monthlyHours = parseFloat(parseFloat(monthlyRes.rows[0].total).toFixed(2));
 
     // 6️⃣ Update Off Duty row with totals
     await pool.query(
@@ -253,7 +256,7 @@ router.post("/logout", async (req, res) => {
       data: {
         employeeId,
         status,
-        sessionHours,
+        sessionHours: sessionHoursRounded,
         dailyHours,
         weeklyHours,
         monthlyHours,
@@ -265,6 +268,7 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
