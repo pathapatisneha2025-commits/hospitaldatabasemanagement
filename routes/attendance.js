@@ -187,7 +187,7 @@ router.post("/logout", async (req, res) => {
 
     const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // 2️⃣ Insert Off Duty with session_hours calculated in SQL using IST
+    // 2️⃣ Insert Off Duty with session_hours in DB (decimal)
     const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours)
        VALUES (
@@ -205,11 +205,18 @@ router.post("/logout", async (req, res) => {
     const offDutyId = offDutyRow.id;
     const offDutyTimestamp = offDutyRow.timestamp;
 
-    // ✅ Convert session_hours from string to number and round
-    const sessionHours = parseFloat(offDutyRow.session_hours);
-    const sessionHoursRounded = parseFloat(sessionHours.toFixed(2));
+    // ✅ Helper function: convert decimal hours → "X hrs Y mins"
+    const formatHours = (decimalHours) => {
+      const totalSeconds = Math.floor(decimalHours * 3600);
+      const hrs = Math.floor(totalSeconds / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      return `${hrs} hrs ${mins} mins`;
+    };
 
-    // 3️⃣ Calculate daily total
+    const sessionHoursDecimal = parseFloat(offDutyRow.session_hours);
+    const sessionHours = formatHours(sessionHoursDecimal);
+
+    // 3️⃣ Daily total
     const dailyRes = await pool.query(
       `SELECT COALESCE(SUM(session_hours), 0) AS total
        FROM attendance
@@ -218,9 +225,10 @@ router.post("/logout", async (req, res) => {
          AND DATE(timestamp) = DATE($2)`,
       [employeeId, offDutyTimestamp]
     );
-    const dailyHours = parseFloat(parseFloat(dailyRes.rows[0].total).toFixed(2));
+    const dailyHoursDecimal = parseFloat(dailyRes.rows[0].total);
+    const dailyHours = formatHours(dailyHoursDecimal);
 
-    // 4️⃣ Calculate weekly total
+    // 4️⃣ Weekly total
     const weeklyRes = await pool.query(
       `SELECT COALESCE(SUM(session_hours), 0) AS total
        FROM attendance
@@ -229,9 +237,10 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const weeklyHours = parseFloat(parseFloat(weeklyRes.rows[0].total).toFixed(2));
+    const weeklyHoursDecimal = parseFloat(weeklyRes.rows[0].total);
+    const weeklyHours = formatHours(weeklyHoursDecimal);
 
-    // 5️⃣ Calculate monthly total
+    // 5️⃣ Monthly total
     const monthlyRes = await pool.query(
       `SELECT COALESCE(SUM(session_hours), 0) AS total
        FROM attendance
@@ -240,14 +249,15 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const monthlyHours = parseFloat(parseFloat(monthlyRes.rows[0].total).toFixed(2));
+    const monthlyHoursDecimal = parseFloat(monthlyRes.rows[0].total);
+    const monthlyHours = formatHours(monthlyHoursDecimal);
 
-    // 6️⃣ Update Off Duty row with totals
+    // 6️⃣ Update Off Duty row with totals (stored as decimals)
     await pool.query(
       `UPDATE attendance
        SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
        WHERE id = $4`,
-      [dailyHours, weeklyHours, monthlyHours, offDutyId]
+      [dailyHoursDecimal, weeklyHoursDecimal, monthlyHoursDecimal, offDutyId]
     );
 
     return res.json({
@@ -256,7 +266,7 @@ router.post("/logout", async (req, res) => {
       data: {
         employeeId,
         status,
-        sessionHours: sessionHoursRounded,
+        sessionHours,  // "1 hrs 2 mins"
         dailyHours,
         weeklyHours,
         monthlyHours,
@@ -268,6 +278,7 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
