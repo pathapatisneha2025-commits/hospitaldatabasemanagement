@@ -118,7 +118,6 @@ router.get("/status/:employeeId", async (req, res) => {
 });
 
 
-
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
@@ -160,7 +159,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const baseSalary = Number(employee.monthly_salary) || 0;
     const deductions = Number(employee.deductions) || 0;
 
-    // 2️⃣ Fetch monthly hours from attendance for proportional incentive
+    // 2️⃣ Fetch monthly hours from attendance
     const monthRes = await pool.query(
       `SELECT monthly_hours
        FROM attendance
@@ -173,7 +172,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     );
     const monthlyHours = parseFloat(monthRes.rows[0]?.monthly_hours || 0);
 
-    // 3️⃣ Proportional Incentive Logic
+    // 3️⃣ Proportional Incentive
     const expectedHours = 270;
     let proportionalIncentive = 0;
     if (monthlyHours > expectedHours) {
@@ -218,7 +217,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     }
     unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
-    // 5️⃣ Late penalty (first 3 late days free)
+    // 5️⃣ Late penalty
     const lateResult = await pool.query(
       `SELECT DATE(a.timestamp) AS day,
        FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
@@ -251,17 +250,26 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty
     );
 
-    // 7️⃣ Generate PDF
+    // 7️⃣ Generate PDF into buffer
     const doc = new PDFDocument();
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=payslip-${employeeId}-${month}-${year}.pdf`);
-    doc.pipe(res);
+    const buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => {
+      const pdfData = Buffer.concat(buffers);
+      res
+        .writeHead(200, {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename=payslip-${employeeId}-${month}-${year}.pdf`,
+          "Content-Length": pdfData.length
+        })
+        .end(pdfData);
+    });
 
     // Header
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
 
-    // Employee image at top-right
+    // Employee image (safe handling)
     if (employee.image) {
       try {
         if (employee.image.startsWith("http")) {
@@ -305,7 +313,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 
