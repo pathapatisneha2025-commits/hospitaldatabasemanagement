@@ -148,18 +148,29 @@ router.post("/mark-attendance", async (req, res) => {
 });
 
 // ✅ Logout
+
 router.post("/logout", async (req, res) => {
   try {
-    const { employeeId } = req.body;
-    if (!employeeId) {
-      return res.status(400).json({ success: false, message: "Missing employeeId" });
+    const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
+
+    if (!employeeId || !capturedUrl) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    // Check verification
+    if (locationVerified !== true || faceVerified !== true) {
+      return res.status(403).json({
+        success: false,
+        message: "Logout failed: Location or Face verification failed",
+      });
     }
 
     const status = "Off Duty";
+
     await pool.query(
-      `INSERT INTO attendance (employee_id, timestamp, status)
-       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2)`,
-      [employeeId, status]
+      `INSERT INTO attendance (employee_id, timestamp, image_url, status)
+       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)`,
+      [employeeId, capturedUrl, status]
     );
 
     return res.json({
