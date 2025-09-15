@@ -158,7 +158,6 @@ router.post("/logout", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    // Check verification
     if (locationVerified !== true || faceVerified !== true) {
       return res.status(403).json({
         success: false,
@@ -186,23 +185,28 @@ router.post("/logout", async (req, res) => {
       });
     }
 
-    const onDutyTime = new Date(onDutyResult.rows[0].timestamp);
-    const offDutyTime = new Date(); // current time
-    const sessionHours = (offDutyTime - onDutyTime) / 1000 / 3600; // in hours
+    const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // 2️⃣ Insert Off Duty WITH session_hours
-    const result = await pool.query(
+    // 2️⃣ Insert Off Duty with session_hours calculated in SQL using IST
+    const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours)
-       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3, $4)
+       VALUES (
+         $1,
+         NOW() AT TIME ZONE 'Asia/Kolkata',
+         $2,
+         $3,
+         EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $4)) / 3600
+       )
        RETURNING id, timestamp, session_hours`,
-      [employeeId, capturedUrl, status, sessionHours]
+      [employeeId, capturedUrl, status, onDutyTime]
     );
 
-    const offDutyRow = result.rows[0];
+    const offDutyRow = insertResult.rows[0];
     const offDutyId = offDutyRow.id;
     const offDutyTimestamp = offDutyRow.timestamp;
+    const sessionHours = parseFloat(offDutyRow.session_hours.toFixed(2));
 
-    // 3️⃣ Daily total
+    // 3️⃣ Calculate daily total
     const dailyRes = await pool.query(
       `SELECT COALESCE(SUM(session_hours), 0) AS total
        FROM attendance
@@ -211,9 +215,9 @@ router.post("/logout", async (req, res) => {
          AND DATE(timestamp) = DATE($2)`,
       [employeeId, offDutyTimestamp]
     );
-    const dailyHours = parseFloat(dailyRes.rows[0].total);
+    const dailyHours = parseFloat(dailyRes.rows[0].total.toFixed(2));
 
-    // 4️⃣ Weekly total
+    // 4️⃣ Calculate weekly total
     const weeklyRes = await pool.query(
       `SELECT COALESCE(SUM(session_hours), 0) AS total
        FROM attendance
@@ -222,9 +226,9 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const weeklyHours = parseFloat(weeklyRes.rows[0].total);
+    const weeklyHours = parseFloat(weeklyRes.rows[0].total.toFixed(2));
 
-    // 5️⃣ Monthly total
+    // 5️⃣ Calculate monthly total
     const monthlyRes = await pool.query(
       `SELECT COALESCE(SUM(session_hours), 0) AS total
        FROM attendance
@@ -233,9 +237,9 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const monthlyHours = parseFloat(monthlyRes.rows[0].total);
+    const monthlyHours = parseFloat(monthlyRes.rows[0].total.toFixed(2));
 
-    // 6️⃣ Update this Off Duty row with daily/weekly/monthly totals
+    // 6️⃣ Update Off Duty row with totals
     await pool.query(
       `UPDATE attendance
        SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
@@ -261,6 +265,7 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 // ✅ Logout queries
