@@ -124,9 +124,11 @@ router.get("/status/:employeeId", async (req, res) => {
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
-    if (!year || !month || !employeeId) return res.status(400).json({ error: "Missing required params" });
+    if (!year || !month || !employeeId) {
+      return res.status(400).json({ error: "Missing required params" });
+    }
 
-    // Fetch employee data
+    // 🔹 Fetch employee data
     const query = `
       SELECT e.full_name,
              e.role,
@@ -153,32 +155,43 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
                e.ifsc, e.branch_name, e.bank_name, e.account_number, e.image;
     `;
     const result = await pool.query(query, [year, month, employeeId]);
-    if (!result.rows.length) return res.status(404).json({ error: "Payslip not found" });
+    if (result.rows.length === 0) return res.status(404).json({ error: "Payslip not found" });
 
     const employee = result.rows[0];
     const baseSalary = Number(employee.monthly_salary) || 0;
     const deductions = Number(employee.deductions) || 0;
 
-    // Monthly hours
+    // 🔹 Monthly hours
     const monthRes = await pool.query(
-      `SELECT monthly_hours FROM attendance
-       WHERE employee_id = $1 AND EXTRACT(YEAR FROM timestamp) = $2
+      `SELECT monthly_hours
+       FROM attendance
+       WHERE employee_id = $1
+         AND EXTRACT(YEAR FROM timestamp) = $2
          AND EXTRACT(MONTH FROM timestamp) = $3
-       ORDER BY timestamp DESC LIMIT 1`,
+       ORDER BY timestamp DESC
+       LIMIT 1`,
       [employeeId, year, month]
     );
     const monthlyHours = parseFloat(monthRes.rows[0]?.monthly_hours || 0);
 
+    // 🔹 Incentives
     const expectedHours = 270;
     const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
 
+    // 🔹 Unauthorized leaves
     const unauthorizedRes = await pool.query(
-      `SELECT COUNT(*) AS unauthorized_leaves FROM leaves
-       WHERE employee_id = $1 AND status ILIKE 'unauthorized'
-         AND ((EXTRACT(YEAR FROM start_date) = $2::int AND EXTRACT(MONTH FROM start_date) = $3::int)
-              OR (EXTRACT(YEAR FROM end_date) = $2::int AND EXTRACT(MONTH FROM end_date) = $3::int)
-              OR (start_date <= make_date($2::int, $3::int, 1)
-                  AND end_date >= (make_date($2::int, $3::int, 1) + interval '1 month - 1 day')));`,
+      `SELECT COUNT(*) AS unauthorized_leaves
+       FROM leaves
+       WHERE employee_id = $1
+         AND status ILIKE 'unauthorized'
+         AND (
+            (EXTRACT(YEAR FROM start_date) = $2::int AND EXTRACT(MONTH FROM start_date) = $3::int)
+            OR
+            (EXTRACT(YEAR FROM end_date) = $2::int AND EXTRACT(MONTH FROM end_date) = $3::int)
+            OR
+            (start_date <= make_date($2::int, $3::int, 1)
+             AND end_date >= (make_date($2::int, $3::int, 1) + interval '1 month - 1 day'))
+          )`,
       [employeeId, year, month]
     );
     const unauthorizedLeaves = Number(unauthorizedRes.rows[0]?.unauthorized_leaves || 0);
@@ -187,7 +200,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const latePenalty = 0;
     const netPay = Math.max(0, baseSalary + proportionalIncentive - deductions - unauthorizedPenaltyTotal - latePenalty);
 
-    // Create PDF
+    // 🔹 Create PDF
     const doc = new PDFDocument({ margin: 30, size: "A4" });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=payslip-${employeeId}-${month}-${year}.pdf`);
@@ -196,25 +209,23 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     // Header
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
 
-    // Employee photo top-right
-    const photoSize = 100;
+    // Employee photo
     if (employee.image) {
       try {
         if (employee.image.startsWith("http")) {
           const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          doc.image(Buffer.from(response.data), doc.page.width - doc.page.margins.right - photoSize, 40, { fit: [photoSize, photoSize] });
+          doc.image(Buffer.from(response.data), doc.page.width - 150, 40, { fit: [100, 100] });
         } else {
-          doc.image(employee.image, doc.page.width - doc.page.margins.right - photoSize, 40, { fit: [photoSize, photoSize] });
+          doc.image(employee.image, doc.page.width - 150, 40, { fit: [100, 100] });
         }
       } catch (err) {
         console.warn("Image load failed:", err.message);
       }
     }
 
-    // Move cursor below photo to avoid overlap
-    doc.moveDown(7);
+    doc.moveDown(6);
 
-    // Table
+    // 🔹 Table Data
     const table = {
       headers: ["Description", "Amount / Details"],
       rows: [
@@ -241,10 +252,10 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       prepareRow: (row, i) => doc.font("Helvetica").fontSize(12),
       padding: 5,
       columnSpacing: 15,
-      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+      width: doc.page.width - 60,
       columnsSize: [200, 300],
       border: { width: 0.5, color: "#000000" },
-      rowColors: ["#f6f6f6", "#ffffff"],
+      rowColors: ["#f6f6f6", "#ffffff"], // alternating row colors
     });
 
     doc.end();
@@ -253,6 +264,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
