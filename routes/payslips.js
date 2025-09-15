@@ -2,6 +2,7 @@ const express = require("express");
 const pool = require("../db"); // PostgreSQL connection
 const PDFDocument = require("pdfkit");
 require("pdfkit-table"); // pdfkit-table patches PDFDocument, no need to assign
+const axios = require("axios");
 
 const router = express.Router();
 
@@ -201,10 +202,10 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const unauthorizedLeaves = Number(unauthorizedRes.rows[0]?.unauthorized_leaves || 0);
 
     // 🔹 Penalty for Unauthorized Leaves
-    const unauthorizedPenaltyPerDay = baseSalary / 30; // simple: daily salary
+    const unauthorizedPenaltyPerDay = baseSalary / 30; // simple daily salary
     const unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerDay;
 
-    // 🔹 Late penalty (placeholder, you can adjust logic later)
+    // 🔹 Late penalty (placeholder, can refine later)
     const latePenalty = 0;
 
     // 🔹 Net Pay
@@ -224,7 +225,22 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     // Header
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
-    doc.moveDown();
+
+    // Employee photo (top-right corner)
+    if (employee.image) {
+      try {
+        if (employee.image.startsWith("http")) {
+          const response = await axios.get(employee.image, { responseType: "arraybuffer" });
+          doc.image(Buffer.from(response.data), doc.page.width - 150, 40, { fit: [100, 100] });
+        } else {
+          doc.image(employee.image, doc.page.width - 150, 40, { fit: [100, 100] });
+        }
+      } catch (err) {
+        console.warn("Image load failed:", err.message);
+      }
+    }
+
+    doc.moveDown(3);
 
     // Employee Info Table
     const employeeTable = {
@@ -258,27 +274,12 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     };
     await doc.table(salaryTable, { prepareHeader: () => doc.font("Helvetica-Bold") });
 
-    // Employee photo
-    if (employee.image) {
-      try {
-        if (employee.image.startsWith("http")) {
-          const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          doc.image(Buffer.from(response.data), 400, 100, { fit: [100, 100] });
-        } else {
-          doc.image(employee.image, 400, 100, { fit: [100, 100] });
-        }
-      } catch (err) {
-        console.warn("Image load failed:", err.message);
-      }
-    }
-
     doc.end();
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 module.exports = router;
