@@ -163,7 +163,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const baseSalary = Number(employee.monthly_salary) || 0;
     const deductions = Number(employee.deductions) || 0;
 
-    // 🔹 Get monthly hours
+    // 🔹 Monthly hours
     const monthRes = await pool.query(
       `SELECT monthly_hours
        FROM attendance
@@ -183,7 +183,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
     }
 
-    // 🔹 Unauthorized Leaves Query
+    // 🔹 Unauthorized Leaves
     const unauthorizedRes = await pool.query(
       `SELECT COUNT(*) AS unauthorized_leaves
        FROM leaves
@@ -201,14 +201,11 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     );
     const unauthorizedLeaves = Number(unauthorizedRes.rows[0]?.unauthorized_leaves || 0);
 
-    // 🔹 Penalty for Unauthorized Leaves
-    const unauthorizedPenaltyPerDay = baseSalary / 30; // simple daily salary
+    const unauthorizedPenaltyPerDay = baseSalary / 30;
     const unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerDay;
 
-    // 🔹 Late penalty (placeholder, can refine later)
     const latePenalty = 0;
 
-    // 🔹 Net Pay
     const netPay = Math.max(
       0,
       baseSalary + proportionalIncentive - deductions - unauthorizedPenaltyTotal - latePenalty
@@ -226,7 +223,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     // Header
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
 
-    // Employee photo (top-right corner)
+    // Employee photo (top-right)
     if (employee.image) {
       try {
         if (employee.image.startsWith("http")) {
@@ -240,11 +237,11 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       }
     }
 
-    doc.moveDown(3);
+    doc.moveDown(5);
 
-    // Employee Info Table
-    const employeeTable = {
-      headers: ["Field", "Details"],
+    // 🔹 Single Combined Table
+    const combinedTable = {
+      headers: ["Description", "Amount / Details"],
       rows: [
         ["Employee Name", employee.full_name],
         ["Role", employee.role],
@@ -252,15 +249,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
         ["Branch", employee.branch_name || "N/A"],
         ["Account Number", employee.account_number || "N/A"],
         ["IFSC", employee.ifsc || "N/A"],
-      ],
-    };
-    await doc.table(employeeTable, { prepareHeader: () => doc.font("Helvetica-Bold") });
-    doc.moveDown();
-
-    // Salary Breakdown Table
-    const salaryTable = {
-      headers: ["Description", "Amount (₹)"],
-      rows: [
         ["Base Salary", baseSalary.toFixed(2)],
         ["Deductions (Leaves)", deductions.toFixed(2)],
         ["Monthly Hours", monthlyHours.toFixed(2)],
@@ -272,7 +260,14 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
         ["Net Pay", netPay.toFixed(2)],
       ],
     };
-    await doc.table(salaryTable, { prepareHeader: () => doc.font("Helvetica-Bold") });
+
+    await doc.table(combinedTable, {
+      prepareHeader: () => doc.font("Helvetica-Bold"),
+      prepareRow: (row, i) => doc.font("Helvetica").fontSize(12),
+      padding: 5,
+      columnSpacing: 15,
+      width: doc.page.width - 60,
+    });
 
     doc.end();
   } catch (err) {
@@ -280,6 +275,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 module.exports = router;
