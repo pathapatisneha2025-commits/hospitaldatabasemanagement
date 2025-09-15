@@ -1,7 +1,7 @@
 const express = require("express");
 const pool = require("../db"); // PostgreSQL connection
 const PDFDocument = require("pdfkit");
-const axios = require("axios");
+
 const router = express.Router();
 
 router.get("/all", async (req, res) => {
@@ -122,121 +122,190 @@ router.get("/status/:employeeId", async (req, res) => {
 router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
-    if (!year || !month || !employeeId)
+    if (!year || !month || !employeeId) {
       return res.status(400).json({ error: "Missing required params" });
+    }
 
-    // Fetch employee data
+    // 1️⃣ Fetch employee info + deductions + bank details + image
     const query = `
-      SELECT e.full_name, e.role, e.monthly_salary, e.ifsc, e.branch_name,
-             e.bank_name, e.account_number, e.image,
+      SELECT e.full_name,
+             e.role,
+             e.monthly_salary,
+             e.ifsc,
+             e.branch_name,
+             e.bank_name,
+             e.account_number,
+             e.image,
              COALESCE(SUM(l.salary_deduction), 0) AS deductions
       FROM employees e
       LEFT JOIN leaves l
         ON e.id = l.employee_id
        AND (
             (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
-            OR (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
-            OR (l.start_date <= make_date($1::int, $2::int, 1)
-                AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+            OR
+            (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+            OR
+            (l.start_date <= make_date($1::int, $2::int, 1)
+             AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
           )
       WHERE e.id = $3::int
-      GROUP BY e.id, e.full_name, e.role, e.monthly_salary, e.ifsc,
-               e.branch_name, e.bank_name, e.account_number, e.image;
+      GROUP BY e.id, e.full_name, e.role, e.monthly_salary,
+               e.ifsc, e.branch_name, e.bank_name, e.account_number, e.image;
     `;
     const result = await pool.query(query, [year, month, employeeId]);
-    if (!result.rows.length) return res.status(404).json({ error: "Payslip not found" });
-
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Payslip not found" });
+    }
     const employee = result.rows[0];
     const baseSalary = Number(employee.monthly_salary) || 0;
     const deductions = Number(employee.deductions) || 0;
 
-    // Monthly hours
+    // 2️⃣ Fetch monthly hours from attendance for proportional incentive
     const monthRes = await pool.query(
-      `SELECT monthly_hours FROM attendance
-       WHERE employee_id = $1 AND EXTRACT(YEAR FROM timestamp) = $2
+      `SELECT monthly_hours
+       FROM attendance
+       WHERE employee_id = $1
+         AND EXTRACT(YEAR FROM timestamp) = $2
          AND EXTRACT(MONTH FROM timestamp) = $3
-       ORDER BY timestamp DESC LIMIT 1`,
+       ORDER BY timestamp DESC
+       LIMIT 1`,
       [employeeId, year, month]
     );
     const monthlyHours = parseFloat(monthRes.rows[0]?.monthly_hours || 0);
 
+    // 3️⃣ Proportional Incentive Logic
     const expectedHours = 270;
-    const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
+    let proportionalIncentive = 0;
+    if (monthlyHours > expectedHours) {
+      proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
+    }
 
-    // Unauthorized leaves
-    const unauthorizedRes = await pool.query(
-      `SELECT COUNT(*) AS unauthorized_leaves FROM leaves
-       WHERE employee_id = $1 AND status ILIKE 'unauthorized'
-         AND ((EXTRACT(YEAR FROM start_date) = $2::int AND EXTRACT(MONTH FROM start_date) = $3::int)
-              OR (EXTRACT(YEAR FROM end_date) = $2::int AND EXTRACT(MONTH FROM end_date) = $3::int)
-              OR (start_date <= make_date($2::int, $3::int, 1)
-                  AND end_date >= (make_date($2::int, $3::int, 1) + interval '1 month - 1 day')));`,
+    // 4️⃣ Unauthorized leave penalty
+    let unauthorizedLeaves = 0;
+    let unauthorizedPenaltyTotal = 0;
+
+    const cancelledLeaves = await pool.query(
+      `SELECT start_date, end_date, leave_type
+       FROM leaves
+       WHERE employee_id = $1
+         AND status ILIKE 'cancelled'
+         AND (
+            (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
+            OR
+            (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
+         )`,
       [employeeId, year, month]
     );
-    const unauthorizedLeaves = Number(unauthorizedRes.rows[0]?.unauthorized_leaves || 0);
-    const unauthorizedPenaltyTotal = (baseSalary / 30) * unauthorizedLeaves;
 
-    const latePenalty = 0;
-    const netPay = Math.max(0, baseSalary + proportionalIncentive - deductions - unauthorizedPenaltyTotal - latePenalty);
+    let unauthorizedPenaltyPerLeave = 0;
+    if (baseSalary >= 4500 && baseSalary <= 7500) unauthorizedPenaltyPerLeave = 35;
+    else if (baseSalary >= 7501 && baseSalary <= 9500) unauthorizedPenaltyPerLeave = 70;
+    else if (baseSalary >= 9501) unauthorizedPenaltyPerLeave = 105;
 
-    // Create PDF
-    const doc = new PDFDocument({ margin: 30, size: "A4" });
+    for (let leave of cancelledLeaves.rows) {
+      if (leave.leave_type.toLowerCase() === "halfday") unauthorizedLeaves += 0.5;
+      else {
+        const attResult = await pool.query(
+          `SELECT COUNT(*) AS off_duty_days
+           FROM attendance
+           WHERE employee_id = $1
+             AND status ILIKE 'Absent'
+             AND timestamp::date BETWEEN $2::date AND $3::date`,
+          [employeeId, leave.start_date, leave.end_date]
+        );
+        unauthorizedLeaves += parseInt(attResult.rows[0].off_duty_days, 10) || 0;
+      }
+    }
+    unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
+
+    // 5️⃣ Late penalty (first 3 late days free)
+    const lateResult = await pool.query(
+      `SELECT DATE(a.timestamp) AS day,
+       FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       WHERE a.employee_id = $1
+         AND EXTRACT(YEAR FROM a.timestamp) = $2
+         AND EXTRACT(MONTH FROM a.timestamp) = $3
+         AND a.status ILIKE 'On Duty'
+       GROUP BY DATE(a.timestamp), e.schedule_in
+       HAVING MIN(a.timestamp)::time > e.schedule_in;`,
+      [employeeId, year, month]
+    );
+
+    const lateRows = lateResult.rows || [];
+    lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
+    let totalBlocks = 0;
+    lateRows.forEach((row, idx) => { if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0; });
+
+    let perLatePenalty = 0;
+    if (baseSalary >= 4500 && baseSalary <= 7500) perLatePenalty = 25;
+    else if (baseSalary >= 7501 && baseSalary <= 9500) perLatePenalty = 50;
+    else if (baseSalary >= 9501) perLatePenalty = 75;
+
+    const latePenalty = totalBlocks * perLatePenalty;
+
+    // 6️⃣ Net Pay
+    const netPay = Math.max(
+      0,
+      baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty
+    );
+
+    // 7️⃣ Generate PDF
+    const doc = new PDFDocument();
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=payslip-${employeeId}-${month}-${year}.pdf`);
     doc.pipe(res);
 
     // Header
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
-    doc.moveDown(1);
+    doc.moveDown();
 
-    // Employee photo (optional, centered)
-    const photoSize = 100;
+    // Employee image at top-right
     if (employee.image) {
       try {
-        let imgBuffer;
         if (employee.image.startsWith("http")) {
           const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-          imgBuffer = Buffer.from(response.data);
+          doc.image(Buffer.from(response.data), doc.page.width - 120, 15, { width: 100, height: 100 });
         } else {
-          imgBuffer = employee.image;
+          doc.image(employee.image, doc.page.width - 120, 15, { width: 100, height: 100 });
         }
-        doc.image(imgBuffer, (doc.page.width - photoSize) / 2, doc.y, { fit: [photoSize, photoSize] });
-        doc.moveDown(2);
       } catch (err) {
         console.warn("Image load failed:", err.message);
       }
     }
 
-    // Payslip details (no table)
-    const details = [
-      `Employee Name: ${employee.full_name}`,
-      `Role: ${employee.role}`,
-      `Bank: ${employee.bank_name || "N/A"}`,
-      `Branch: ${employee.branch_name || "N/A"}`,
-      `Account Number: ${employee.account_number || "N/A"}`,
-      `IFSC: ${employee.ifsc || "N/A"}`,
-      `Base Salary: ${baseSalary.toFixed(2)}`,
-      `Deductions (Leaves): ${deductions.toFixed(2)}`,
-      `Monthly Hours: ${monthlyHours.toFixed(2)}`,
-      `Expected Hours: ${expectedHours}`,
-      `Proportional Incentive: ${proportionalIncentive.toFixed(2)}`,
-      `Unauthorized Leaves: ${unauthorizedLeaves}`,
-      `Unauthorized Penalty: ${unauthorizedPenaltyTotal.toFixed(2)}`,
-      `Late Penalty: ${latePenalty.toFixed(2)}`,
-      `Net Pay: ${netPay.toFixed(2)}`,
-    ];
+    // Employee info
+    doc.fontSize(12).text(`Employee Name: ${employee.full_name}`);
+    doc.text(`Role: ${employee.role}`);
+    doc.text(`Base Salary: ${baseSalary.toFixed(2)}`);
+    doc.text(`Deductions (Leaves): ${deductions.toFixed(2)}`);
+    doc.text(`Monthly Hours: ${monthlyHours.toFixed(2)} hrs`);
+    doc.text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`);
+    doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
+    doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
+    doc.text(`Late Blocks (after 3 free days): ${totalBlocks}`);
+    doc.text(`Late Penalty: ${latePenalty}`);
+    doc.moveDown();
 
-    details.forEach(line => {
-      doc.font("Helvetica").fontSize(12).text(line);
-      doc.moveDown(0.5);
-    });
+    // Bank info
+    doc.text(`Bank: ${employee.bank_name || "N/A"}`);
+    doc.text(`Branch: ${employee.branch_name || "N/A"}`);
+    doc.text(`Account Number: ${employee.account_number || "N/A"}`);
+    doc.text(`IFSC: ${employee.ifsc || "N/A"}`);
+    doc.moveDown();
+
+    // Net Pay
+    doc.fontSize(14).text(`Net Pay: ${netPay.toFixed(2)}`, { underline: true });
 
     doc.end();
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
