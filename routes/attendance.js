@@ -149,6 +149,7 @@ router.post("/mark-attendance", async (req, res) => {
 
 // ✅ Logout
 
+// ✅ Logout Route with session_hours, daily, weekly, monthly
 router.post("/logout", async (req, res) => {
   try {
     const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
@@ -167,22 +168,100 @@ router.post("/logout", async (req, res) => {
 
     const status = "Off Duty";
 
+    // 1️⃣ Find last On Duty record
+    const onDutyResult = await pool.query(
+      `SELECT id, timestamp
+       FROM attendance
+       WHERE employee_id = $1 AND status = 'On Duty'
+       ORDER BY timestamp DESC
+       LIMIT 1`,
+      [employeeId]
+    );
+
+    if (onDutyResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: "Logout marked (no matching On Duty found).",
+        data: { employeeId, status },
+      });
+    }
+
+    const onDutyTime = new Date(onDutyResult.rows[0].timestamp);
+    const offDutyTime = new Date(); // current time
+    const sessionHours = (offDutyTime - onDutyTime) / 1000 / 3600; // in hours
+
+    // 2️⃣ Insert Off Duty WITH session_hours
+    const result = await pool.query(
+      `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours)
+       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3, $4)
+       RETURNING id, timestamp, session_hours`,
+      [employeeId, capturedUrl, status, sessionHours]
+    );
+
+    const offDutyRow = result.rows[0];
+    const offDutyId = offDutyRow.id;
+    const offDutyTimestamp = offDutyRow.timestamp;
+
+    // 3️⃣ Daily total
+    const dailyRes = await pool.query(
+      `SELECT COALESCE(SUM(session_hours), 0) AS total
+       FROM attendance
+       WHERE employee_id = $1
+         AND status = 'Off Duty'
+         AND DATE(timestamp) = DATE($2)`,
+      [employeeId, offDutyTimestamp]
+    );
+    const dailyHours = parseFloat(dailyRes.rows[0].total);
+
+    // 4️⃣ Weekly total
+    const weeklyRes = await pool.query(
+      `SELECT COALESCE(SUM(session_hours), 0) AS total
+       FROM attendance
+       WHERE employee_id = $1
+         AND status = 'Off Duty'
+         AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
+      [employeeId, offDutyTimestamp]
+    );
+    const weeklyHours = parseFloat(weeklyRes.rows[0].total);
+
+    // 5️⃣ Monthly total
+    const monthlyRes = await pool.query(
+      `SELECT COALESCE(SUM(session_hours), 0) AS total
+       FROM attendance
+       WHERE employee_id = $1
+         AND status = 'Off Duty'
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
+      [employeeId, offDutyTimestamp]
+    );
+    const monthlyHours = parseFloat(monthlyRes.rows[0].total);
+
+    // 6️⃣ Update this Off Duty row with daily/weekly/monthly totals
     await pool.query(
-      `INSERT INTO attendance (employee_id, timestamp, image_url, status)
-       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)`,
-      [employeeId, capturedUrl, status]
+      `UPDATE attendance
+       SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
+       WHERE id = $4`,
+      [dailyHours, weeklyHours, monthlyHours, offDutyId]
     );
 
     return res.json({
       success: true,
-      message: "Logout marked successfully",
-      data: { employeeId, status },
+      message: "Logout marked successfully with hours calculated",
+      data: {
+        employeeId,
+        status,
+        sessionHours,
+        dailyHours,
+        weeklyHours,
+        monthlyHours,
+      },
     });
+
   } catch (error) {
     console.error("Logout error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // ✅ Logout queries
 router.get("/logout/all", async (req, res) => {
