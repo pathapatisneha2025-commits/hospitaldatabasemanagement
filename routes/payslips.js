@@ -179,7 +179,7 @@ const monthlyHours = monthRes.rows[0]?.max_monthly_hours || "0 hrs 0 mins";
 
 
     // 3️⃣ Proportional Incentive
-    const expectedHours = 270;
+    const expectedHours = 1;
     let proportionalIncentive = 0;
     if (monthlyHours > expectedHours) {
       proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
