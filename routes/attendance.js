@@ -87,9 +87,9 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 
 // ✅ Location verification
-const OFFICE_LAT = 14.683566097002268;
-const OFFICE_LNG = 77.57632597022224;
-const RADIUS_IN_METERS = 1000;
+const OFFICE_LAT = 21.930424;
+const OFFICE_LNG =  86.726709;
+const RADIUS_IN_METERS = 2000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -147,7 +147,33 @@ router.post("/mark-attendance", async (req, res) => {
   }
 });
 
-// ✅ Logout
+// ✅ Delete any attendance record by ID
+router.delete("/attendance/delete/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `DELETE FROM attendance WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance record not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Attendance record deleted successfully",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Delete attendance error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 
 // ✅ Logout Route with session_hours, daily, weekly, monthly
 router.post("/logout", async (req, res) => {
