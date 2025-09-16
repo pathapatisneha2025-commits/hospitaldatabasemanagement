@@ -306,7 +306,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.text(`Role: ${employee.role}`);
     doc.text(`Base Salary: ${baseSalary.toFixed(2)}`);
     doc.text(`Deductions (Leaves): ${deductions.toFixed(2)}`);
-    doc.text(`Monthly Hours: ${monthlyHoursText}`);
     doc.text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`);
     doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
     doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
