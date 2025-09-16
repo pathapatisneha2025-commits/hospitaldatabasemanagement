@@ -164,18 +164,19 @@ WHERE e.id = $3::int;
     const baseSalary = Number(employee.monthly_salary) || 0;
     const deductions = Number(employee.deductions) || 0;
 
-    // 2️⃣ Fetch monthly hours from attendance
-    const monthRes = await pool.query(
-      `SELECT monthly_hours
-       FROM attendance
-       WHERE employee_id = $1
-         AND EXTRACT(YEAR FROM timestamp) = $2
-         AND EXTRACT(MONTH FROM timestamp) = $3
-       ORDER BY timestamp DESC
-       LIMIT 1`,
-      [employeeId, year, month]
-    );
-const monthlyHours = monthRes.rows[0]?.monthly_hours || "0 hrs 0 mins";
+  
+    // 2️ Fetch maximum monthly hours from attendance
+const monthRes = await pool.query(
+  `SELECT MAX(monthly_hours) AS max_monthly_hours
+   FROM attendance
+   WHERE employee_id = $1
+     AND EXTRACT(YEAR FROM timestamp) = $2
+     AND EXTRACT(MONTH FROM timestamp) = $3`,
+  [employeeId, year, month]
+);
+
+const monthlyHours = monthRes.rows[0]?.max_monthly_hours || "0 hrs 0 mins";
+
 
     // 3️⃣ Proportional Incentive
     const expectedHours = 270;
