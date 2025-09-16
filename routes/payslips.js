@@ -175,7 +175,7 @@ WHERE e.id = $3::int;
        LIMIT 1`,
       [employeeId, year, month]
     );
-    const monthlyHours = parseFloat(monthRes.rows[0]?.monthly_hours || 0);
+const monthlyHours = monthRes.rows[0]?.monthly_hours || "0 hrs 0 mins";
 
     // 3️⃣ Proportional Incentive
     const expectedHours = 270;
