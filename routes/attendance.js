@@ -187,77 +187,64 @@ router.post("/logout", async (req, res) => {
 
     const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // 2️⃣ Insert Off Duty with session_hours in DB (decimal)
+    // ✅ Helper function: convert seconds → "X hrs Y mins"
+    const formatHours = (seconds) => {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return `${hrs} hrs ${mins} mins`;
+    };
+
+    // 2️⃣ Calculate session seconds
+    const sessionSecondsRes = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
+      [onDutyTime]
+    );
+    const sessionSeconds = parseInt(sessionSecondsRes.rows[0].seconds, 10);
+    const sessionHours = formatHours(sessionSeconds);
+
+    // 3️⃣ Insert Off Duty with session_hours
     const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours)
-       VALUES (
-         $1,
-         NOW() AT TIME ZONE 'Asia/Kolkata',
-         $2,
-         $3,
-         EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $4)) / 3600
-       )
-       RETURNING id, timestamp, session_hours`,
-      [employeeId, capturedUrl, status, onDutyTime]
+       VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4)
+       RETURNING id, timestamp`,
+      [employeeId, capturedUrl, status, sessionHours]
     );
 
     const offDutyRow = insertResult.rows[0];
     const offDutyId = offDutyRow.id;
     const offDutyTimestamp = offDutyRow.timestamp;
 
-    // ✅ Helper function: convert decimal hours → "X hrs Y mins"
-    const formatHours = (decimalHours) => {
-      const totalSeconds = Math.floor(decimalHours * 3600);
-      const hrs = Math.floor(totalSeconds / 3600);
-      const mins = Math.floor((totalSeconds % 3600) / 60);
-      return `${hrs} hrs ${mins} mins`;
-    };
+    // 4️⃣ Daily hours = current session only
+    const dailyHours = sessionHours;
 
-    const sessionHoursDecimal = parseFloat(offDutyRow.session_hours);
-    const sessionHours = formatHours(sessionHoursDecimal);
-
-    // 3️⃣ Daily total
-    const dailyRes = await pool.query(
-      `SELECT COALESCE(SUM(session_hours), 0) AS total
-       FROM attendance
-       WHERE employee_id = $1
-         AND status = 'Off Duty'
-         AND DATE(timestamp) = DATE($2)`,
-      [employeeId, offDutyTimestamp]
-    );
-    const dailyHoursDecimal = parseFloat(dailyRes.rows[0].total);
-    const dailyHours = formatHours(dailyHoursDecimal);
-
-    // 4️⃣ Weekly total
+    // 5️⃣ Weekly total = sum of all sessions this week
     const weeklyRes = await pool.query(
-      `SELECT COALESCE(SUM(session_hours), 0) AS total
+      `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
        FROM attendance
        WHERE employee_id = $1
          AND status = 'Off Duty'
          AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const weeklyHoursDecimal = parseFloat(weeklyRes.rows[0].total);
-    const weeklyHours = formatHours(weeklyHoursDecimal);
+    const weeklyHours = formatHours(parseInt(weeklyRes.rows[0].total_seconds, 10));
 
-    // 5️⃣ Monthly total
+    // 6️⃣ Monthly total = sum of all sessions this month
     const monthlyRes = await pool.query(
-      `SELECT COALESCE(SUM(session_hours), 0) AS total
+      `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
        FROM attendance
        WHERE employee_id = $1
          AND status = 'Off Duty'
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const monthlyHoursDecimal = parseFloat(monthlyRes.rows[0].total);
-    const monthlyHours = formatHours(monthlyHoursDecimal);
+    const monthlyHours = formatHours(parseInt(monthlyRes.rows[0].total_seconds, 10));
 
-    // 6️⃣ Update Off Duty row with totals (stored as decimals)
+    // 7️⃣ Update Off Duty row with all totals in "hrs mins"
     await pool.query(
       `UPDATE attendance
        SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
        WHERE id = $4`,
-      [dailyHoursDecimal, weeklyHoursDecimal, monthlyHoursDecimal, offDutyId]
+      [dailyHours, weeklyHours, monthlyHours, offDutyId]
     );
 
     return res.json({
@@ -266,7 +253,7 @@ router.post("/logout", async (req, res) => {
       data: {
         employeeId,
         status,
-        sessionHours,  // "1 hrs 2 mins"
+        sessionHours,  // "X hrs Y mins"
         dailyHours,
         weeklyHours,
         monthlyHours,
@@ -278,6 +265,7 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
