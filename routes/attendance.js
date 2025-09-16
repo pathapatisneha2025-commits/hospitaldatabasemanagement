@@ -148,7 +148,7 @@ router.post("/mark-attendance", async (req, res) => {
 });
 
 // ✅ Delete any attendance record by ID
-router.delete("/attendance/delete/:id", async (req, res) => {
+router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
