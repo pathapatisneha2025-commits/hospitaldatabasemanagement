@@ -187,7 +187,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const monthlyHours = parseHoursText(monthlyHoursText);
 
     // 3️⃣ Proportional Incentive
-    const expectedHours = 1; // set your monthly expected hours
+    const expectedHours = 270; // set your monthly expected hours
     let proportionalIncentive = 0;
     if (monthlyHours > expectedHours) {
       proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
