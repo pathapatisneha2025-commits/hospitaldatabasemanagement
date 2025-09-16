@@ -127,7 +127,8 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     // 1️⃣ Fetch employee info + deductions + bank details + image
     const query = `
-      SELECT e.full_name,
+      SELECT e.id,
+             e.full_name,
              e.role,
              e.monthly_salary,
              e.ifsc,
@@ -135,18 +136,23 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
              e.bank_name,
              e.account_number,
              e.image,
-             COALESCE(SUM(l.salary_deduction), 0) AS deductions
+             COALESCE(l.salary_deduction, 0) AS deductions
       FROM employees e
-      LEFT JOIN leaves l
-        ON e.id = l.employee_id
-       AND (
-            (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
-            OR
-            (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
-            OR
-            (l.start_date <= make_date($1::int, $2::int, 1)
-             AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
-          )
+      LEFT JOIN LATERAL (
+          SELECT l.salary_deduction
+          FROM leaves l
+          WHERE l.employee_id = e.id
+            AND (
+              (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
+              OR
+              (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+              OR
+              (l.start_date <= make_date($1::int, $2::int, 1)
+               AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+            )
+          ORDER BY l.id DESC   -- last record
+          LIMIT 1
+      ) l ON TRUE
       WHERE e.id = $3::int
       GROUP BY e.id, e.full_name, e.role, e.monthly_salary,
                e.ifsc, e.branch_name, e.bank_name, e.account_number, e.image;
@@ -236,6 +242,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
     let totalBlocks = 0;
     lateRows.forEach((row, idx) => { if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0; });
+    const latedays = lateRows.length; // 👈 total late days
 
     let perLatePenalty = 0;
     if (baseSalary >= 4500 && baseSalary <= 7500) perLatePenalty = 25;
@@ -247,7 +254,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     // 6️⃣ Net Pay
     const netPay = Math.max(
       0,
-      baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty
+      baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty-deductions
     );
 
     // 7️⃣ Preload employee image buffer
@@ -298,6 +305,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     doc.text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`);
     doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
     doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
+    doc.text(`Late Days: ${latedays}`);
     doc.text(`Late Blocks (after 3 free days): ${totalBlocks}`);
     doc.text(`Late Penalty: ${latePenalty}`);
     doc.moveDown();
