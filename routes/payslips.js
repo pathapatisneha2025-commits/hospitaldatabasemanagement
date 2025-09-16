@@ -193,10 +193,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
     }
 
-    console.log("Monthly Hours (text):", monthlyHoursText);
-    console.log("Monthly Hours (number):", monthlyHours);
-    console.log("Expected Hours:", expectedHours);
-    console.log("Proportional Incentive:", proportionalIncentive.toFixed(2));
+   
 
     // 4️⃣ Unauthorized leave penalty
     let unauthorizedLeaves = 0;
