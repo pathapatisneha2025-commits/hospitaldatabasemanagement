@@ -127,35 +127,34 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     // 1️⃣ Fetch employee info + deductions + bank details + image
     const query = `
-      SELECT e.id,
-             e.full_name,
-             e.role,
-             e.monthly_salary,
-             e.ifsc,
-             e.branch_name,
-             e.bank_name,
-             e.account_number,
-             e.image,
-             COALESCE(l.salary_deduction, 0) AS deductions
-      FROM employees e
-      LEFT JOIN LATERAL (
-          SELECT l.salary_deduction
-          FROM leaves l
-          WHERE l.employee_id = e.id
-            AND (
-              (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
-              OR
-              (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
-              OR
-              (l.start_date <= make_date($1::int, $2::int, 1)
-               AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
-            )
-          ORDER BY l.id DESC   -- last record
-          LIMIT 1
-      ) l ON TRUE
-      WHERE e.id = $3::int
-      GROUP BY e.id, e.full_name, e.role, e.monthly_salary,
-               e.ifsc, e.branch_name, e.bank_name, e.account_number, e.image;
+     SELECT e.id,
+       e.full_name,
+       e.role,
+       e.monthly_salary,
+       e.ifsc,
+       e.branch_name,
+       e.bank_name,
+       e.account_number,
+       e.image,
+       COALESCE(l.salary_deduction, 0) AS deductions
+FROM employees e
+LEFT JOIN LATERAL (
+    SELECT l.salary_deduction
+    FROM leaves l
+    WHERE l.employee_id = e.id
+      AND (
+        (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
+        OR
+        (EXTRACT(YEAR FROM l.end_date) = $1::int AND EXTRACT(MONTH FROM l.end_date) = $2::int)
+        OR
+        (l.start_date <= make_date($1::int, $2::int, 1)
+         AND l.end_date >= (make_date($1::int, $2::int, 1) + interval '1 month - 1 day'))
+      )
+    ORDER BY l.id DESC   -- last record
+    LIMIT 1
+) l ON TRUE
+WHERE e.id = $3::int;
+
     `;
     const result = await pool.query(query, [year, month, employeeId]);
     if (result.rows.length === 0) {
