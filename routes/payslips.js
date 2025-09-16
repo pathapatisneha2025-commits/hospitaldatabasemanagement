@@ -300,7 +300,7 @@ const monthlyHours = monthRes.rows[0]?.monthly_hours || "0 hrs 0 mins";
     doc.text(`Role: ${employee.role}`);
     doc.text(`Base Salary: ${baseSalary.toFixed(2)}`);
     doc.text(`Deductions (Leaves): ${deductions.toFixed(2)}`);
-    doc.text(`Monthly Hours: ${monthlyHours.toFixed(2)} hrs`);
+   doc.text(`Monthly Hours: ${monthlyHours}`);
     doc.text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`);
     doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
     doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
