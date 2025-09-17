@@ -6,6 +6,10 @@ const multer = require('multer');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const JWT_SECRET = process.env.JWT_SECRET;
+const authenticateJWT = require('../middleware/auth');
 
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
@@ -183,26 +187,36 @@ router.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
     const user = await pool.query("SELECT * FROM employees WHERE email = $1", [email]);
-
     if (user.rows.length === 0) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const employee = user.rows[0];
 
-    // ✅ check approval status
     if (employee.status !== "approved") {
       return res.status(403).json({ error: "Account not approved yet" });
     }
 
-    // 🔑 check hashed password
     const isMatch = await bcrypt.compare(password, employee.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+    if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
 
-    // ✅ login success
-    res.json({ message: "Login successful", employee });
+    // Generate token
+    const token = jwt.sign(
+      { id: employee.id, email: employee.email, role: employee.role },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      employee: {
+        id: employee.id,
+        fullName: employee.full_name,
+        email: employee.email,
+        role: employee.role,
+      },
+      token
+    });
   } catch (error) {
     console.error("Login error:", error.message);
     res.status(500).json({ error: "Server error" });
@@ -271,8 +285,8 @@ router.get('/all', async (req, res) => {
 
 
 // Fetch employee by ID
-// Fetch employee by ID
-router.get('/:id', async (req, res) => {
+
+router.get('/:id', authenticateJWT, async (req, res) => {
   const { id } = req.params;
 
   try {

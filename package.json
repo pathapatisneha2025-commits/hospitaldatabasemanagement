@@ -22,6 +22,7 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "face-api.js": "^0.22.2",
+    "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^4.2.1",
