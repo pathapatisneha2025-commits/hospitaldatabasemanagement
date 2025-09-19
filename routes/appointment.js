@@ -3,8 +3,7 @@ const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
 
 // -------------------- CREATE (POST) --------------------
-// -------------------- CREATE (POST) --------------------
-// -------------------- CREATE (POST) --------------------
+
 router.post('/add', async (req, res) => {
   const {
     doctorId,       
@@ -86,9 +85,6 @@ router.post('/add', async (req, res) => {
 
 
 // -------------------- READ (GET) --------------------
-// Get all appointments
-// -------------------- READ (GET) --------------------
-
 // Get all appointments
 router.get('/all', async (req, res) => {
   try {
