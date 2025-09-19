@@ -108,6 +108,7 @@ router.get('/:id', async (req, res) => {
 
 // -------------------- UPDATE (PUT) --------------------
 // -------------------- UPDATE (PUT) --------------------
+// -------------------- UPDATE (PUT) --------------------
 router.put('/update/:id', async (req, res) => {
     const {
         doctorId,
@@ -148,8 +149,7 @@ router.put('/update/:id', async (req, res) => {
                 gender = $11,
                 bloodGroup = $12,
                 reason = $13,
-                paymentStatus = COALESCE($14, paymentStatus),
-                updatedAt = NOW()
+                paymentStatus = COALESCE($14, paymentStatus)
             WHERE id = $15
             RETURNING *;
         `;
@@ -168,7 +168,7 @@ router.put('/update/:id', async (req, res) => {
             gender,
             bloodGroup,
             reason,
-            paymentStatus || null, // allow keeping old status if not passed
+            paymentStatus || null,
             req.params.id
         ];
 
@@ -187,6 +187,7 @@ router.put('/update/:id', async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
+
 
 
 // -------------------- DELETE --------------------
