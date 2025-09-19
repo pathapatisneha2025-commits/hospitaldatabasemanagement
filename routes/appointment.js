@@ -3,108 +3,161 @@ const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
 
 // -------------------- CREATE (POST) --------------------
+// -------------------- CREATE (POST) --------------------
+// -------------------- CREATE (POST) --------------------
 router.post('/add', async (req, res) => {
-    const {
-        doctorId,
-        doctorName,
-        yearsOfExperience,
-        department,
-        date,
-        timeSlot,
-        consultantFees,
-        patientId,
-        name,
-        age,
-        gender,
-        bloodGroup,
-        reason
-    } = req.body;
+  const {
+    doctorId,       
+    doctorName,     
+    experience,     
+    department,    
+    consultantFees, 
+    date,
+    timeSlot,
+    patientId,
+    name,
+    age,
+    gender,
+    bloodGroup,
+    reason,
+    patientPhone    // <-- new field
+  } = req.body;
 
-    // Validate request
-    if (!doctorId || !doctorName || !yearsOfExperience || !department || !date || !timeSlot || !consultantFees ||
-        !patientId || !name || !age || !gender || !bloodGroup || !reason) {
-        return res.status(400).json({ error: "All fields including doctor and patient details are required!" });
+  // Validate request
+  if (!doctorId || !doctorName || !experience || !department || !consultantFees ||
+      !date || !timeSlot || !patientId || !name || !age || !gender || !bloodGroup || !reason || !patientPhone) {
+    return res.status(400).json({ error: "All fields including patientPhone are required!" });
+  }
+
+  try {
+    // ✅ Step 1: Verify doctorId exists in doctor_fees
+    const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
+    const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
+
+    if (doctorCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Doctor ID does not exist in doctor_fees" });
     }
 
-    try {
-        // Check for double booking
-        const checkQuery = `SELECT * FROM appointments WHERE doctorId = $1 AND date = $2 AND timeSlot = $3`;
-        const existing = await db.query(checkQuery, [doctorId, date, timeSlot]);
+    // ✅ Step 2: Check for double booking
+    const checkQuery = `SELECT * FROM appointments WHERE doctorId = $1 AND date = $2 AND timeSlot = $3`;
+    const existing = await db.query(checkQuery, [doctorId, date, timeSlot]);
 
-        if (existing.rows.length > 0) {
-            return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
-        }
-
-        // Insert appointment into database
-        const insertQuery = `
-            INSERT INTO appointments
-            (doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
-             paymentStatus, patientId, name, age, gender, bloodGroup, reason, createdAt)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10, $11, $12, $13, NOW())
-            RETURNING *;
-        `;
-        const values = [
-            doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
-            patientId, name, age, gender, bloodGroup, reason
-        ];
-        const result = await db.query(insertQuery, values);
-
-        return res.status(201).json({
-            message: "Appointment booked successfully",
-            appointment: result.rows[0]
-        });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Server error" });
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
     }
+
+    // ✅ Step 3: Insert appointment (doctor details come from request body)
+    const insertQuery = `
+      INSERT INTO appointments
+      (doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
+       paymentStatus, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10, $11, $12, $13, $14, NOW())
+      RETURNING *;
+    `;
+
+    const values = [
+      doctorId,
+      doctorName,
+      experience,
+      department,
+      date,
+      timeSlot,
+      consultantFees,
+      patientId,
+      name,
+      age,
+      gender,
+      bloodGroup,
+      reason,
+      patientPhone
+    ];
+
+    const result = await db.query(insertQuery, values);
+
+    return res.status(201).json({
+      message: "Appointment booked successfully",
+      appointment: result.rows[0]
+    });
+  } catch (err) {
+    console.error("Error booking appointment:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
 });
+
 
 // -------------------- READ (GET) --------------------
 // Get all appointments
+// -------------------- READ (GET) --------------------
+
+// Get all appointments
 router.get('/all', async (req, res) => {
-    try {
-        const result = await db.query(`SELECT * FROM appointments ORDER BY createdAt DESC`);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
-    }
+  try {
+    const result = await db.query(`SELECT * FROM appointments ORDER BY createdAt DESC`);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
 // Get appointments by patientId
 router.get('/patient/:patientId', async (req, res) => {
-    try {
-        const result = await db.query(
-            `SELECT id, doctorId, doctorName, department, date, timeSlot, consultantFees, paymentStatus 
-             FROM appointments 
-             WHERE patientId = $1 
-             ORDER BY createdAt DESC`,
-            [req.params.patientId]
-        );
+  try {
+    const result = await db.query(
+      `SELECT id, doctorId, doctorName, department, date, timeSlot, consultantFees, paymentStatus 
+       FROM appointments 
+       WHERE patientId = $1 
+       ORDER BY createdAt DESC`,
+      [req.params.patientId]
+    );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "No appointments found for this patient" });
-        }
-
-        res.json(result.rows);  // returns list of appointments for patient
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "No appointments found for this patient" });
     }
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ✅ Get appointments by doctorId
+router.get('/doctor/:doctorId', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees, paymentStatus, patientId, name, age, gender, bloodGroup, reason 
+       FROM appointments 
+       WHERE doctorId = $1 
+       ORDER BY createdAt DESC`,
+      [req.params.doctorId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "No appointments found for this doctor" });
+    }
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching doctor appointments:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // Get appointment by ID
 router.get('/:id', async (req, res) => {
-    try {
-        const result = await db.query(`SELECT * FROM appointments WHERE id = $1`, [req.params.id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Appointment not found" });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
+  try {
+    const result = await db.query(`SELECT * FROM appointments WHERE id = $1`, [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
     }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
 
 // -------------------- UPDATE (PUT) --------------------
 // -------------------- UPDATE (PUT) --------------------
