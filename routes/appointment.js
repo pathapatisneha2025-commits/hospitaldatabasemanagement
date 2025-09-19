@@ -156,8 +156,6 @@ router.get('/:id', async (req, res) => {
 
 
 // -------------------- UPDATE (PUT) --------------------
-// -------------------- UPDATE (PUT) --------------------
-// -------------------- UPDATE (PUT) --------------------
 router.put('/update/:id', async (req, res) => {
     const {
         doctorId,
@@ -173,12 +171,13 @@ router.put('/update/:id', async (req, res) => {
         gender,
         bloodGroup,
         reason,
-        paymentStatus
+        paymentStatus,
+        patientPhone   // <-- added here
     } = req.body;
 
     // Validate (same as add)
     if (!doctorId || !doctorName || !yearsOfExperience || !department || !date || !timeSlot || !consultantFees ||
-        !patientId || !name || !age || !gender || !bloodGroup || !reason) {
+        !patientId || !name || !age || !gender || !bloodGroup || !reason || !patientPhone) {   // <-- include patientPhone
         return res.status(400).json({ error: "All fields including doctor and patient details are required!" });
     }
 
@@ -198,8 +197,9 @@ router.put('/update/:id', async (req, res) => {
                 gender = $11,
                 bloodGroup = $12,
                 reason = $13,
-                paymentStatus = COALESCE($14, paymentStatus)
-            WHERE id = $15
+                paymentStatus = COALESCE($14, paymentStatus),
+                patientPhone = $15   -- <-- include in query
+            WHERE id = $16
             RETURNING *;
         `;
 
@@ -218,6 +218,7 @@ router.put('/update/:id', async (req, res) => {
             bloodGroup,
             reason,
             paymentStatus || null,
+            patientPhone,   // <-- add here
             req.params.id
         ];
 
@@ -236,6 +237,7 @@ router.put('/update/:id', async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
+
 
 
 
