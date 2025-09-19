@@ -16,6 +16,8 @@ const Department = require("./routes/department");
 const Role = require("./routes/role"); 
 const Patient = require("./routes/patient"); 
 const Bookappointment = require("./routes/appointment"); 
+const Doctorsfees = require("./routes/doctorsfee"); 
+
 
 
 
@@ -44,6 +46,8 @@ app.use("/department", Department);
 app.use("/role", Role); 
 app.use("/patient", Patient); 
 app.use("/book-appointment",Bookappointment); 
+app.use("/consultancefee",Doctorsfees); 
+
 
 
 
