@@ -1,15 +1,31 @@
 const express = require('express');
 const router = express.Router();
 
-const db = require('../db'); 
+// Example: replace with your DB connection
+const db = require('../db'); // e.g., a MySQL or PostgreSQL client
 
 // POST /api/book-appointment
 router.post('/add', async (req, res) => {
-    const { doctorId, date, timeSlot, consultantFees, patientId, name, age, gender, bloodGroup, reason } = req.body;
+    const {
+        doctorId,
+        doctorName,
+        yearsOfExperience,
+        department,
+        date,
+        timeSlot,
+        consultantFees,
+        patientId,
+        name,
+        age,
+        gender,
+        bloodGroup,
+        reason
+    } = req.body;
 
     // Validate request
-    if (!doctorId || !date || !timeSlot || !consultantFees || !patientId || !name || !age || !gender || !bloodGroup || !reason) {
-        return res.status(400).json({ error: "All fields including patient details are required!" });
+    if (!doctorId || !doctorName || !yearsOfExperience || !department || !date || !timeSlot || !consultantFees ||
+        !patientId || !name || !age || !gender || !bloodGroup || !reason) {
+        return res.status(400).json({ error: "All fields including doctor and patient details are required!" });
     }
 
     try {
@@ -24,11 +40,15 @@ router.post('/add', async (req, res) => {
         // Insert appointment into database
         const insertQuery = `
             INSERT INTO appointments
-            (doctorId, date, timeSlot, consultantFees, paymentStatus, patientId, name, age, gender, bloodGroup, reason, createdAt)
-            VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, NOW())
+            (doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
+             paymentStatus, patientId, name, age, gender, bloodGroup, reason, createdAt)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10, $11, $12, $13, NOW())
             RETURNING *;
         `;
-        const values = [doctorId, date, timeSlot, consultantFees, patientId, name, age, gender, bloodGroup, reason];
+        const values = [
+            doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
+            patientId, name, age, gender, bloodGroup, reason
+        ];
         const result = await db.query(insertQuery, values);
 
         return res.status(201).json({
