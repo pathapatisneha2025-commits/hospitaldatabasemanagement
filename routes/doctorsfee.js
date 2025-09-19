@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require("../db"); // PostgreSQL connection
 
 // ---------------- CREATE ----------------
-router.post("/add-doctor-fee", async (req, res) => {
+router.post("/add", async (req, res) => {
   try {
     const {
       doctor_id,
