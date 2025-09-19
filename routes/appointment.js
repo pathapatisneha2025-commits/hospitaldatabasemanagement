@@ -107,20 +107,71 @@ router.get('/:id', async (req, res) => {
 });
 
 // -------------------- UPDATE (PUT) --------------------
+// -------------------- UPDATE (PUT) --------------------
 router.put('/update/:id', async (req, res) => {
-    const { date, timeSlot, reason, paymentStatus } = req.body;
+    const {
+        doctorId,
+        doctorName,
+        yearsOfExperience,
+        department,
+        date,
+        timeSlot,
+        consultantFees,
+        patientId,
+        name,
+        age,
+        gender,
+        bloodGroup,
+        reason,
+        paymentStatus
+    } = req.body;
+
+    // Validate (same as add)
+    if (!doctorId || !doctorName || !yearsOfExperience || !department || !date || !timeSlot || !consultantFees ||
+        !patientId || !name || !age || !gender || !bloodGroup || !reason) {
+        return res.status(400).json({ error: "All fields including doctor and patient details are required!" });
+    }
 
     try {
         const updateQuery = `
             UPDATE appointments
-            SET date = COALESCE($1, date),
-                timeSlot = COALESCE($2, timeSlot),
-                reason = COALESCE($3, reason),
-                paymentStatus = COALESCE($4, paymentStatus)
-            WHERE id = $5
+            SET doctorId = $1,
+                doctorName = $2,
+                yearsOfExperience = $3,
+                department = $4,
+                date = $5,
+                timeSlot = $6,
+                consultantFees = $7,
+                patientId = $8,
+                name = $9,
+                age = $10,
+                gender = $11,
+                bloodGroup = $12,
+                reason = $13,
+                paymentStatus = COALESCE($14, paymentStatus),
+                updatedAt = NOW()
+            WHERE id = $15
             RETURNING *;
         `;
-        const values = [date, timeSlot, reason, paymentStatus, req.params.id];
+
+        const values = [
+            doctorId,
+            doctorName,
+            yearsOfExperience,
+            department,
+            date,
+            timeSlot,
+            consultantFees,
+            patientId,
+            name,
+            age,
+            gender,
+            bloodGroup,
+            reason,
+            paymentStatus || null, // allow keeping old status if not passed
+            req.params.id
+        ];
+
         const result = await db.query(updateQuery, values);
 
         if (result.rows.length === 0) {
@@ -132,10 +183,11 @@ router.put('/update/:id', async (req, res) => {
             appointment: result.rows[0]
         });
     } catch (err) {
-        console.error(err);
+        console.error("Error updating appointment:", err);
         res.status(500).json({ error: "Server error" });
     }
 });
+
 
 // -------------------- DELETE --------------------
 router.delete('/delete/:id', async (req, res) => {
