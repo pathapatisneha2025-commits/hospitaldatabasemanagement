@@ -127,7 +127,7 @@ router.get("/all", async (req, res) => {
 });
 
 // GET Patient by ID (Protected)
-router.get("/patient/:id", authenticateJWT, async (req, res) => {
+router.get("/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
 
