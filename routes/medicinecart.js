@@ -34,8 +34,8 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO cart
-       (patient_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+       (patient_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
         patient_id,
