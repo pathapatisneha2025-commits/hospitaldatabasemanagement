@@ -1,153 +1,125 @@
 const express = require("express");
-const router = express.Router();
-const db = require("../db");
-const cloudinary = require("../cloudinary");
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const path = require("path");
+const cloudinary = require("../cloudinary"); // ✅ Your Cloudinary config
+const pool = require("../db"); // ✅ PostgreSQL pool
 
-// -------------------- CLOUDINARY STORAGE --------------------
+const router = express.Router();
+
+// ✅ Test route
+router.get("/", (req, res) => {
+  res.send("Medicines route working");
+});
+
+// ✅ Multer storage for Cloudinary
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "medicines",
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
-    public_id: (req, file) => {
-      const nameWithoutExt = path.parse(file.originalname).name;
-      return Date.now() + "-" + nameWithoutExt;
-    },
+    public_id: (req, file) => Date.now() + "-" + file.originalname,
   },
 });
 
 const upload = multer({ storage });
 
-// -------------------- ADD PRODUCT --------------------
+// ✅ Add medicine with images
 router.post("/add", upload.array("images", 5), async (req, res) => {
+  const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
+  const files = req.files || [];
+
   try {
-    const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
+    const imageUrls = files.map((file) => file.path);
 
-    if (!name) return res.status(400).json({ error: "Name is required" });
+    const result = await pool.query(
+      `INSERT INTO medicines 
+       (name, category, manufacturer, batch_number, pack_size, description, price, stock, images, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+       RETURNING *`,
+      [
+        name,
+        category || null,
+        manufacturer || null,
+        batch_number || null,
+        pack_size || null,
+        description || null,
+        price ? parseFloat(price) : null,
+        stock ? parseInt(stock) : 0,
+        imageUrls,
+      ]
+    );
 
-    const priceNum = price ? parseFloat(price) : null;
-    const stockNum = stock ? parseInt(stock) : 0;
-
-    const imageUrls = req.files ? req.files.map(file => file.path) : [];
-
-    const query = `
-      INSERT INTO medicines
-      (name, category, manufacturer, batch_number, pack_size, description, price, stock, images)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *;
-    `;
-    const values = [
-      name,
-      category || null,
-      manufacturer || null,
-      batch_number || null,
-      pack_size || null,
-      description || null,
-      priceNum,
-      stockNum,
-      imageUrls
-    ];
-
-    const result = await db.query(query, values);
-    res.status(201).json({ message: "Product added successfully", product: result.rows[0] });
-
+    res.status(201).json({
+      message: "Medicine added successfully",
+      medicine: result.rows[0],
+    });
   } catch (err) {
-    console.error("Error adding product:", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Error adding medicine:", err.message);
+    res.status(500).json({ error: "Medicine creation failed" });
   }
 });
 
-
-// -------------------- GET ALL PRODUCTS --------------------
+// ✅ Get all medicines
 router.get("/all", async (req, res) => {
   try {
-    const result = await db.query("SELECT * FROM medicines ORDER BY id DESC");
-    res.status(200).json({ products: result.rows });
+    const result = await pool.query("SELECT * FROM medicines ORDER BY created_at DESC");
+    res.status(200).json(result.rows);
   } catch (err) {
-    console.error("Error fetching products:", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Error fetching medicines:", err.message);
+    res.status(500).json({ error: "Failed to fetch medicines" });
   }
 });
 
-// -------------------- GET PRODUCT BY ID --------------------
+// ✅ Get medicine by ID
 router.get("/:id", async (req, res) => {
+  const { id } = req.params;
   try {
-    const productId = req.params.id;
-    const result = await db.query("SELECT * FROM medicines WHERE id = $1", [productId]);
-
-    if (result.rows.length === 0) return res.status(404).json({ error: "Product not found" });
-
-    res.status(200).json({ product: result.rows[0] });
+    const result = await pool.query("SELECT * FROM medicines WHERE id = $1", [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Medicine not found" });
+    }
+    res.status(200).json(result.rows[0]);
   } catch (err) {
-    console.error("Error fetching product:", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Error fetching medicine:", err.message);
+    res.status(500).json({ error: "Failed to fetch medicine" });
   }
 });
 
-// -------------------- UPDATE PRODUCT --------------------
-router.put("/update/:id", upload.array("images", 5), async (req, res) => {
+// ✅ Delete medicine and Cloudinary images
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const getPublicIdFromUrl = (url) => {
+    const parts = url.split("/");
+    const filename = parts[parts.length - 1].split(".")[0];
+    return `medicines/${filename}`;
+  };
+
   try {
-    const productId = req.params.id;
-    const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
+    // Fetch medicine
+    const result = await pool.query("SELECT * FROM medicines WHERE id = $1", [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Medicine not found" });
+    }
 
-    const existingProduct = await db.query("SELECT * FROM medicines WHERE id = $1", [productId]);
-    if (existingProduct.rows.length === 0) return res.status(404).json({ error: "Product not found" });
+    const medicine = result.rows[0];
+    const imageUrls = medicine.images || [];
 
-    let imageUrls = existingProduct.rows[0].images;
-    if (req.files && req.files.length > 0) imageUrls = req.files.map(file => file.path);
+    // Delete Cloudinary images
+    await Promise.all(
+      imageUrls.map((url) => {
+        const publicId = getPublicIdFromUrl(url);
+        return cloudinary.uploader.destroy(publicId);
+      })
+    );
 
-    const query = `
-      UPDATE medicines
-      SET 
-        name = $1,
-        category = $2,
-        manufacturer = $3,
-        batch_number = $4,
-        pack_size = $5,
-        description = $6,
-        price = $7,
-        stock = $8,
-        images = $9
-      WHERE id = $10
-      RETURNING *;
-    `;
-    const values = [
-      name || existingProduct.rows[0].name,
-      category || existingProduct.rows[0].category,
-      manufacturer || existingProduct.rows[0].manufacturer,
-      batch_number || existingProduct.rows[0].batch_number,
-      pack_size || existingProduct.rows[0].pack_size,
-      description || existingProduct.rows[0].description,
-      price !== undefined ? price : existingProduct.rows[0].price,
-      stock !== undefined ? stock : existingProduct.rows[0].stock,
-      imageUrls,
-      productId
-    ];
+    // Delete from DB
+    await pool.query("DELETE FROM medicines WHERE id = $1", [id]);
 
-    const result = await db.query(query, values);
-    res.status(200).json({ message: "Product updated successfully", product: result.rows[0] });
+    res.status(200).json({ message: "Medicine deleted successfully" });
   } catch (err) {
-    console.error("Error updating product:", err);
-    res.status(500).json({ error: "Something went wrong" });
-  }
-});
-
-// -------------------- DELETE PRODUCT --------------------
-router.delete("/delete/:id", async (req, res) => {
-  try {
-    const productId = req.params.id;
-    const existingProduct = await db.query("SELECT * FROM medicines WHERE id = $1", [productId]);
-
-    if (existingProduct.rows.length === 0) return res.status(404).json({ error: "Product not found" });
-
-    await db.query("DELETE FROM medicines WHERE id = $1", [productId]);
-    res.status(200).json({ message: "Product deleted successfully" });
-  } catch (err) {
-    console.error("Error deleting product:", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Error deleting medicine:", err.message);
+    res.status(500).json({ error: "Failed to delete medicine" });
   }
 });
 
