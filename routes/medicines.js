@@ -23,6 +23,8 @@ const upload = multer({ storage });
 
 // -------------------- ADD PRODUCT --------------------
 router.post("/add", upload.array("images", 5), async (req, res) => {
+     console.log("req.files:", req.files); // <--- DEBUG
+  console.log("req.body:", req.body);
   try {
     const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
 
