@@ -26,25 +26,41 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
   try {
     const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
 
-    if (!name) return res.status(400).json({ error: "Name is required" });
+    if (!name) {
+      return res.status(400).json({ error: "Name is required" });
+    }
 
-    const imageUrls = req.files ? req.files.map(file => file.path) : [];
+    // Handle files (images)
+    const files = req.files || [];
+    const imageUrls = files.length > 0 ? files.map(file => file.path) : [];
 
+    // Insert into database
     const query = `
       INSERT INTO medicines
       (name, category, manufacturer, batch_number, pack_size, description, price, stock, images)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *;
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING *;
     `;
-    const values = [name, category, manufacturer, batch_number, pack_size, description, price || null, stock || 0, imageUrls];
+    const values = [
+      name,
+      category || null,
+      manufacturer || null,
+      batch_number || null,
+      pack_size || null,
+      description || null,
+      price !== undefined ? price : null,
+      stock !== undefined ? stock : 0,
+      imageUrls
+    ];
 
     const result = await db.query(query, values);
     res.status(201).json({ message: "Product added successfully", product: result.rows[0] });
+
   } catch (err) {
     console.error("Error adding product:", err);
     res.status(500).json({ error: "Something went wrong" });
   }
 });
-
 // -------------------- GET ALL PRODUCTS --------------------
 router.get("/all", async (req, res) => {
   try {
