@@ -25,12 +25,22 @@ const upload = multer({ storage });
 
 // -------------------- ADD ITEM TO CART WITH MULTIPLE IMAGES --------------------
 router.post("/add", upload.array("images", 5), async (req, res) => {
-  const { patient_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity } = req.body;
+  const {
+    patient_id,
+    name,
+    category,
+    manufacturer,
+    batch_number,
+    pack_size,
+    description,
+    price,
+    stock,
+    quantity,
+  } = req.body;
   const files = req.files || [];
 
   try {
     const imageUrls = files.map((file) => file.path);
-    console.log("Image URLs to insert:", imageUrls);
 
     const result = await pool.query(
       `INSERT INTO cart
@@ -65,7 +75,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
 // -------------------- GET ALL CART ITEMS --------------------
 router.get("/all", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM cart ORDER BY created_at DESC");
+    const result = await pool.query("SELECT * FROM cart");
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("Error fetching cart items:", err.message);
@@ -77,11 +87,88 @@ router.get("/all", async (req, res) => {
 router.get("/:patient_id", async (req, res) => {
   const { patient_id } = req.params;
   try {
-    const result = await pool.query("SELECT * FROM cart WHERE patient_id = $1 ORDER BY created_at DESC", [patient_id]);
+    const result = await pool.query("SELECT * FROM cart WHERE patient_id = $1", [patient_id]);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("Error fetching cart items:", err.message);
     res.status(500).json({ error: "Failed to fetch cart items" });
+  }
+});
+
+// -------------------- UPDATE CART ITEM --------------------
+router.put("/:id", upload.array("images", 5), async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    category,
+    manufacturer,
+    batch_number,
+    pack_size,
+    description,
+    price,
+    stock,
+    quantity,
+  } = req.body;
+  const files = req.files || [];
+
+  try {
+    // Get existing cart item
+    const existing = await pool.query("SELECT * FROM cart WHERE id = $1", [id]);
+    if (existing.rowCount === 0) {
+      return res.status(404).json({ error: "Cart item not found" });
+    }
+
+    const oldItem = existing.rows[0];
+    let imageUrls = oldItem.images || [];
+
+    // If new images uploaded, replace old ones in Cloudinary
+    if (files.length > 0) {
+      // Delete old images from Cloudinary
+      const getPublicIdFromUrl = (url) => {
+        const parts = url.split("/");
+        const filename = parts[parts.length - 1].split(".")[0];
+        return `cart_items/${filename}`;
+      };
+
+      await Promise.all(
+        imageUrls.map((url) => {
+          const publicId = getPublicIdFromUrl(url);
+          return cloudinary.uploader.destroy(publicId);
+        })
+      );
+
+      // Save new image URLs
+      imageUrls = files.map((file) => file.path);
+    }
+
+    // Update DB
+    const result = await pool.query(
+      `UPDATE cart
+       SET name=$1, category=$2, manufacturer=$3, batch_number=$4, pack_size=$5,
+           description=$6, price=$7, stock=$8, quantity=$9, images=$10
+       WHERE id=$11 RETURNING *`,
+      [
+        name || oldItem.name,
+        category || oldItem.category,
+        manufacturer || oldItem.manufacturer,
+        batch_number || oldItem.batch_number,
+        pack_size || oldItem.pack_size,
+        description || oldItem.description,
+        price ? parseFloat(price) : oldItem.price,
+        stock ? parseInt(stock) : oldItem.stock,
+        quantity ? parseInt(quantity) : oldItem.quantity,
+        imageUrls,
+        id,
+      ]
+    );
+
+    res.status(200).json({
+      message: "Cart item updated successfully",
+      item: result.rows[0],
+    });
+  } catch (err) {
+    console.error("Error updating cart item:", err.message);
+    res.status(500).json({ error: "Failed to update cart item" });
   }
 });
 
@@ -96,7 +183,6 @@ router.delete("/:id", async (req, res) => {
   };
 
   try {
-    // Fetch cart item
     const result = await pool.query("SELECT * FROM cart WHERE id = $1", [id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Cart item not found" });
