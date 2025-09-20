@@ -32,6 +32,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
 
   try {
     const imageUrls = files.map((file) => file.path);
+  console.log("Image URLs to insert:", imageUrls);
 
     const result = await pool.query(
       `INSERT INTO medicines 
