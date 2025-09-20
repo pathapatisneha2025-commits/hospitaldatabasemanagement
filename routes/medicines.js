@@ -26,13 +26,10 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
   try {
     const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ error: "Name is required" });
-    }
+    if (!name) return res.status(400).json({ error: "Name is required" });
 
-    // Handle files (images)
-    const files = req.files || [];
-    const imageUrls = files.length > 0 ? files.map(file => file.path) : [];
+    // Multer + Cloudinary automatically uploaded files
+    const imageUrls = req.files ? req.files.map(file => file.path) : [];
 
     // Insert into database
     const query = `
@@ -61,6 +58,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 });
+
 // -------------------- GET ALL PRODUCTS --------------------
 router.get("/all", async (req, res) => {
   try {
