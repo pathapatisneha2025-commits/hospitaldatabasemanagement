@@ -23,17 +23,16 @@ const upload = multer({ storage });
 
 // -------------------- ADD PRODUCT --------------------
 router.post("/add", upload.array("images", 5), async (req, res) => {
-     console.log("req.files:", req.files); // <--- DEBUG
-  console.log("req.body:", req.body);
   try {
     const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
 
     if (!name) return res.status(400).json({ error: "Name is required" });
 
-    // Multer + Cloudinary automatically uploaded files
+    const priceNum = price ? parseFloat(price) : null;
+    const stockNum = stock ? parseInt(stock) : 0;
+
     const imageUrls = req.files ? req.files.map(file => file.path) : [];
 
-    // Insert into database
     const query = `
       INSERT INTO medicines
       (name, category, manufacturer, batch_number, pack_size, description, price, stock, images)
@@ -47,8 +46,8 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
       batch_number || null,
       pack_size || null,
       description || null,
-      price !== undefined ? price : null,
-      stock !== undefined ? stock : 0,
+      priceNum,
+      stockNum,
       imageUrls
     ];
 
@@ -60,6 +59,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 });
+
 
 // -------------------- GET ALL PRODUCTS --------------------
 router.get("/all", async (req, res) => {
