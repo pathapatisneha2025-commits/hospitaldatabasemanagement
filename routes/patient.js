@@ -1,6 +1,8 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const db = require("../db");
+const jwt = require("jsonwebtoken");
+const authenticateJWT = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -40,6 +42,7 @@ router.post("/register", async (req, res) => {
 
 
 // 2️⃣ LOGIN API (no token, just success + patient info)
+// LOGIN API
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -58,18 +61,28 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Return basic patient details
+    // ✅ Create JWT Token
+    const token = jwt.sign(
+      { id: patient.id, email: patient.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "1h" }
+    );
+
     res.json({
       message: "Login successful",
-      first_name: patient.first_name,
-      last_name: patient.last_name,
-      email: patient.email,
-      phone_number: patient.phone_number,
+      patient: {
+        first_name: patient.first_name,
+        last_name: patient.last_name,
+        email: patient.email,
+        phone_number: patient.phone_number,
+      },
+      token
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // 3️⃣ FORGOT PASSWORD API
 router.post("/forgot-password", async (req, res) => {
@@ -95,7 +108,7 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
-router.get("/all", async (req, res) => {
+router.get("/all", authenticateJWT,async (req, res) => {
   try {
     const query = `
       SELECT * 
