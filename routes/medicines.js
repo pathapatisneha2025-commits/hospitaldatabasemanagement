@@ -87,6 +87,57 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch medicine" });
   }
 });
+// ✅ Update medicine
+router.put("/update/:id", upload.array("images", 5), async (req, res) => {
+  const { id } = req.params;
+  const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
+  const files = req.files || [];
+
+  try {
+    // Fetch existing medicine
+    const existing = await pool.query("SELECT * FROM medicines WHERE id = $1", [id]);
+    if (existing.rowCount === 0) return res.status(404).json({ error: "Medicine not found" });
+
+    let imageUrls = existing.rows[0].images;
+
+    // Replace images if new ones are uploaded
+    if (files.length > 0) {
+      const getPublicIdFromUrl = (url) => {
+        const parts = url.split("/");
+        const filename = parts[parts.length - 1].split(".")[0];
+        return `medicines/${filename}`;
+      };
+      await Promise.all(imageUrls.map(url => cloudinary.uploader.destroy(getPublicIdFromUrl(url))));
+      imageUrls = files.map(file => file.path);
+    }
+
+    const result = await pool.query(
+      `UPDATE medicines
+       SET name=$1, category=$2, manufacturer=$3, batch_number=$4, pack_size=$5, description=$6, price=$7, stock=$8, images=$9
+       WHERE id=$10
+       RETURNING *`,
+      [
+        name || existing.rows[0].name,
+        category || existing.rows[0].category,
+        manufacturer || existing.rows[0].manufacturer,
+        batch_number || existing.rows[0].batch_number,
+        pack_size || existing.rows[0].pack_size,
+        description || existing.rows[0].description,
+        price !== undefined ? parseFloat(price) : existing.rows[0].price,
+        stock !== undefined ? parseInt(stock) : existing.rows[0].stock,
+        imageUrls,
+        id,
+      ]
+    );
+
+    res.status(200).json({ message: "Medicine updated successfully", medicine: result.rows[0] });
+
+  } catch (err) {
+    console.error("Error updating medicine:", err.message);
+    res.status(500).json({ error: "Failed to update medicine" });
+  }
+});
+
 
 // ✅ Delete medicine and Cloudinary images
 router.delete("/:id", async (req, res) => {
