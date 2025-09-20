@@ -26,6 +26,8 @@ const upload = multer({ storage });
 // ✅ Add medicine with images
 router.post("/add", upload.array("images", 5), async (req, res) => {
   const { name, category, manufacturer, batch_number, pack_size, description, price, stock } = req.body;
+  console.log("Files received:", req.files);
+  console.log("Body received:", req.body);
   const files = req.files || [];
 
   try {
