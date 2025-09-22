@@ -21,6 +21,8 @@ const Medicines = require("./routes/medicines");
 const Medicinecart = require("./routes/medicinecart"); 
 const DeliveryAddress = require("./routes/deliveryaddress"); 
 const Medicineorder = require("./routes/ordermedicine"); 
+const OrderCancelled = require("./routes/cancelorder"); 
+
 
 
 
@@ -59,6 +61,8 @@ app.use("/medicine",Medicines);
 app.use("/cart",Medicinecart); 
 app.use("/delivery-addresses",DeliveryAddress); 
 app.use("/order-medicine",Medicineorder); 
+app.use("/cancel-order", OrderCancelled); 
+
 
 
 
