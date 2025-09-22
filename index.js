@@ -20,6 +20,8 @@ const Doctorsfees = require("./routes/doctorsfee");
 const Medicines = require("./routes/medicines"); 
 const Medicinecart = require("./routes/medicinecart"); 
 const DeliveryAddress = require("./routes/deliveryaddress"); 
+const Medicineorder = require("./routes/ordermedicine"); 
+
 
 
 
@@ -54,7 +56,8 @@ app.use("/book-appointment",Bookappointment);
 app.use("/consultancefee",Doctorsfees); 
 app.use("/medicine",Medicines); 
 app.use("/cart",Medicinecart); 
-app.use("/delivery-addresses",DeliveryAddress); 
+app.use("/medicine-order",Medicineorder); 
+
 
 
 
