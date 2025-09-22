@@ -9,9 +9,9 @@ router.post("/checkout", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // ✅ 1. Fetch address
+    // 1️⃣ Fetch delivery address
     const addressRes = await client.query(
-      "SELECT * FROM  delivery_addresses WHERE patient_id = $1 AND id = $2",
+      "SELECT * FROM delivery_addresses WHERE patient_id = $1 AND id = $2",
       [patientId, addressId]
     );
     if (addressRes.rowCount === 0) {
@@ -19,40 +19,37 @@ router.post("/checkout", async (req, res) => {
     }
     const address = addressRes.rows[0];
 
-    // ✅ 2. Fetch cart items (join with medicines table for details)
+    // 2️⃣ Fetch cart items for the patient directly
     const cartRes = await client.query(
-      `SELECT c.id AS cart_id, c.quantity, 
-              m.id AS medicine_id, m.name, m.price
-       FROM cart c
-       JOIN medicines m ON c.medicine_id = m.id
-       WHERE c.patient_id = $1`,
+      `SELECT id AS cart_id, name, quantity, price
+       FROM cart
+       WHERE patient_id = $1`,
       [patientId]
     );
+
     if (cartRes.rowCount === 0) {
       return res.status(400).json({ error: "No items in cart" });
     }
 
-    // ✅ 3. Prepare order summary
-    const orderSummary = [];
+    // 3️⃣ Prepare order summary and calculate totals
     let subtotal = 0;
-
-    for (const item of cartRes.rows) {
-      const itemTotal = (item.price || 0) * (item.quantity || 1);
-      subtotal += itemTotal;
-      orderSummary.push({
-        medicine_id: item.medicine_id,
+    const orderSummary = cartRes.rows.map(item => {
+      const total = (item.price || 0) * (item.quantity || 1);
+      subtotal += total;
+      return {
+        cart_id: item.cart_id,
         name: item.name,
         price: item.price,
         quantity: item.quantity,
-        total: itemTotal,
-      });
-    }
+        total,
+      };
+    });
 
-    const deliveryFee = 40;
-    const tax = Math.round(subtotal * 0.05); // 5% GST for example
+    const deliveryFee = 40; // fixed delivery fee
+    const tax = Math.round(subtotal * 0.05); // 5% tax
     const totalAmount = subtotal + deliveryFee + tax;
 
-    // ✅ 4. Insert order (store orderSummary JSON in one row)
+    // 4️⃣ Insert order into orders table
     const insertOrder = `
       INSERT INTO orders (
         patient_id, address_id, address, payment_method,
@@ -78,10 +75,12 @@ router.post("/checkout", async (req, res) => {
 
     const orderId = orderRes.rows[0].id;
 
-    // ✅ 5. Clear cart after order
+    // 5️⃣ Clear cart for the patient
     await client.query("DELETE FROM cart WHERE patient_id = $1", [patientId]);
 
     await client.query("COMMIT");
+
+    // 6️⃣ Respond with order summary
     res.status(200).json({
       message: "Order placed successfully",
       order_id: orderId,
@@ -104,7 +103,6 @@ router.post("/checkout", async (req, res) => {
     client.release();
   }
 });
-
 
 router.get("/all", async (req, res) => {
   try {
