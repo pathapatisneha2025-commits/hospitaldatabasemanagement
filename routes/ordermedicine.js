@@ -11,7 +11,7 @@ router.post("/checkout", async (req, res) => {
 
     // ✅ 1. Fetch address
     const addressRes = await client.query(
-      "SELECT * FROM addresses WHERE patient_id = $1 AND id = $2",
+      "SELECT * FROM  delivery_addresses WHERE patient_id = $1 AND id = $2",
       [patientId, addressId]
     );
     if (addressRes.rowCount === 0) {
