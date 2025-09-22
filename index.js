@@ -30,6 +30,7 @@ const Medicineorder = require("./routes/ordermedicine");
 
 
 
+
 // WebSocket setup
 const WebSocket = require("ws");
 const clients = new Map();
@@ -56,7 +57,8 @@ app.use("/book-appointment",Bookappointment);
 app.use("/consultancefee",Doctorsfees); 
 app.use("/medicine",Medicines); 
 app.use("/cart",Medicinecart); 
-app.use("/medicine-order",Medicineorder); 
+app.use("/delivery-addresses",DeliveryAddress); 
+app.use("/order-medicine",Medicineorder); 
 
 
 
