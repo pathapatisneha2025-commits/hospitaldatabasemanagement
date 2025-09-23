@@ -178,7 +178,7 @@ router.delete("/delete/:id", async (req, res) => {
 
 
 // ✅ Logout Route with session_hours, daily, weekly, monthly
-router.post("/logout", async (req, res) => { 
+router.post("/logout", async (req, res) => {
   try {
     const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
 
@@ -186,7 +186,7 @@ router.post("/logout", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    if (locationVerified !== true || faceVerified !== true) {
+    if (!locationVerified || !faceVerified) {
       return res.status(403).json({
         success: false,
         message: "Logout failed: Location or Face verification failed",
@@ -215,7 +215,7 @@ router.post("/logout", async (req, res) => {
 
     const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // Helper: convert seconds → "X hrs Y mins"
+    // Helper to convert seconds → "X hrs Y mins"
     const formatHours = (seconds) => {
       const hrs = Math.floor(seconds / 3600);
       const mins = Math.floor((seconds % 3600) / 60);
@@ -240,18 +240,22 @@ router.post("/logout", async (req, res) => {
     if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
       const scheduleOut = empRes.rows[0].schedule_out;
 
-      // 4️⃣ Calculate overtime in seconds
+      // Convert schedule_out (time) to today's timestamp and calculate overtime
       const overtimeRes = await pool.query(
-        `SELECT GREATEST(EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)), 0) AS overtime_seconds`,
+        `SELECT GREATEST(
+            EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Kolkata') 
+            - (CURRENT_DATE + $1::time AT TIME ZONE 'Asia/Kolkata'))), 0
+          ) AS overtime_seconds`,
         [scheduleOut]
       );
+
       const overtimeSeconds = parseInt(overtimeRes.rows[0].overtime_seconds, 10);
       if (overtimeSeconds > 0) {
         overtime = formatHours(overtimeSeconds);
       }
     }
 
-    // 5️⃣ Insert Off Duty with session_hours + overtime
+    // 4️⃣ Insert Off Duty record
     const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours, overtime)
        VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5)
@@ -263,9 +267,10 @@ router.post("/logout", async (req, res) => {
     const offDutyId = offDutyRow.id;
     const offDutyTimestamp = offDutyRow.timestamp;
 
-    // 6️⃣ Daily, weekly, monthly totals
-    const dailyHours = sessionHours;
+    // Helper to sum seconds and format
+    const sumSecondsToHours = (seconds) => formatHours(parseInt(seconds, 10));
 
+    // 5️⃣ Calculate weekly and monthly totals
     const weeklyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
        FROM attendance
@@ -274,7 +279,7 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const weeklyHours = formatHours(parseInt(weeklyRes.rows[0].total_seconds, 10));
+    const weeklyHours = sumSecondsToHours(weeklyRes.rows[0].total_seconds);
 
     const monthlyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
@@ -284,14 +289,14 @@ router.post("/logout", async (req, res) => {
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
       [employeeId, offDutyTimestamp]
     );
-    const monthlyHours = formatHours(parseInt(monthlyRes.rows[0].total_seconds, 10));
+    const monthlyHours = sumSecondsToHours(monthlyRes.rows[0].total_seconds);
 
-    // 7️⃣ Update Off Duty row with totals
+    // 6️⃣ Update Off Duty row with daily, weekly, monthly totals
     await pool.query(
       `UPDATE attendance
        SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
        WHERE id = $4`,
-      [dailyHours, weeklyHours, monthlyHours, offDutyId]
+      [sessionHours, weeklyHours, monthlyHours, offDutyId]
     );
 
     return res.json({
@@ -301,7 +306,7 @@ router.post("/logout", async (req, res) => {
         employeeId,
         status,
         sessionHours,
-        dailyHours,
+        dailyHours: sessionHours,
         weeklyHours,
         monthlyHours,
         overtime
@@ -313,7 +318,6 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 
