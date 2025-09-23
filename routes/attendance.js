@@ -176,7 +176,7 @@ router.delete("/delete/:id", async (req, res) => {
 
 
 // ✅ Logout Route with session_hours, daily, weekly, monthly
-router.post("/logout", async (req, res) => {
+router.post("/logout", async (req, res) => { 
   try {
     const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
 
@@ -213,7 +213,7 @@ router.post("/logout", async (req, res) => {
 
     const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // ✅ Helper function: convert seconds → "X hrs Y mins"
+    // Helper: convert seconds → "X hrs Y mins"
     const formatHours = (seconds) => {
       const hrs = Math.floor(seconds / 3600);
       const mins = Math.floor((seconds % 3600) / 60);
@@ -228,22 +228,42 @@ router.post("/logout", async (req, res) => {
     const sessionSeconds = parseInt(sessionSecondsRes.rows[0].seconds, 10);
     const sessionHours = formatHours(sessionSeconds);
 
-    // 3️⃣ Insert Off Duty with session_hours
+    // 3️⃣ Get employee's schedule_out
+    const empRes = await pool.query(
+      `SELECT schedule_out FROM employee WHERE id = $1`,
+      [employeeId]
+    );
+
+    let overtime = "0 hrs 0 mins";
+    if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
+      const scheduleOut = empRes.rows[0].schedule_out;
+
+      // 4️⃣ Calculate overtime in seconds
+      const overtimeRes = await pool.query(
+        `SELECT GREATEST(EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)), 0) AS overtime_seconds`,
+        [scheduleOut]
+      );
+      const overtimeSeconds = parseInt(overtimeRes.rows[0].overtime_seconds, 10);
+      if (overtimeSeconds > 0) {
+        overtime = formatHours(overtimeSeconds);
+      }
+    }
+
+    // 5️⃣ Insert Off Duty with session_hours + overtime
     const insertResult = await pool.query(
-      `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours)
-       VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4)
+      `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours, overtime)
+       VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5)
        RETURNING id, timestamp`,
-      [employeeId, capturedUrl, status, sessionHours]
+      [employeeId, capturedUrl, status, sessionHours, overtime]
     );
 
     const offDutyRow = insertResult.rows[0];
     const offDutyId = offDutyRow.id;
     const offDutyTimestamp = offDutyRow.timestamp;
 
-    // 4️⃣ Daily hours = current session only
+    // 6️⃣ Daily, weekly, monthly totals
     const dailyHours = sessionHours;
 
-    // 5️⃣ Weekly total = sum of all sessions this week
     const weeklyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
        FROM attendance
@@ -254,7 +274,6 @@ router.post("/logout", async (req, res) => {
     );
     const weeklyHours = formatHours(parseInt(weeklyRes.rows[0].total_seconds, 10));
 
-    // 6️⃣ Monthly total = sum of all sessions this month
     const monthlyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
        FROM attendance
@@ -265,7 +284,7 @@ router.post("/logout", async (req, res) => {
     );
     const monthlyHours = formatHours(parseInt(monthlyRes.rows[0].total_seconds, 10));
 
-    // 7️⃣ Update Off Duty row with all totals in "hrs mins"
+    // 7️⃣ Update Off Duty row with totals
     await pool.query(
       `UPDATE attendance
        SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
@@ -275,14 +294,15 @@ router.post("/logout", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Logout marked successfully with hours calculated",
+      message: "Logout marked successfully with hours & overtime calculated",
       data: {
         employeeId,
         status,
-        sessionHours,  // "X hrs Y mins"
+        sessionHours,
         dailyHours,
         weeklyHours,
         monthlyHours,
+        overtime
       },
     });
 
@@ -291,6 +311,7 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
