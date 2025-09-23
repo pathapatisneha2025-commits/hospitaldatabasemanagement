@@ -123,6 +123,7 @@ router.post("/verify-location", (req, res) => {
 router.post("/mark-attendance", async (req, res) => {
   try {
     const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
+
     if (!employeeId || !capturedUrl) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
@@ -130,22 +131,31 @@ router.post("/mark-attendance", async (req, res) => {
     const status =
       locationVerified === true && faceVerified === true ? "On Duty" : "Absent";
 
-    await pool.query(
+    // Insert and return timestamp
+    const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status)
-       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)`,
+       VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
+       RETURNING id, employee_id, status, timestamp`,
       [employeeId, capturedUrl, status]
     );
+
+    const row = insertResult.rows[0];
 
     return res.json({
       success: true,
       message: "Attendance marked successfully",
-      data: { employeeId, status },
+      data: {
+        employeeId: row.employee_id,
+        status: row.status,
+        timestamp: row.timestamp   // ✅ timestamp added here
+      },
     });
   } catch (error) {
     console.error("Mark attendance error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
  
 
 
@@ -305,6 +315,7 @@ router.post("/logout", async (req, res) => {
       data: {
         employeeId,
         status,
+        timestamp: offDutyTimestamp, 
         sessionHours,
         dailyHours: sessionHours,
         weeklyHours,
