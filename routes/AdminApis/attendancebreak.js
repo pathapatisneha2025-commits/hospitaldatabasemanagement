@@ -56,7 +56,7 @@ router.get("/totalemployeescount", async (req, res) => {
             AND onduty_timestamp > e.scheduled_in
         ) AS total_late
       FROM attendance a
-      JOIN employee e ON a.employee_id = e.id
+      JOIN employees e ON a.employee_id = e.id
       WHERE DATE(a.timestamp) = CURRENT_DATE
     `);
 
@@ -110,7 +110,7 @@ router.get("/by-department", async (req, res) => {
         a.onduty_timestamp,
         e.scheduled_in
       FROM attendance a
-      JOIN employee e ON a.employee_id = e.id
+      JOIN employees e ON a.employee_id = e.id
       LEFT JOIN department d ON d.id = e.department_id
       WHERE DATE(a.timestamp) = CURRENT_DATE
       ORDER BY e.department_id, e.full_name
@@ -126,7 +126,7 @@ router.get("/by-department", async (req, res) => {
         e.email,
         bl.timestamp AS break_in_time
       FROM break_logs bl
-      JOIN employee e ON e.id = bl.employee_id
+      JOIN employees e ON e.id = bl.employee_id
       LEFT JOIN department d ON d.id = e.department_id
       WHERE bl.break_type = 'Break In'
         AND bl.status = 'On Break'
