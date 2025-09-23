@@ -49,8 +49,8 @@ router.get("/totalemployeescount", async (req, res) => {
     // Count attendance (present / absent / late)
     const attendanceResult = await pool.query(`
       SELECT 
-        COUNT(*) FILTER (WHERE status = 'On Duty') AS total_present,
-        COUNT(*) FILTER (WHERE status = 'Absent') AS total_absent,
+        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
+        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
           WHERE a.status = 'On Duty'
             AND onduty_timestamp > e.scheduled_in
