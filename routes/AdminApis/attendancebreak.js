@@ -80,7 +80,7 @@ router.get("/breaks/current", async (req, res) => {
     const { email } = req.query;
 
     let query = `
-      SELECT e.id AS employee_id, e.name, e.email, bl.timestamp AS break_in_time, bl.image_url
+      SELECT e.id AS employee_id, e.full_name, e.email, bl.timestamp AS break_in_time, bl.image_url
       FROM break_logs bl
       JOIN employees e ON e.id = bl.employee_id
       WHERE bl.break_type = 'Break In'
