@@ -146,6 +146,8 @@ router.post("/mark-attendance", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+ 
+
 
 // ✅ Delete any attendance record by ID
 router.delete("/delete/:id", async (req, res) => {

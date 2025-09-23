@@ -23,6 +23,7 @@ const DeliveryAddress = require("./routes/deliveryaddress");
 const Medicineorder = require("./routes/ordermedicine"); 
 const OrderCancelled = require("./routes/cancelorder"); 
 const Medicinecategory = require("./routes/medicinecategory"); 
+const BreakInattendance = require("./routes/AdminApis/attendancebreakin"); 
 
 
 
@@ -57,6 +58,8 @@ app.use("/delivery-addresses",DeliveryAddress);
 app.use("/order-medicine",Medicineorder); 
 app.use("/cancel-order", OrderCancelled); 
 app.use("/medicine-category", Medicinecategory); 
+app.use("/BreakIn-attendance", BreakInattendance); 
+
 
 
 
