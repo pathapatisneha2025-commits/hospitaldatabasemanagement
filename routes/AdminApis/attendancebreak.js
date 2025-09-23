@@ -53,7 +53,7 @@ router.get("/totalemployeescount", async (req, res) => {
         COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
           WHERE a.status = 'On Duty'
-            AND a.timestamp > e.schedule_in
+            AND a.timestamp > (DATE(a.timestamp) + e.schedule_in)
         ) AS total_late
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
@@ -91,6 +91,7 @@ router.get("/totalemployeescount", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
