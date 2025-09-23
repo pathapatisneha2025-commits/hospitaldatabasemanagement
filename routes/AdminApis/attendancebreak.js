@@ -1,5 +1,5 @@
 const express = require("express");
-const pool = require("../db"); // PostgreSQL connection
+const pool = require("./db"); // PostgreSQL connection
 const router = express.Router();
 
 // =========================
