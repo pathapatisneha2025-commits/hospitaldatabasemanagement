@@ -53,7 +53,7 @@ router.get("/totalemployeescount", async (req, res) => {
         COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
           WHERE a.status = 'On Duty'
-            AND onduty_timestamp > e.scheduled_in
+            AND a.timestamp > e.scheduled_in
         ) AS total_late
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
