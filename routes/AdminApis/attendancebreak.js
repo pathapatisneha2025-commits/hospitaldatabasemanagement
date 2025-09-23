@@ -52,7 +52,7 @@ router.get("/totalemployeescount", async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'On Duty') AS total_present,
         COUNT(*) FILTER (WHERE status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
-          WHERE status = 'On Duty'
+          WHERE a.status = 'On Duty'
             AND onduty_timestamp > e.scheduled_in
         ) AS total_late
       FROM attendance a
@@ -65,7 +65,7 @@ router.get("/totalemployeescount", async (req, res) => {
       SELECT COUNT(DISTINCT employee_id) AS employees_on_break
       FROM break_logs bl
       WHERE break_type = 'Break In'
-        AND status = 'On Break'
+        AND bl.status = 'On Break'
         AND DATE(bl.timestamp) = CURRENT_DATE
         AND NOT EXISTS (
           SELECT 1
