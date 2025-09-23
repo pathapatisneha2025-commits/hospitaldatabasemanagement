@@ -232,7 +232,7 @@ router.post("/logout", async (req, res) => {
 
     // 3️⃣ Get employee's schedule_out
     const empRes = await pool.query(
-      `SELECT schedule_out FROM employee WHERE id = $1`,
+      `SELECT schedule_out FROM employees WHERE id = $1`,
       [employeeId]
     );
 
