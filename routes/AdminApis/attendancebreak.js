@@ -1,5 +1,5 @@
 const express = require("express");
-const pool = require('../../../db'); // 3 levels up from attendancebreakin folder
+const pool = require("../..//db"); // 2 levels up from AdminApis folder
 const router = express.Router();
 
 // =========================
