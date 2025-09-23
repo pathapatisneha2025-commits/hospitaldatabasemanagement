@@ -42,11 +42,26 @@ router.post("/breaks", async (req, res) => {
 });
 
 // =========================
-// 2️ Count employees on break (today)
+// 5️ Summary: present, absent, on break, late (today)
 // =========================
-router.get("/breaks/count", async (req, res) => {
+router.get("/totalemployeescount", async (req, res) => {
   try {
-    const result = await pool.query(`
+    // Count attendance (present / absent / late)
+    const attendanceResult = await pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE status = 'On Duty') AS total_present,
+        COUNT(*) FILTER (WHERE status = 'Absent') AS total_absent,
+        COUNT(*) FILTER (
+          WHERE status = 'On Duty'
+            AND onduty_timestamp > e.scheduled_in
+        ) AS total_late
+      FROM attendance a
+      JOIN employee e ON a.employee_id = e.id
+      WHERE DATE(a.timestamp) = CURRENT_DATE
+    `);
+
+    // Count employees currently on break
+    const breakResult = await pool.query(`
       SELECT COUNT(DISTINCT employee_id) AS employees_on_break
       FROM break_logs bl
       WHERE break_type = 'Break In'
@@ -64,25 +79,55 @@ router.get("/breaks/count", async (req, res) => {
 
     return res.json({
       success: true,
-      employeesOnBreak: result.rows[0].employees_on_break,
+      summary: {
+        total_present: attendanceResult.rows[0].total_present,
+        total_absent: attendanceResult.rows[0].total_absent,
+        total_late: attendanceResult.rows[0].total_late,
+        employees_on_break: breakResult.rows[0].employees_on_break
+      }
     });
   } catch (error) {
-    console.error("Count employees on break error:", error.message);
+    console.error("Attendance & break summary error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// =========================
-// 3️ List employees currently on break (today)
-// =========================
-router.get("/breaks/current", async (req, res) => {
-  try {
-    const { email } = req.query;
 
-    let query = `
-      SELECT e.id AS employee_id, e.full_name, e.email, bl.timestamp AS break_in_time, bl.image_url
+
+// =========================
+// 3️ List employees currently on break ,present,absemnt,late based on department wise(today)
+// =========================
+router.get("/by-department", async (req, res) => {
+  try {
+    // 1️⃣ Fetch attendance data
+    const attendanceQuery = `
+      SELECT 
+        e.department_id,
+        d.name AS department_name,
+        e.full_name,
+        e.email,
+        a.status,
+        a.onduty_timestamp,
+        e.scheduled_in
+      FROM attendance a
+      JOIN employee e ON a.employee_id = e.id
+      LEFT JOIN department d ON d.id = e.department_id
+      WHERE DATE(a.timestamp) = CURRENT_DATE
+      ORDER BY e.department_id, e.full_name
+    `;
+    const attendanceResult = await pool.query(attendanceQuery);
+
+    // 2️⃣ Fetch employees currently on break
+    const breakQuery = `
+      SELECT 
+        e.department_id,
+        d.name AS department_name,
+        e.full_name,
+        e.email,
+        bl.timestamp AS break_in_time
       FROM break_logs bl
-      JOIN employees e ON e.id = bl.employee_id
+      JOIN employee e ON e.id = bl.employee_id
+      LEFT JOIN department d ON d.id = e.department_id
       WHERE bl.break_type = 'Break In'
         AND bl.status = 'On Break'
         AND DATE(bl.timestamp) = CURRENT_DATE
@@ -94,26 +139,81 @@ router.get("/breaks/current", async (req, res) => {
             AND DATE(bo.timestamp) = CURRENT_DATE
             AND bo.timestamp > bl.timestamp
         )
+      ORDER BY e.department_id, bl.timestamp ASC
     `;
+    const breakResult = await pool.query(breakQuery);
 
-    const params = [];
-    if (email) {
-      query += " AND e.email = $1";
-      params.push(email);
-    }
+    // 3️⃣ Group attendance by department and status
+    const groupedData = {
+      present: {},
+      absent: {},
+      late: {}
+    };
 
-    query += " ORDER BY bl.timestamp ASC";
+    attendanceResult.rows.forEach(row => {
+      const deptKey = row.department_id;
 
-    const result = await pool.query(query, params);
+      // Initialize department objects if not exists
+      ['present', 'absent', 'late'].forEach(status => {
+        if (!groupedData[status][deptKey]) {
+          groupedData[status][deptKey] = {
+            department_id: row.department_id,
+            department_name: row.department_name,
+            employees: []
+          };
+        }
+      });
+
+      // Categorize attendance
+      if (row.status === 'Absent') {
+        groupedData.absent[deptKey].employees.push({
+          full_name: row.full_name,
+          email: row.email
+        });
+      } else if (row.status === 'On Duty' && row.onduty_timestamp > row.scheduled_in) {
+        groupedData.late[deptKey].employees.push({
+          full_name: row.full_name,
+          email: row.email
+        });
+      } else if (row.status === 'On Duty') {
+        groupedData.present[deptKey].employees.push({
+          full_name: row.full_name,
+          email: row.email
+        });
+      }
+    });
+
+    // 4️⃣ Group breaks by department
+    const breaksByDepartment = {};
+    breakResult.rows.forEach(row => {
+      const deptKey = row.department_id;
+      if (!breaksByDepartment[deptKey]) {
+        breaksByDepartment[deptKey] = {
+          department_id: row.department_id,
+          department_name: row.department_name,
+          employees: []
+        };
+      }
+      breaksByDepartment[deptKey].employees.push({
+        full_name: row.full_name,
+        email: row.email,
+        break_in_time: row.break_in_time
+      });
+    });
 
     return res.json({
       success: true,
-      employeesOnBreak: result.rows,
+      present: Object.values(groupedData.present),
+      absent: Object.values(groupedData.absent),
+      late: Object.values(groupedData.late),
+      employeesOnBreak: Object.values(breaksByDepartment)
     });
   } catch (error) {
-    console.error("List employees on break error:", error.message);
+    console.error("Department-wise attendance & break error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
 
 module.exports = router;
