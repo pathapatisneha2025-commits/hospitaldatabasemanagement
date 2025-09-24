@@ -131,7 +131,7 @@ router.post("/mark-attendance", async (req, res) => {
     const status =
       locationVerified === true && faceVerified === true ? "On Duty" : "Absent";
 
-    // 1️⃣ Insert attendance record
+    // Insert and return timestamp
     const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status)
        VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
@@ -141,46 +141,13 @@ router.post("/mark-attendance", async (req, res) => {
 
     const row = insertResult.rows[0];
 
-    let remainingHours = "0 hrs 0 mins";
-
-    if (status === "On Duty") {
-      // 2️⃣ Get employee's schedule_out
-      const empRes = await pool.query(
-        `SELECT schedule_out FROM employees WHERE id = $1`,
-        [employeeId]
-      );
-
-      if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
-        const scheduleOut = empRes.rows[0].schedule_out;
-
-        // 3️⃣ Calculate remaining time until schedule_out
-        const remainingRes = await pool.query(
-          `SELECT GREATEST(
-              EXTRACT(EPOCH FROM (
-                (CURRENT_DATE + $1::time AT TIME ZONE 'Asia/Kolkata') 
-                - (NOW() AT TIME ZONE 'Asia/Kolkata')
-              )), 0
-            ) AS remaining_seconds`,
-          [scheduleOut]
-        );
-
-        const remainingSeconds = parseInt(remainingRes.rows[0].remaining_seconds, 10);
-
-        // 4️⃣ Format into hrs/mins
-        const hrs = Math.floor(remainingSeconds / 3600);
-        const mins = Math.floor((remainingSeconds % 3600) / 60);
-        remainingHours = `${hrs} hrs ${mins} mins`;
-      }
-    }
-
     return res.json({
       success: true,
       message: "Attendance marked successfully",
       data: {
         employeeId: row.employee_id,
         status: row.status,
-        timestamp: row.timestamp,
-        remainingHours, // ✅ Remaining hours added here
+        timestamp: row.timestamp   // ✅ timestamp added here
       },
     });
   } catch (error) {
@@ -188,7 +155,6 @@ router.post("/mark-attendance", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
  
 
@@ -239,6 +205,13 @@ router.post("/logout", async (req, res) => {
 
     const status = "Off Duty";
 
+    // Helper to format seconds into "X hrs Y mins"
+    const formatHours = (seconds) => {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return `${hrs} hrs ${mins} mins`;
+    };
+
     // 1️⃣ Find last On Duty record
     const onDutyResult = await pool.query(
       `SELECT id, timestamp
@@ -259,14 +232,7 @@ router.post("/logout", async (req, res) => {
 
     const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // Helper to convert seconds → "X hrs Y mins"
-    const formatHours = (seconds) => {
-      const hrs = Math.floor(seconds / 3600);
-      const mins = Math.floor((seconds % 3600) / 60);
-      return `${hrs} hrs ${mins} mins`;
-    };
-
-    // 2️⃣ Calculate session seconds
+    // 2️⃣ Calculate session worked time in seconds
     const sessionSecondsRes = await pool.query(
       `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
       [onDutyTime]
@@ -274,17 +240,19 @@ router.post("/logout", async (req, res) => {
     const sessionSeconds = parseInt(sessionSecondsRes.rows[0].seconds, 10);
     const sessionHours = formatHours(sessionSeconds);
 
-    // 3️⃣ Get employee's schedule_out
+    // 3️⃣ Calculate remaining hours for a 10-hour workday
+    const totalDaySeconds = 10 * 3600; // 10 hours in seconds
+    const remainingSeconds = Math.max(totalDaySeconds - sessionSeconds, 0);
+    const remainingHours = formatHours(remainingSeconds);
+
+    // 4️⃣ Calculate overtime (time beyond scheduled_out)
+    let overtime = "0 hrs 0 mins";
     const empRes = await pool.query(
       `SELECT schedule_out FROM employees WHERE id = $1`,
       [employeeId]
     );
-
-    let overtime = "0 hrs 0 mins";
     if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
       const scheduleOut = empRes.rows[0].schedule_out;
-
-      // Convert schedule_out (time) to today's timestamp and calculate overtime
       const overtimeRes = await pool.query(
         `SELECT GREATEST(
             EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Kolkata') 
@@ -292,69 +260,32 @@ router.post("/logout", async (req, res) => {
           ) AS overtime_seconds`,
         [scheduleOut]
       );
-
       const overtimeSeconds = parseInt(overtimeRes.rows[0].overtime_seconds, 10);
       if (overtimeSeconds > 0) {
         overtime = formatHours(overtimeSeconds);
       }
     }
 
-    // 4️⃣ Insert Off Duty record
+    // 5️⃣ Insert Off Duty record
     const insertResult = await pool.query(
-      `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours, overtime)
-       VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5)
+      `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours, overtime, remaining_hours)
+       VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5, $6)
        RETURNING id, timestamp`,
-      [employeeId, capturedUrl, status, sessionHours, overtime]
+      [employeeId, capturedUrl, status, sessionHours, overtime, remainingHours]
     );
 
     const offDutyRow = insertResult.rows[0];
-    const offDutyId = offDutyRow.id;
-    const offDutyTimestamp = offDutyRow.timestamp;
-
-    // Helper to sum seconds and format
-    const sumSecondsToHours = (seconds) => formatHours(parseInt(seconds, 10));
-
-    // 5️⃣ Calculate weekly and monthly totals
-    const weeklyRes = await pool.query(
-      `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
-       FROM attendance
-       WHERE employee_id = $1
-         AND status = 'Off Duty'
-         AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', $2::timestamp)`,
-      [employeeId, offDutyTimestamp]
-    );
-    const weeklyHours = sumSecondsToHours(weeklyRes.rows[0].total_seconds);
-
-    const monthlyRes = await pool.query(
-      `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours::interval)),0) AS total_seconds
-       FROM attendance
-       WHERE employee_id = $1
-         AND status = 'Off Duty'
-         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', $2::timestamp)`,
-      [employeeId, offDutyTimestamp]
-    );
-    const monthlyHours = sumSecondsToHours(monthlyRes.rows[0].total_seconds);
-
-    // 6️⃣ Update Off Duty row with daily, weekly, monthly totals
-    await pool.query(
-      `UPDATE attendance
-       SET daily_hours = $1, weekly_hours = $2, monthly_hours = $3
-       WHERE id = $4`,
-      [sessionHours, weeklyHours, monthlyHours, offDutyId]
-    );
 
     return res.json({
       success: true,
-      message: "Logout marked successfully with hours & overtime calculated",
+      message: "Logout marked successfully with hours, overtime, and remaining hours calculated",
       data: {
         employeeId,
         status,
-        timestamp: offDutyTimestamp, 
+        timestamp: offDutyRow.timestamp,
         sessionHours,
-        dailyHours: sessionHours,
-        weeklyHours,
-        monthlyHours,
-        overtime
+        remainingHours,
+        overtime,
       },
     });
 
@@ -363,6 +294,7 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
