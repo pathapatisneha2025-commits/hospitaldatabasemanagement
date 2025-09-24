@@ -131,7 +131,7 @@ router.post("/mark-attendance", async (req, res) => {
     const status =
       locationVerified === true && faceVerified === true ? "On Duty" : "Absent";
 
-    // Insert and return timestamp
+    // 1️⃣ Insert attendance record
     const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status)
        VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
@@ -141,13 +141,46 @@ router.post("/mark-attendance", async (req, res) => {
 
     const row = insertResult.rows[0];
 
+    let remainingHours = "0 hrs 0 mins";
+
+    if (status === "On Duty") {
+      // 2️⃣ Get employee's schedule_out
+      const empRes = await pool.query(
+        `SELECT schedule_out FROM employees WHERE id = $1`,
+        [employeeId]
+      );
+
+      if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
+        const scheduleOut = empRes.rows[0].schedule_out;
+
+        // 3️⃣ Calculate remaining time until schedule_out
+        const remainingRes = await pool.query(
+          `SELECT GREATEST(
+              EXTRACT(EPOCH FROM (
+                (CURRENT_DATE + $1::time AT TIME ZONE 'Asia/Kolkata') 
+                - (NOW() AT TIME ZONE 'Asia/Kolkata')
+              )), 0
+            ) AS remaining_seconds`,
+          [scheduleOut]
+        );
+
+        const remainingSeconds = parseInt(remainingRes.rows[0].remaining_seconds, 10);
+
+        // 4️⃣ Format into hrs/mins
+        const hrs = Math.floor(remainingSeconds / 3600);
+        const mins = Math.floor((remainingSeconds % 3600) / 60);
+        remainingHours = `${hrs} hrs ${mins} mins`;
+      }
+    }
+
     return res.json({
       success: true,
       message: "Attendance marked successfully",
       data: {
         employeeId: row.employee_id,
         status: row.status,
-        timestamp: row.timestamp   // ✅ timestamp added here
+        timestamp: row.timestamp,
+        remainingHours, // ✅ Remaining hours added here
       },
     });
   } catch (error) {
@@ -155,6 +188,7 @@ router.post("/mark-attendance", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
  
 
