@@ -215,6 +215,32 @@ router.get("/by-department", async (req, res) => {
   }
 });
 
+router.get("/late-employees-report", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        e.name,
+        a.timestamp::date AS date,                  -- date of attendance
+        a.timestamp::time AS time,                  -- time of attendance
+        COUNT(*) OVER (PARTITION BY e.id) AS late_count  -- total times employee was late
+      FROM attendance a
+      JOIN employees e ON a.employee_id = e.id
+      WHERE a.status = 'On Duty' 
+        AND a.timestamp::time > e.schedule_in
+      ORDER BY e.name, a.timestamp DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error("Late employees report error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 
 
 module.exports = router;
