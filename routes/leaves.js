@@ -103,7 +103,7 @@ router.post("/salary-deduction", async (req, res) => {
     if (leaveDuration.toLowerCase() === "hourly") {
       const hours = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
       equivalentLeaveDays = hours / workingHoursPerDay;
-    } else if (leaveDuration.toLowerCase() === "halfday") {
+} else if (leaveDuration.toLowerCase() === "firsthalf" || leaveDuration.toLowerCase() === "secondhalf") {
       equivalentLeaveDays = 0.5;
     } else {
       equivalentLeaveDays =
@@ -161,7 +161,7 @@ router.post("/salary-deduction", async (req, res) => {
         // Unauthorized hours treated as fraction of a day
         const hours = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
         UnauthorizedLeaves = hours / workingHoursPerDay;
-      } else if (leaveDuration.toLowerCase() === "halfday") {
+} else if (leaveDuration.toLowerCase() === "firsthalf" || leaveDuration.toLowerCase() === "secondhalf") {
         UnauthorizedLeaves = 0.5;
       } else {
         // Count Off Duty days from attendance for multiple/full days
