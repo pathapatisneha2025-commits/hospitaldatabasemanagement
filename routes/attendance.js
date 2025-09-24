@@ -212,7 +212,7 @@ router.post("/logout", async (req, res) => {
       return `${hrs} hrs ${mins} mins`;
     };
 
-    // 1️⃣ Find last On Duty record
+    // 1️ Find last On Duty record
     const onDutyResult = await pool.query(
       `SELECT id, timestamp
        FROM attendance
@@ -232,7 +232,7 @@ router.post("/logout", async (req, res) => {
 
     const onDutyTime = onDutyResult.rows[0].timestamp;
 
-    // 2️⃣ Calculate session worked time in seconds
+    // 2️ Calculate session worked time in seconds
     const sessionSecondsRes = await pool.query(
       `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
       [onDutyTime]
@@ -240,12 +240,12 @@ router.post("/logout", async (req, res) => {
     const sessionSeconds = parseInt(sessionSecondsRes.rows[0].seconds, 10);
     const sessionHours = formatHours(sessionSeconds);
 
-    // 3️⃣ Calculate remaining hours for a 10-hour workday
+    // 3️ Calculate remaining hours for a 10-hour workday
     const totalDaySeconds = 10 * 3600; // 10 hours in seconds
     const remainingSeconds = Math.max(totalDaySeconds - sessionSeconds, 0);
     const remainingHours = formatHours(remainingSeconds);
 
-    // 4️⃣ Calculate overtime (time beyond scheduled_out)
+    // 4️ Calculate overtime (time beyond scheduled_out)
     let overtime = "0 hrs 0 mins";
     const empRes = await pool.query(
       `SELECT schedule_out FROM employees WHERE id = $1`,
@@ -266,7 +266,7 @@ router.post("/logout", async (req, res) => {
       }
     }
 
-    // 5️⃣ Insert Off Duty record
+    // 5️ Insert Off Duty record
     const insertResult = await pool.query(
       `INSERT INTO attendance (employee_id, timestamp, image_url, status, session_hours, overtime, remaining_hours)
        VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5, $6)
@@ -275,6 +275,25 @@ router.post("/logout", async (req, res) => {
     );
 
     const offDutyRow = insertResult.rows[0];
+        // 6️ Fetch daily attendance with sessionHours, remainingHours, and overtime
+
+ const dailyRes = await pool.query(
+      `SELECT timestamp, session_hours, remaining_hours, overtime
+       FROM attendance
+       WHERE employee_id = $1 AND DATE(timestamp) = CURRENT_DATE
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    // 7️ Fetch monthly attendance (current month dynamically)
+    const monthlyRes = await pool.query(
+      `SELECT timestamp, session_hours, remaining_hours, overtime
+       FROM attendance
+       WHERE employee_id = $1
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+       ORDER BY timestamp`,
+      [employeeId]
+    );
 
     return res.json({
       success: true,
@@ -286,6 +305,10 @@ router.post("/logout", async (req, res) => {
         sessionHours,
         remainingHours,
         overtime,
+        attendance: {
+          daily: dailyRes.rows,
+          monthly: monthlyRes.rows,
+        },
       },
     });
 
@@ -294,7 +317,6 @@ router.post("/logout", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 
