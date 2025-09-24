@@ -220,9 +220,9 @@ router.get("/late-employees-report", async (req, res) => {
     const result = await pool.query(`
       SELECT 
         e.full_name,
-        a.timestamp::date AS date,                  -- date of attendance
-        a.timestamp::time AS time,                  -- time of attendance
-        COUNT(*) OVER (PARTITION BY e.id) AS late_count  -- total times employee was late
+        a.timestamp::date AS date,                              -- date of attendance
+        TO_CHAR(a.timestamp, 'HH24:MI') AS time,               -- time in HH:MM format
+        COUNT(*) OVER (PARTITION BY e.id) AS late_count        -- total times employee was late
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
       WHERE a.status = 'On Duty' 
@@ -239,7 +239,6 @@ router.get("/late-employees-report", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 
