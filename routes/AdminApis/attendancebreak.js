@@ -219,7 +219,7 @@ router.get("/late-employees-report", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        e.name,
+        e.full_name,
         a.timestamp::date AS date,                  -- date of attendance
         a.timestamp::time AS time,                  -- time of attendance
         COUNT(*) OVER (PARTITION BY e.id) AS late_count  -- total times employee was late
@@ -227,7 +227,7 @@ router.get("/late-employees-report", async (req, res) => {
       JOIN employees e ON a.employee_id = e.id
       WHERE a.status = 'On Duty' 
         AND a.timestamp::time > e.schedule_in
-      ORDER BY e.name, a.timestamp DESC
+      ORDER BY e.full_name, a.timestamp DESC
     `);
 
     res.json({
