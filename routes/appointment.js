@@ -4,6 +4,17 @@ const db = require('../db'); // PostgreSQL client (from db.js)
 
 // -------------------- CREATE (POST) --------------------
 
+// Helper function to generate random 6-character alphanumeric ID
+function generateRandomId(length = 6) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// -------------------- CREATE (POST) --------------------
 router.post('/add', async (req, res) => {
   const {
     doctorId,       
@@ -19,7 +30,7 @@ router.post('/add', async (req, res) => {
     gender,
     bloodGroup,
     reason,
-    patientPhone    // <-- new field
+    patientPhone
   } = req.body;
 
   // Validate request
@@ -29,32 +40,34 @@ router.post('/add', async (req, res) => {
   }
 
   try {
-    // ✅ Step 1: Verify doctorId exists in doctor_fees
+    // Verify doctor exists
     const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
     const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
-
     if (doctorCheck.rows.length === 0) {
       return res.status(404).json({ error: "Doctor ID does not exist in doctor_fees" });
     }
 
-    // ✅ Step 2: Check for double booking
+    // Check for double booking
     const checkQuery = `SELECT * FROM appointments WHERE doctorId = $1 AND date = $2 AND timeSlot = $3`;
     const existing = await db.query(checkQuery, [doctorId, date, timeSlot]);
-
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
     }
 
-    // ✅ Step 3: Insert appointment (doctor details come from request body)
+    // Generate random alphanumeric ID for appointment
+    const appointmentId = generateRandomId(6);
+
+    // Insert appointment
     const insertQuery = `
       INSERT INTO appointments
-      (doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
+      (id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
        paymentStatus, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10, $11, $12, $13, $14, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
     const values = [
+      appointmentId,
       doctorId,
       doctorName,
       experience,
@@ -82,6 +95,7 @@ router.post('/add', async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 // -------------------- READ (GET) --------------------
