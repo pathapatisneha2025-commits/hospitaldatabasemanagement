@@ -47,7 +47,7 @@ router.post("/add", async (req, res) => {
 });
 
 // -------------------- READ (ALL) --------------------
-router.get("/", async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM late_to_come ORDER BY late_date DESC");
     res.json({ success: true, data: result.rows });
