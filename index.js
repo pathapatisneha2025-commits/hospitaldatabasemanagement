@@ -27,6 +27,8 @@ const BreakInattendance = require("./routes/AdminApis/attendancebreak");
 const LatetoCome = require("./routes/AdminApis/latetocome"); 
 const Manageexpenses = require("./routes/AdminApis/manageexpenses"); 
 const Projects = require("./routes/AdminApis/projects"); 
+const Admintask = require("./routes/AdminApis/Admintasks"); 
+
 
 
 
@@ -65,6 +67,7 @@ app.use("/BreakIn-attendance", BreakInattendance);
 app.use("/late_tocome", LatetoCome); 
 app.use("/expenses", Manageexpenses); 
 app.use("/projects", Projects); 
+app.use("/Admintask", Projects); 
 
 
 
