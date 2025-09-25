@@ -25,6 +25,7 @@ const OrderCancelled = require("./routes/cancelorder");
 const Medicinecategory = require("./routes/medicinecategory"); 
 const BreakInattendance = require("./routes/AdminApis/attendancebreak"); 
 const LatetoCome = require("./routes/AdminApis/latetocome"); 
+const Manageexpenses = require("./routes/AdminApis/manageexpenses"); 
 
 
 
@@ -61,6 +62,8 @@ app.use("/cancel-order", OrderCancelled);
 app.use("/medicine-category", Medicinecategory); 
 app.use("/BreakIn-attendance", BreakInattendance); 
 app.use("/late_tocome", LatetoCome); 
+app.use("/expenses", Manageexpenses); 
+
 
 
 
