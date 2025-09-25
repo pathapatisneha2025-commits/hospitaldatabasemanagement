@@ -21,7 +21,7 @@ router.post("/add", async (req, res) => {
       [employee_email]
     );
 
-    const { employee_id } = empResult.rows[0] || {};
+    const { id: employee_id } = empResult.rows[0] || {};
 
     // Get current late count
     const countResult = await pool.query(
