@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../db'); // Assuming you have a PostgreSQL pool in db.js
+const pool = require("../../db"); // Adjust path if needed
 
 // -------------------- CREATE (POST) --------------------
 router.post('/add', async (req, res) => {
