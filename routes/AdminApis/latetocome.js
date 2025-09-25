@@ -17,7 +17,7 @@ router.post("/add", async (req, res) => {
 
     // Fetch employee_id from employees table
     const empResult = await pool.query(
-      "SELECT employee_id FROM employees WHERE email = $1",
+      "SELECT id FROM employees WHERE email = $1",
       [employee_email]
     );
 
