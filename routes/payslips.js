@@ -14,13 +14,13 @@ router.get("/all", async (req, res) => {
     const year = today.getFullYear();
     const month = today.getMonth() + 1; // JS months are 0-based
 
-    // Calculate total working days in the month (excluding weekends)
+    // Calculate total working days in the month (excluding Sundays only)
     const firstDay = new Date(year, month - 1, 1);
     const lastDay = new Date(year, month, 0);
     let totalWorkingDays = 0;
     for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
       const day = d.getDay();
-      if (day !== 0 && day !== 6) totalWorkingDays++; // exclude Sunday(0) & Saturday(6)
+      if (day !== 0) totalWorkingDays++; // exclude Sunday(0) only
     }
 
     const expectedHours = 270; // fixed
@@ -162,6 +162,7 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
