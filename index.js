@@ -29,6 +29,8 @@ const Manageexpenses = require("./routes/AdminApis/manageexpenses");
 const Projects = require("./routes/AdminApis/projects"); 
 const Admintask = require("./routes/AdminApis/Admintasks"); 
 const Managesuppliers = require("./routes/AdminApis/managesuppliers"); 
+const PurchaseOrders = require("./routes/AdminApis/purchaseorders"); 
+
 
 
 
@@ -71,6 +73,7 @@ app.use("/expenses", Manageexpenses);
 app.use("/projects", Projects); 
 app.use("/Admintask",Admintask ); 
 app.use("/Manage-suppliers",Managesuppliers ); 
+app.use("/purchase-orders",PurchaseOrders ); 
 
 
 
