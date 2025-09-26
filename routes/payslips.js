@@ -139,22 +139,6 @@ router.get("/all", async (req, res) => {
         baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty
       );
 
-      // ------------------------
-      // 6️⃣ Preload employee image buffer
-      let employeeImageBuffer = null;
-      if (employee.image) {
-        try {
-          if (employee.image.startsWith("http")) {
-            const response = await axios.get(employee.image, { responseType: "arraybuffer" });
-            employeeImageBuffer = Buffer.from(response.data);
-          } else {
-            employeeImageBuffer = employee.image;
-          }
-        } catch (err) {
-          console.warn("Image load failed:", err.message);
-        }
-      }
-
       results.push({
         employee_id: employeeId,
         employee_name: employee.full_name,
@@ -168,8 +152,7 @@ router.get("/all", async (req, res) => {
         unauthorized_leaves: unauthorizedLeaves,
         unauthorized_penalty: unauthorizedPenaltyTotal,
         late_penalty: latePenalty,
-        net_pay: netPay,
-        image: employeeImageBuffer
+        net_pay: netPay
       });
     }
 
@@ -179,7 +162,6 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 
