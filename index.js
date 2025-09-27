@@ -30,6 +30,7 @@ const Projects = require("./routes/AdminApis/projects");
 const Admintask = require("./routes/AdminApis/Admintasks"); 
 const Managesuppliers = require("./routes/AdminApis/managesuppliers"); 
 const PurchaseOrders = require("./routes/AdminApis/purchaseorders"); 
+const ManageChallan = require("./routes/AdminApis/managechallan"); 
 
 
 
@@ -74,23 +75,7 @@ app.use("/projects", Projects);
 app.use("/Admintask",Admintask ); 
 app.use("/Manage-suppliers",Managesuppliers ); 
 app.use("/purchase-orders",PurchaseOrders ); 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+app.use("/manage-challan",ManageChallan ); 
 
 // Start HTTP server
 const server = app.listen(PORT, () => {
