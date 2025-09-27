@@ -6,7 +6,7 @@ const pool = require("../db"); // PostgreSQL pool connection
 router.post("/add", async (req, res) => {
   try {
     const {
-      employee_id,        // 👈 new
+      employee_id,
       employee_name,
       department,
       leave_type,
@@ -15,16 +15,16 @@ router.post("/add", async (req, res) => {
       leave_hours,
       reason,
       status,
-      leavestaken,        // 👈 existing
-      leaves_duration,    // 👈 new
-      salary_deduction    // 👈 new
+      leavestaken,
+      leaves_duration,
+      salary_deduction,
     } = req.body;
 
-    // Basic validation
     if (!employee_name || !department || !leave_type || !start_date || !end_date) {
       return res.status(400).json({ error: "All required fields must be provided." });
     }
 
+    // 1️⃣ Insert new leave request
     const query = `
       INSERT INTO leaves (
         employee_id,
@@ -56,20 +56,44 @@ router.post("/add", async (req, res) => {
       status,
       leavestaken,
       leaves_duration || null,
-      salary_deduction
+      salary_deduction,
     ];
 
-    const result = await pool.query(query, values);
+    const leaveResult = await pool.query(query, values);
+    const leave = leaveResult.rows[0];
 
+    // 2️⃣ Insert notification message: "New leave request by {employee_name}"
+    const notifResult = await pool.query(
+      `INSERT INTO leavenotifications (employee_id, message, leave_id)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [employee_id, `New leave request by ${employee_name}`, leave.id]
+    );
+
+    const notification = notifResult.rows[0];
+
+    // 3️⃣ Push live notification via WebSocket if employee is online
+    const ws = clients.get(employee_id.toString());
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "leaveRequest",
+          notification,
+        })
+      );
+    }
+
+    //  Done
     res.status(201).json({
-      message: "Leave application submitted successfully.",
-      leave: result.rows[0]
+      message: "Leave application submitted successfully",
+      leave,
+      notification,
     });
   } catch (error) {
     console.error("Error adding leave:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 router.post("/salary-deduction", async (req, res) => {
   try {
