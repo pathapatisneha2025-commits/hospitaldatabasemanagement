@@ -31,6 +31,7 @@ const Admintask = require("./routes/AdminApis/Admintasks");
 const Managesuppliers = require("./routes/AdminApis/managesuppliers"); 
 const PurchaseOrders = require("./routes/AdminApis/purchaseorders"); 
 const ManageChallan = require("./routes/AdminApis/managechallan"); 
+const LeavesDeduction = require("./routes/AdminApis/leavesdeduction"); 
 
 
 
@@ -76,6 +77,7 @@ app.use("/Admintask",Admintask );
 app.use("/Manage-suppliers",Managesuppliers ); 
 app.use("/purchase-orders",PurchaseOrders ); 
 app.use("/manage-challan",ManageChallan ); 
+app.use("/leavededuction",LeavesDeduction ); 
 
 // Start HTTP server
 const server = app.listen(PORT, () => {
