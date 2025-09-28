@@ -6,8 +6,6 @@ const pool = require("../../db");
 
 const router = express.Router();
 
-// Simple in-memory counter (resets when server restarts)
-// For production, store in DB
 let invoiceCounter = 1;
 
 // Function to generate invoice number
@@ -24,7 +22,7 @@ function generateInvoiceNo() {
   return `INV${datePart}-${counterPart}`;
 }
 
-// POST: Generate Invoice
+// POST: Generate Invoice (direct PDF response)
 router.post('/generate', (req, res) => {
   const invoiceData = req.body;
 
@@ -32,16 +30,16 @@ router.post('/generate', (req, res) => {
   const invoiceNo = generateInvoiceNo();
   invoiceData.invoiceNo = invoiceNo;
 
-  // Ensure invoices folder exists
-  const invoicesDir = path.join(__dirname, '../invoices');
-  if (!fs.existsSync(invoicesDir)) {
-    fs.mkdirSync(invoicesDir);
-  }
-  const filePath = path.join(invoicesDir, `Invoice-${invoiceNo}.pdf`);
+  // Set response headers so browser/Postman knows it's a PDF
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename=Invoice-${invoiceNo}.pdf`
+  );
 
   // Create PDF document
   const doc = new PDFDocument({ margin: 30 });
-  doc.pipe(fs.createWriteStream(filePath));
+  doc.pipe(res); // Pipe directly to response
 
   // Title
   doc.fontSize(20).text('Medicine Store Invoice', { align: 'center' });
@@ -72,7 +70,7 @@ router.post('/generate', (req, res) => {
   // Table rows
   doc.font('Helvetica');
   let rowY = tableTop + 25;
-  invoiceData.medicines.forEach(med => {
+  invoiceData.medicines.forEach((med) => {
     doc.text(med.name, itemX, rowY);
     doc.text(med.qty, qtyX, rowY);
     doc.text(med.unitPrice, priceX, rowY);
@@ -88,14 +86,9 @@ router.post('/generate', (req, res) => {
   doc.text(`Grand Total: ${invoiceData.grandTotal}`, { align: 'right' });
   doc.text(`Payment Mode: ${invoiceData.paymentMode}`, { align: 'right' });
 
+  // End and send PDF
   doc.end();
-
-  // Send file as response after creation
-  doc.on('finish', () => {
-    res.download(filePath, (err) => {
-      if (err) console.error('Download error:', err);
-    });
-  });
 });
+
 
 module.exports = router;
