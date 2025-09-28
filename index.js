@@ -32,6 +32,7 @@ const Managesuppliers = require("./routes/AdminApis/managesuppliers");
 const PurchaseOrders = require("./routes/AdminApis/purchaseorders"); 
 const ManageChallan = require("./routes/AdminApis/managechallan"); 
 const LeavesDeduction = require("./routes/AdminApis/leavesdeduction"); 
+const Generateinvoice = require("./routes/AdminApis/generateinvoice"); 
 
 
 
@@ -78,6 +79,7 @@ app.use("/Manage-suppliers",Managesuppliers );
 app.use("/purchase-orders",PurchaseOrders ); 
 app.use("/manage-challan",ManageChallan ); 
 app.use("/leavededuction",LeavesDeduction ); 
+app.use("/invoice",Generateinvoice ); 
 
 // Start HTTP server
 const server = app.listen(PORT, () => {
