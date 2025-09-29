@@ -108,7 +108,7 @@ router.get("/by-department", async (req, res) => {
         e.full_name,
         e.email,
         a.status,
-        a.onduty_timestamp,
+        a.timestamp,
         e.schedule_in
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
