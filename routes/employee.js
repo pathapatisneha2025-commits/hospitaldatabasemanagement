@@ -207,16 +207,9 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({
+   res.json({
       message: "Login successful",
-      employee: {
-        id: employee.id,
-        fullName: employee.full_name,
-        email: employee.email,
-        role: employee.role,
-        status: employee.status,
-
-      },
+      employee, // send full employee row directly
       token
     });
   } catch (error) {

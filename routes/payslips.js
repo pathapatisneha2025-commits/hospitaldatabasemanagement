@@ -6,36 +6,57 @@ const router = express.Router();
 
 
 
-router.get("/all", async (req, res) => {
+router.get("/all/pdf", async (req, res) => {
   try {
-    // Get current date in Asia/Kolkata timezone
     const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
     const today = new Date(now);
     const year = today.getFullYear();
-    const month = today.getMonth() + 1; // JS months are 0-based
+    const month = today.getMonth() + 1;
 
-    // Calculate total working days in the month (excluding Sundays only)
+    const expectedHours = 270; // fixed
     const firstDay = new Date(year, month - 1, 1);
     const lastDay = new Date(year, month, 0);
     let totalWorkingDays = 0;
     for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-      const day = d.getDay();
-      if (day !== 0) totalWorkingDays++; // exclude Sunday(0) only
+      if (d.getDay() !== 0) totalWorkingDays++; // exclude Sundays
     }
 
-    const expectedHours = 270; // fixed
-
-    // Fetch all employees
     const employeesRes = await pool.query(`SELECT * FROM employees`);
     const employees = employeesRes.rows;
-    const results = [];
 
-    for (let employee of employees) {
+    const doc = new PDFDocument({ autoFirstPage: false });
+    const buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => {
+      const pdfData = Buffer.concat(buffers);
+      res.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename=all_payslips-${month}-${year}.pdf`,
+        "Content-Length": pdfData.length,
+      }).end(pdfData);
+    });
+
+    for (const employee of employees) {
       const employeeId = employee.id;
-      const baseSalary = parseFloat(employee.monthly_salary || 0);
+      const baseSalary = Number(employee.monthly_salary) || 0;
 
-      // ------------------------
-      // 1️⃣ Fetch maximum monthly hours
+      // Deductions
+      const deductionResult = await pool.query(
+        `SELECT COALESCE(salary_deduction, 0) AS deductions
+         FROM leaves
+         WHERE employee_id = $1
+           AND (
+             (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
+             OR
+             (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
+           )
+         ORDER BY id DESC
+         LIMIT 1`,
+        [employeeId, year, month]
+      );
+      const deductions = Number(deductionResult.rows[0]?.deductions || 0);
+
+      // Monthly hours
       const monthRes = await pool.query(
         `SELECT MAX(monthly_hours) AS max_monthly_hours
          FROM attendance
@@ -45,31 +66,22 @@ router.get("/all", async (req, res) => {
         [employeeId, year, month]
       );
       const monthlyHoursText = monthRes.rows[0]?.max_monthly_hours || "0 hrs 0 mins";
-
-      function parseHoursText(hoursText) {
-        const match = hoursText.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
+      const parseHoursText = (text) => {
+        const match = text.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
         if (!match) return 0;
-        const hrs = parseInt(match[1], 10);
-        const mins = parseInt(match[2] || 0, 10);
-        return hrs + mins / 60;
-      }
-
+        return parseInt(match[1], 10) + (parseInt(match[2] || 0, 10) / 60);
+      };
       const monthlyHours = parseHoursText(monthlyHoursText);
 
-      // ------------------------
-      // 2️⃣ Proportional Incentive
-      let proportionalIncentive = 0;
-      let incentiveHours = 0;
-      if (monthlyHours > expectedHours) {
-        proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
-        incentiveHours = monthlyHours - expectedHours;
-      }
+      // Overtime hours
+      const overtimeHours = Math.max(0, monthlyHours - expectedHours);
 
-      // ------------------------
-      // 3️⃣ Unauthorized leave penalty
+      // Proportional incentive
+      const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
+
+      // Unauthorized leave penalty
       let unauthorizedLeaves = 0;
       let unauthorizedPenaltyTotal = 0;
-
       const cancelledLeaves = await pool.query(
         `SELECT start_date, end_date, leave_type
          FROM leaves
@@ -83,13 +95,18 @@ router.get("/all", async (req, res) => {
         [employeeId, year, month]
       );
 
-      let unauthorizedPenaltyPerLeave = 0;
-      if (baseSalary >= 4500 && baseSalary <= 7500) unauthorizedPenaltyPerLeave = 35;
-      else if (baseSalary >= 7501 && baseSalary <= 9500) unauthorizedPenaltyPerLeave = 70;
-      else if (baseSalary >= 9501) unauthorizedPenaltyPerLeave = 105;
+      const deductionConfig = await pool.query(
+        `SELECT deduction_per_day, unauthorized_penalty
+         FROM employee_leavededuction
+         WHERE employee_id = $1
+         LIMIT 1`,
+        [employeeId]
+      );
+      const unauthorizedPenaltyPerLeave = deductionConfig.rows[0]?.unauthorized_penalty || 0;
 
-      for (let leave of cancelledLeaves.rows) {
-        if (leave.leave_type.toLowerCase() === "halfday") unauthorizedLeaves += 0.5;
+      for (const leave of cancelledLeaves.rows) {
+        const type = leave.leave_type?.toLowerCase();
+        if (["firsthalf", "secondhalf"].includes(type)) unauthorizedLeaves += 0.5;
         else {
           const attResult = await pool.query(
             `SELECT COUNT(*) AS off_duty_days
@@ -99,16 +116,15 @@ router.get("/all", async (req, res) => {
                AND timestamp::date BETWEEN $2::date AND $3::date`,
             [employeeId, leave.start_date, leave.end_date]
           );
-          unauthorizedLeaves += parseInt(attResult.rows[0].off_duty_days, 10) || 0;
+          unauthorizedLeaves += parseInt(attResult.rows[0]?.off_duty_days || 0, 10);
         }
       }
       unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
-      // ------------------------
-      // 4️⃣ Late penalty
+      // Late penalty
       const lateResult = await pool.query(
         `SELECT DATE(a.timestamp) AS day,
-         FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
+                FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
          FROM attendance a
          JOIN employees e ON a.employee_id = e.id
          WHERE a.employee_id = $1
@@ -125,43 +141,49 @@ router.get("/all", async (req, res) => {
       let totalBlocks = 0;
       lateRows.forEach((row, idx) => { if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0; });
 
-      let perLatePenalty = 0;
-      if (baseSalary >= 4500 && baseSalary <= 7500) perLatePenalty = 25;
-      else if (baseSalary >= 7501 && baseSalary <= 9500) perLatePenalty = 50;
-      else if (baseSalary >= 9501) perLatePenalty = 75;
-
+      const latePenaltyConfig = await pool.query(
+        `SELECT penalty_amount
+         FROM latepenalites
+         WHERE employee_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [employeeId]
+      );
+      const perLatePenalty = parseFloat(latePenaltyConfig.rows[0]?.penalty_amount) || 0;
       const latePenalty = totalBlocks * perLatePenalty;
 
-      // ------------------------
-      // 5️⃣ Net Pay
-      const netPay = Math.max(
-        0,
-        baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty
-      );
+      // Net Pay including deductions
+      const netPay = Math.max(0, baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - deductions);
 
-      results.push({
-        employee_id: employeeId,
-        employee_name: employee.full_name,
-        designation: employee.role,
-        monthly_salary: baseSalary,
-        total_working_days: totalWorkingDays,
-        expected_working_hours: expectedHours,
-        monthly_hours: monthlyHours,
-        incentive_hours: incentiveHours,
-        proportional_incentive: proportionalIncentive,
-        unauthorized_leaves: unauthorizedLeaves,
-        unauthorized_penalty: unauthorizedPenaltyTotal,
-        late_penalty: latePenalty,
-        net_pay: netPay
-      });
+      // Add new page per employee
+      doc.addPage();
+      doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
+      doc.moveDown();
+      doc.fontSize(12)
+         .text(`Employee Name: ${employee.full_name}`)
+         .text(`Role: ${employee.role}`)
+         .text(`Base Salary: ${baseSalary.toFixed(2)}`)
+         .text(`Deductions: ${deductions.toFixed(2)}`)
+         .text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`)
+         .text(`Overtime Hours: ${overtimeHours.toFixed(2)}`)
+         .text(`Unauthorized Leaves: ${unauthorizedLeaves}`)
+         .text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`)
+         .text(`Late Blocks (after 3 free days): ${totalBlocks}`)
+         .text(`Late Penalty: ${latePenalty}`)
+         .moveDown()
+         .text(`Total Working Days: ${totalWorkingDays}`)
+         .text(`Expected Working Hours: ${expectedHours}`)
+         .text(`Monthly Hours: ${monthlyHours.toFixed(2)}`)
+         .text(`Net Pay: ${netPay.toFixed(2)}`, { underline: true });
     }
 
-    res.json(results);
+    doc.end();
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
