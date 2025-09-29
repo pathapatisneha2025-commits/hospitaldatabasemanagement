@@ -214,6 +214,8 @@ router.post("/login", async (req, res) => {
         fullName: employee.full_name,
         email: employee.email,
         role: employee.role,
+        status: employee.status,
+
       },
       token
     });
