@@ -26,7 +26,7 @@ router.post("/add", async (req, res) => {
 // -------------------- GET All Suppliers --------------------
 router.get("/all", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM suppliers ORDER BY id ASC");
+    const result = await pool.query("SELECT * FROM suppliers ");
     res.json({ success: true, data: result.rows });
   } catch (err) {
     console.error(err);
