@@ -143,7 +143,7 @@ router.get("/all/pdf", async (req, res) => {
 
       const latePenaltyConfig = await pool.query(
         `SELECT penalty_amount
-         FROM latepenalites
+         FROM latepenalties 
          WHERE employee_id = $1
          ORDER BY created_at DESC
          LIMIT 1`,
