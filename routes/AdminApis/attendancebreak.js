@@ -100,35 +100,35 @@ router.get("/totalemployeescount", async (req, res) => {
 // =========================
 router.get("/by-department", async (req, res) => {
   try {
-    // 1️⃣ Fetch attendance data
+    // 1️⃣ Fetch attendance data (join by department name)
     const attendanceQuery = `
       SELECT 
-        e.department_id,
-        d.name AS department_name,
+        d.id AS department_id,
+        d.department_name,
         e.full_name,
         e.email,
         a.status,
         a.onduty_timestamp,
-        e.scheduled_in
+        e.schedule_in
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
-      LEFT JOIN department d ON d.id = e.department_id
+      LEFT JOIN department d ON d.department_name = e.department
       WHERE DATE(a.timestamp) = CURRENT_DATE
-      ORDER BY e.department_id, e.full_name
+      ORDER BY d.department_name, e.full_name
     `;
     const attendanceResult = await pool.query(attendanceQuery);
 
-    // 2️⃣ Fetch employees currently on break
+    // 2️⃣ Fetch employees currently on break (join by department name)
     const breakQuery = `
       SELECT 
-        e.department_id,
-        d.name AS department_name,
+        d.id AS department_id,
+        d.department_name,
         e.full_name,
         e.email,
         bl.timestamp AS break_in_time
       FROM break_logs bl
       JOIN employees e ON e.id = bl.employee_id
-      LEFT JOIN department d ON d.id = e.department_id
+      LEFT JOIN department d ON d.department_name = e.department
       WHERE bl.break_type = 'Break In'
         AND bl.status = 'On Break'
         AND DATE(bl.timestamp) = CURRENT_DATE
@@ -140,7 +140,7 @@ router.get("/by-department", async (req, res) => {
             AND DATE(bo.timestamp) = CURRENT_DATE
             AND bo.timestamp > bl.timestamp
         )
-      ORDER BY e.department_id, bl.timestamp ASC
+      ORDER BY d.department_name, bl.timestamp ASC
     `;
     const breakResult = await pool.query(breakQuery);
 
@@ -152,7 +152,7 @@ router.get("/by-department", async (req, res) => {
     };
 
     attendanceResult.rows.forEach(row => {
-      const deptKey = row.department_id;
+      const deptKey = row.department_name;
 
       // Initialize department objects if not exists
       ['present', 'absent', 'late'].forEach(status => {
@@ -171,7 +171,7 @@ router.get("/by-department", async (req, res) => {
           full_name: row.full_name,
           email: row.email
         });
-      } else if (row.status === 'On Duty' && row.onduty_timestamp > row.scheduled_in) {
+      } else if (row.status === 'On Duty' && row.onduty_timestamp > row.schedule_in) {
         groupedData.late[deptKey].employees.push({
           full_name: row.full_name,
           email: row.email
@@ -187,7 +187,7 @@ router.get("/by-department", async (req, res) => {
     // 4️⃣ Group breaks by department
     const breaksByDepartment = {};
     breakResult.rows.forEach(row => {
-      const deptKey = row.department_id;
+      const deptKey = row.department_name;
       if (!breaksByDepartment[deptKey]) {
         breaksByDepartment[deptKey] = {
           department_id: row.department_id,
@@ -214,6 +214,7 @@ router.get("/by-department", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 router.get("/late-employees-report", async (req, res) => {
   try {
