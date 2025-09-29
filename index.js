@@ -33,6 +33,7 @@ const PurchaseOrders = require("./routes/AdminApis/purchaseorders");
 const ManageChallan = require("./routes/AdminApis/managechallan"); 
 const LeavesDeduction = require("./routes/AdminApis/leavesdeduction"); 
 const Latepenality = require("./routes/AdminApis/latepenalities"); 
+const Breakpenality = require("./routes/AdminApis/breakpenality"); 
 
 const Generateinvoice = require("./routes/AdminApis/generateinvoice"); 
 
@@ -82,6 +83,7 @@ app.use("/purchase-orders",PurchaseOrders );
 app.use("/manage-challan",ManageChallan ); 
 app.use("/leavededuction",LeavesDeduction ); 
 app.use("/latepenalities",Latepenality ); 
+app.use("/breakpenality",Breakpenality ); 
 
 app.use("/invoice",Generateinvoice ); 
 
