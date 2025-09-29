@@ -271,7 +271,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       WHERE e.id = $3::int;
     `;
     const result = await pool.query(query, [year, month, employeeId]);
-    if (result.rows.length === 0) {
+    if (!result.rows.length) {
       return res.status(404).json({ error: "Payslip not found" });
     }
 
@@ -288,31 +288,25 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
          AND EXTRACT(MONTH FROM timestamp) = $3`,
       [employeeId, year, month]
     );
+
     const monthlyHoursText = monthRes.rows[0]?.max_monthly_hours || "0 hrs 0 mins";
 
-    // Helper to convert "X hrs Y mins" → decimal hours
     function parseHoursText(hoursText) {
       const match = hoursText.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
       if (!match) return 0;
-      const hrs = parseInt(match[1], 10);
-      const mins = parseInt(match[2] || 0, 10);
-      return hrs + mins / 60;
+      return parseInt(match[1], 10) + (parseInt(match[2] || 0, 10) / 60);
     }
 
     const monthlyHours = parseHoursText(monthlyHoursText);
 
     // 3️⃣ Proportional Incentive
-    const expectedHours = 270; // set your monthly expected hours
-    let proportionalIncentive = 0;
-    if (monthlyHours > expectedHours) {
-      proportionalIncentive = (baseSalary / expectedHours) * monthlyHours;
-    }
-
-   
+    const expectedHours = 270;
+    const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
 
     // 4️⃣ Unauthorized leave penalty
     let unauthorizedLeaves = 0;
     let unauthorizedPenaltyTotal = 0;
+
     const cancelledLeaves = await pool.query(
       `SELECT start_date, end_date, leave_type
        FROM leaves
@@ -326,14 +320,21 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
       [employeeId, year, month]
     );
 
-    let unauthorizedPenaltyPerLeave = 0;
-    if (baseSalary >= 4500 && baseSalary <= 7500) unauthorizedPenaltyPerLeave = 35;
-    else if (baseSalary >= 7501 && baseSalary <= 9500) unauthorizedPenaltyPerLeave = 70;
-    else if (baseSalary >= 9501) unauthorizedPenaltyPerLeave = 105;
+    const deductionResult = await pool.query(
+      `SELECT deduction_per_day, unauthorized_penalty
+       FROM employee_leavededuction
+       WHERE employee_id = $1
+       LIMIT 1`,
+      [employeeId]
+    );
 
-    for (let leave of cancelledLeaves.rows) {
-      if (leave.leave_type.toLowerCase() === "halfday") unauthorizedLeaves += 0.5;
-      else {
+    const unauthorizedPenaltyPerLeave = deductionResult.rows[0]?.unauthorized_penalty || 0;
+
+    for (const leave of cancelledLeaves.rows) {
+      const type = leave.leave_type?.toLowerCase();
+      if (["firsthalf", "secondhalf"].includes(type)) {
+        unauthorizedLeaves += 0.5;
+      } else {
         const attResult = await pool.query(
           `SELECT COUNT(*) AS off_duty_days
            FROM attendance
@@ -342,15 +343,16 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
              AND timestamp::date BETWEEN $2::date AND $3::date`,
           [employeeId, leave.start_date, leave.end_date]
         );
-        unauthorizedLeaves += parseInt(attResult.rows[0].off_duty_days, 10) || 0;
+        unauthorizedLeaves += parseInt(attResult.rows[0]?.off_duty_days || 0, 10);
       }
     }
+
     unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
     // 5️⃣ Late penalty
     const lateResult = await pool.query(
       `SELECT DATE(a.timestamp) AS day,
-       FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
+              FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
        FROM attendance a
        JOIN employees e ON a.employee_id = e.id
        WHERE a.employee_id = $1
@@ -364,22 +366,26 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     const lateRows = lateResult.rows || [];
     lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
+
     let totalBlocks = 0;
     lateRows.forEach((row, idx) => { if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0; });
+
     const latedays = lateRows.length;
 
-    let perLatePenalty = 0;
-    if (baseSalary >= 4500 && baseSalary <= 7500) perLatePenalty = 25;
-    else if (baseSalary >= 7501 && baseSalary <= 9500) perLatePenalty = 50;
-    else if (baseSalary >= 9501) perLatePenalty = 75;
+    const latePenaltyResult = await pool.query(
+      `SELECT penalty_amount 
+       FROM latepenalites
+       WHERE employee_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [employeeId]
+    );
 
+    const perLatePenalty = parseFloat(latePenaltyResult.rows[0]?.penalty_amount) || 0;
     const latePenalty = totalBlocks * perLatePenalty;
 
     // 6️⃣ Net Pay
-    const netPay = Math.max(
-      0,
-      baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - deductions
-    );
+    const netPay = Math.max(0, baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - deductions);
 
     // 7️⃣ Preload employee image buffer
     let employeeImageBuffer = null;
@@ -411,28 +417,27 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     doc.fontSize(18).text(`Payslip - ${month}/${year}`, { align: "center" });
     doc.moveDown();
-
     if (employeeImageBuffer) doc.image(employeeImageBuffer, doc.page.width - 120, 15, { width: 100, height: 100 });
 
-    doc.fontSize(12).text(`Employee Name: ${employee.full_name}`);
-    doc.text(`Role: ${employee.role}`);
-    doc.text(`Base Salary: ${baseSalary.toFixed(2)}`);
-    doc.text(`Deductions (Leaves): ${deductions.toFixed(2)}`);
-    doc.text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`);
-    doc.text(`Unauthorized Leaves: ${unauthorizedLeaves}`);
-    doc.text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`);
-    doc.text(`Late Days: ${latedays}`);
-    doc.text(`Late Blocks (after 3 free days): ${totalBlocks}`);
-    doc.text(`Late Penalty: ${latePenalty}`);
-    doc.moveDown();
-
-    doc.text(`Bank: ${employee.bank_name || "N/A"}`);
-    doc.text(`Branch: ${employee.branch_name || "N/A"}`);
-    doc.text(`Account Number: ${employee.account_number || "N/A"}`);
-    doc.text(`IFSC: ${employee.ifsc || "N/A"}`);
-    doc.moveDown();
-
-    doc.fontSize(14).text(`Net Pay: ${netPay.toFixed(2)}`, { underline: true });
+    doc.fontSize(12)
+       .text(`Employee Name: ${employee.full_name}`)
+       .text(`Role: ${employee.role}`)
+       .text(`Base Salary: ${baseSalary.toFixed(2)}`)
+       .text(`Deductions (Leaves): ${deductions.toFixed(2)}`)
+       .text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`)
+       .text(`Unauthorized Leaves: ${unauthorizedLeaves}`)
+       .text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`)
+       .text(`Late Days: ${latedays}`)
+       .text(`Late Blocks (after 3 free days): ${totalBlocks}`)
+       .text(`Late Penalty: ${latePenalty}`)
+       .moveDown()
+       .text(`Bank: ${employee.bank_name || "N/A"}`)
+       .text(`Branch: ${employee.branch_name || "N/A"}`)
+       .text(`Account Number: ${employee.account_number || "N/A"}`)
+       .text(`IFSC: ${employee.ifsc || "N/A"}`)
+       .moveDown()
+       .fontSize(14)
+       .text(`Net Pay: ${netPay.toFixed(2)}`, { underline: true });
 
     doc.end();
 
