@@ -30,7 +30,7 @@ router.post('/generate', authenticateJWT, async (req, res) => {
 
     // Fetch full employee name from DB
     const employeeResult = await pool.query(
-      "SELECT name FROM employees WHERE id = $1",
+      "SELECT full_name FROM employees WHERE id = $1",
       [employeeId]
     );
     const employeeName = employeeResult.rows[0]?.full_name || 'Unknown';
