@@ -171,5 +171,25 @@ router.post("/assign-delivery", async (req, res) => {
   }
 });
 
+// ✅ Get orders assigned to a specific delivery boy
+router.get("/:deliveryboyId", async (req, res) => {
+  try {
+    const { deliveryboyId } = req.params;
+
+    const result = await pool.query(
+      `SELECT * 
+       FROM orders 
+       WHERE deliveryboy_id = $1 
+       ORDER BY created_at DESC`,
+      [deliveryboyId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get DeliveryBoy Orders Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 module.exports = router;
