@@ -405,9 +405,48 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     const perLatePenalty = parseFloat(latePenaltyResult.rows[0]?.penalty_amount) || 0;
     const latePenalty = totalBlocks * perLatePenalty;
+// 6️⃣ Break penalty
+const breakResult = await pool.query(
+  `SELECT b.timestamp::time AS actual_breakout, e.break_out
+   FROM break_logs b
+   JOIN employees e ON b.employee_id = e.id
+   WHERE b.employee_id = $1
+     AND b.break_type = 'Break Out'
+     AND EXTRACT(YEAR FROM b.timestamp) = $2
+     AND EXTRACT(MONTH FROM b.timestamp) = $3`,
+  [employeeId, year, month]
+);
 
-    // 6️⃣ Net Pay
-    const netPay = Math.max(0, baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - deductions);
+let totalBreakBlocks = 0;
+for (const row of breakResult.rows) {
+  const scheduled = row.break_out;   // stored as time in employees
+  const actual = row.actual_breakout;
+
+  if (scheduled && actual < scheduled) {
+    const diffMinutes = Math.floor(
+      (new Date(`1970-01-01T${scheduled}`) - new Date(`1970-01-01T${actual}`)) / 60000
+    );
+    totalBreakBlocks += Math.floor(diffMinutes / 5);
+  }
+}
+
+const breakPenaltyResult = await pool.query(
+  `SELECT penalty_amount 
+   FROM breakdeductions 
+   WHERE employee_id = $1
+   ORDER BY created_at DESC
+   LIMIT 1`,
+  [employeeId]
+);
+
+const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.penalty_amount) || 0;
+const breakPenalty = totalBreakBlocks * perBreakPenalty;
+
+// 7️⃣ Net Pay (updated with breakPenalty)
+const netPay = Math.max(
+  0,
+  baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - breakPenalty - deductions
+);
 
     // 7️⃣ Preload employee image buffer
     let employeeImageBuffer = null;
@@ -452,6 +491,8 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
        .text(`Late Days: ${latedays}`)
        .text(`Late Blocks (after 3 free days): ${totalBlocks}`)
        .text(`Late Penalty: ${latePenalty}`)
+       .text(`Break Blocks (early outs): ${totalBreakBlocks}`)
+   .text(`Break Penalty: ${breakPenalty}`)
        .moveDown()
        .text(`Bank: ${employee.bank_name || "N/A"}`)
        .text(`Branch: ${employee.branch_name || "N/A"}`)
