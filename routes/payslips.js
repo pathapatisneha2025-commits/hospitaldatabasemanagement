@@ -312,13 +312,11 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     );
 
     const monthlyHoursText = monthRes.rows[0]?.max_monthly_hours || "0 hrs 0 mins";
-
     function parseHoursText(hoursText) {
       const match = hoursText.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
       if (!match) return 0;
       return parseInt(match[1], 10) + (parseInt(match[2] || 0, 10) / 60);
     }
-
     const monthlyHours = parseHoursText(monthlyHoursText);
 
     // 3️⃣ Proportional Incentive
@@ -349,7 +347,6 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
        LIMIT 1`,
       [employeeId]
     );
-
     const unauthorizedPenaltyPerLeave = deductionResult.rows[0]?.unauthorized_penalty || 0;
 
     for (const leave of cancelledLeaves.rows) {
@@ -368,10 +365,9 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
         unauthorizedLeaves += parseInt(attResult.rows[0]?.off_duty_days || 0, 10);
       }
     }
-
     unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
-    // 5️⃣ Late penalty
+    // 5️⃣ Late penalty (first 3 days free)
     const lateResult = await pool.query(
       `SELECT DATE(a.timestamp) AS day,
               FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
@@ -390,8 +386,9 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
 
     let totalBlocks = 0;
-    lateRows.forEach((row, idx) => { if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0; });
-
+    lateRows.forEach((row, idx) => {
+      if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0;
+    });
     const latedays = lateRows.length;
 
     const latePenaltyResult = await pool.query(
@@ -402,54 +399,57 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
        LIMIT 1`,
       [employeeId]
     );
-
     const perLatePenalty = parseFloat(latePenaltyResult.rows[0]?.penalty_amount) || 0;
     const latePenalty = totalBlocks * perLatePenalty;
-// 6️⃣ Break penalty
-const breakResult = await pool.query(
-  `SELECT b.timestamp::time AS actual_breakout, e.break_out
-   FROM break_logs b
-   JOIN employees e ON b.employee_id = e.id
-   WHERE b.employee_id = $1
-     AND b.break_type = 'Break Out'
-     AND EXTRACT(YEAR FROM b.timestamp) = $2
-     AND EXTRACT(MONTH FROM b.timestamp) = $3`,
-  [employeeId, year, month]
-);
 
-let totalBreakBlocks = 0;
-for (const row of breakResult.rows) {
-  const scheduled = row.break_out;   // stored as time in employees
-  const actual = row.actual_breakout;
+    // 6️⃣ Break penalty (first 3 occurrences free)
+    const breakResult = await pool.query(
+      `SELECT b.timestamp::time AS actual_breakout, e.break_out
+       FROM break_logs b
+       JOIN employees e ON b.employee_id = e.id
+       WHERE b.employee_id = $1
+         AND b.break_type = 'Break Out'
+         AND EXTRACT(YEAR FROM b.timestamp) = $2
+         AND EXTRACT(MONTH FROM b.timestamp) = $3
+       ORDER BY b.timestamp ASC`,
+      [employeeId, year, month]
+    );
 
-  if ( actual > scheduled) {
-   const diffMinutes = Math.floor(
-  (new Date(`1970-01-01T${actual}`) - new Date(`1970-01-01T${scheduled}`)) / 60000
-);
+    let totalBreakBlocks = 0;
+    breakResult.rows.sort((a, b) => new Date(`1970-01-01T${a.actual_breakout}`) - new Date(`1970-01-01T${b.actual_breakout}`));
 
-    totalBreakBlocks += Math.floor(diffMinutes / 5);
-  }
-}
+    breakResult.rows.forEach((row, idx) => {
+      if (idx >= 3) { // only count after first 3 occurrences
+        const scheduled = row.break_out;
+        const actual = row.actual_breakout;
 
-const breakPenaltyResult = await pool.query(
-  `SELECT break_penalty
-   FROM breakpenalty 
-   WHERE employee_id = $1
-   ORDER BY created_at DESC
-   LIMIT 1`,
-  [employeeId]
-);
+        if (actual > scheduled) {
+          const diffMinutes = Math.floor(
+            (new Date(`1970-01-01T${actual}`) - new Date(`1970-01-01T${scheduled}`)) / 60000
+          );
+          totalBreakBlocks += Math.floor(diffMinutes / 5);
+        }
+      }
+    });
 
-const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.break_penalty) || 0;
-const breakPenalty = totalBreakBlocks * perBreakPenalty;
+    const breakPenaltyResult = await pool.query(
+      `SELECT break_penalty
+       FROM breakpenalty 
+       WHERE employee_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [employeeId]
+    );
+    const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.break_penalty) || 0;
+    const breakPenalty = totalBreakBlocks * perBreakPenalty;
 
-// 7️⃣ Net Pay (updated with breakPenalty)
-const netPay = Math.max(
-  0,
-  baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - breakPenalty - deductions
-);
+    // 7️⃣ Net Pay
+    const netPay = Math.max(
+      0,
+      baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - breakPenalty - deductions
+    );
 
-    // 7️⃣ Preload employee image buffer
+    // 8️⃣ Preload employee image buffer
     let employeeImageBuffer = null;
     if (employee.image) {
       try {
@@ -464,7 +464,7 @@ const netPay = Math.max(
       }
     }
 
-    // 8️⃣ Generate PDF
+    // 9️⃣ Generate PDF
     const doc = new PDFDocument();
     const buffers = [];
     doc.on("data", buffers.push.bind(buffers));
@@ -492,8 +492,8 @@ const netPay = Math.max(
        .text(`Late Days: ${latedays}`)
        .text(`Late Blocks (after 3 free days): ${totalBlocks}`)
        .text(`Late Penalty: ${latePenalty}`)
-       .text(`Break Blocks (early outs): ${totalBreakBlocks}`)
-   .text(`Break Penalty: ${breakPenalty}`)
+       .text(`Break Blocks (early outs after 3 free): ${totalBreakBlocks}`)
+       .text(`Break Penalty: ${breakPenalty}`)
        .moveDown()
        .text(`Bank: ${employee.bank_name || "N/A"}`)
        .text(`Branch: ${employee.branch_name || "N/A"}`)
