@@ -1,7 +1,8 @@
 const express = require('express');
 const PDFDocument = require('pdfkit');
 const pool = require("../../db"); 
-const authenticateJWT = require('../middleware/auth');
+
+const authenticateJWT = require('../../middleware/auth');
 
 const router = express.Router();
 
