@@ -1,5 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken"); // 👈 for login tokens
 const pool = require("../../db");
 const multer = require("multer");
 const path = require("path");
@@ -23,19 +24,30 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-// Register delivery boy
-router.post("/register",upload.fields([{ name: "profile_pic" }, { name: "bike_photo" }]),
+// ---------------- REGISTER ----------------
+router.post(
+  "/register",
+  upload.fields([{ name: "profile_pic" }, { name: "bike_photo" }]),
   async (req, res) => {
-    const { name, phone, email, address, bike_number, password } = req.body;
+    const { name, phone, email, address, bike_number, password, confirmPassword } = req.body;
 
-    // Cloudinary gives a secure_url (stored in .path by multer-storage-cloudinary)
+    // 1️⃣ Validate passwords
+    if (!password || !confirmPassword) {
+      return res.status(400).json({ error: "Password and confirm password are required" });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: "Passwords do not match" });
+    }
+
+    // 2️⃣ Cloudinary URLs
     const profilePicUrl = req.files?.profile_pic?.[0]?.path || null;
     const bikePhotoUrl = req.files?.bike_photo?.[0]?.path || null;
 
     try {
-      // hash password
+      // 3️⃣ Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
+      // 4️⃣ Insert into DB
       const result = await pool.query(
         `INSERT INTO delivery_boys 
         (name, phone, email, address, profile_pic, bike_number, bike_photo, password, status)
@@ -53,12 +65,51 @@ router.post("/register",upload.fields([{ name: "profile_pic" }, { name: "bike_ph
         ]
       );
 
-      res.status(201).json(result.rows[0]);
+      res.status(201).json({ message: "Registration successful", deliveryBoy: result.rows[0] });
     } catch (err) {
       console.error("Error registering delivery boy:", err);
       res.status(500).json({ error: "Failed to register delivery boy" });
     }
   }
 );
+
+// ---------------- LOGIN ----------------
+router.post("/login", async (req, res) => {
+  const { phone, password } = req.body;
+
+  try {
+    // 1️⃣ Find user by phone
+    const result = await pool.query(
+      "SELECT * FROM delivery_boys WHERE phone = $1",
+      [phone]
+    );
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid phone or password" });
+    }
+
+    const user = result.rows[0];
+
+    // 2️⃣ Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid phone or password" });
+    }
+
+    // 3️⃣ Generate JWT token
+    const token = jwt.sign(
+      { id: user.id, phone: user.phone },
+      process.env.JWT_SECRET || "secretkey", // store securely in .env
+      { expiresIn: "7d" }
+    );
+
+    // 4️⃣ Return user info (excluding password)
+    const { password: _, ...userData } = user;
+
+    res.json({ message: "Login successful", token, user: userData });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Failed to login" });
+  }
+});
 
 module.exports = router;
