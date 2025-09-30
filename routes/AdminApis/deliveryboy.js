@@ -74,17 +74,18 @@ router.post(
 );
 
 // ---------------- LOGIN ----------------
+// ---------------- LOGIN ----------------
 router.post("/login", async (req, res) => {
-  const { phone, password } = req.body;
+  const { email, password } = req.body;
 
   try {
-    // 1️⃣ Find user by phone
+    // 1️⃣ Find user by email
     const result = await pool.query(
-      "SELECT * FROM delivery_boys WHERE phone = $1",
-      [phone]
+      "SELECT * FROM delivery_boys WHERE email = $1",
+      [email]
     );
     if (result.rows.length === 0) {
-      return res.status(400).json({ error: "Invalid phone or password" });
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
     const user = result.rows[0];
@@ -92,13 +93,13 @@ router.post("/login", async (req, res) => {
     // 2️⃣ Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ error: "Invalid phone or password" });
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
     // 3️⃣ Generate JWT token
     const token = jwt.sign(
-      { id: user.id, phone: user.phone },
-      process.env.JWT_SECRET || "secretkey", // store securely in .env
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET || "secretkey",
       { expiresIn: "7d" }
     );
 
@@ -111,5 +112,6 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Failed to login" });
   }
 });
+
 
 module.exports = router;
