@@ -431,8 +431,8 @@ for (const row of breakResult.rows) {
 }
 
 const breakPenaltyResult = await pool.query(
-  `SELECT penalty_amount 
-   FROM breakdeductions 
+  `SELECT break_penalty
+   FROM breakpenalty 
    WHERE employee_id = $1
    ORDER BY created_at DESC
    LIMIT 1`,
