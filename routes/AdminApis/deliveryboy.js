@@ -1,5 +1,5 @@
 const express = require("express");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const pool = require("../../db");
 const multer = require("multer");
 const path = require("path");
