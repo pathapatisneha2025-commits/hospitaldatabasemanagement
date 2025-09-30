@@ -34,13 +34,8 @@ const ManageChallan = require("./routes/AdminApis/managechallan");
 const LeavesDeduction = require("./routes/AdminApis/leavesdeduction"); 
 const Latepenality = require("./routes/AdminApis/latepenalities"); 
 const Breakpenality = require("./routes/AdminApis/breakpenality"); 
-
 const Generateinvoice = require("./routes/AdminApis/generateinvoice"); 
-
-
-
-
-
+const DeliveryBoy = require("./routes/AdminApis/deliveryboy"); 
 
 
 // WebSocket setup
@@ -84,8 +79,8 @@ app.use("/manage-challan",ManageChallan );
 app.use("/leavededuction",LeavesDeduction ); 
 app.use("/latepenalities",Latepenality ); 
 app.use("/breakpenality",Breakpenality ); 
-
 app.use("/invoice",Generateinvoice ); 
+app.use("/deliveryboy",DeliveryBoy ); 
 
 // Start HTTP server
 const server = app.listen(PORT, () => {
