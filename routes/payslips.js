@@ -422,10 +422,11 @@ for (const row of breakResult.rows) {
   const scheduled = row.break_out;   // stored as time in employees
   const actual = row.actual_breakout;
 
-  if (scheduled && actual < scheduled) {
-    const diffMinutes = Math.floor(
-      (new Date(`1970-01-01T${scheduled}`) - new Date(`1970-01-01T${actual}`)) / 60000
-    );
+  if ( actual > scheduled) {
+   const diffMinutes = Math.floor(
+  (new Date(`1970-01-01T${actual}`) - new Date(`1970-01-01T${scheduled}`)) / 60000
+);
+
     totalBreakBlocks += Math.floor(diffMinutes / 5);
   }
 }
