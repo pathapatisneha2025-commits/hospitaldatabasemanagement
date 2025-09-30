@@ -149,7 +149,7 @@ router.post("/assign-delivery", async (req, res) => {
 
     // 3️⃣ Assign delivery boy to order
     await client.query(
-      "UPDATE orders SET delivery_boy_id = $1, status = 'out_for_delivery' WHERE id = $2",
+      "UPDATE orders SET deliveryboy_id = $1, status = 'out_for_delivery' WHERE id = $2",
       [deliveryBoyId, orderId]
     );
 
