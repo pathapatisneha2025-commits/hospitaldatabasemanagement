@@ -125,7 +125,7 @@ router.post("/assign-delivery", async (req, res) => {
 
     // 1️⃣ Check if order exists and not already assigned
     const orderRes = await client.query(
-      "SELECT id, status, delivery_boy_id FROM orders WHERE id = $1",
+      "SELECT id, status, deliveryboy_id FROM orders WHERE id = $1",
       [orderId]
     );
     if (orderRes.rowCount === 0) {
