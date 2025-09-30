@@ -439,7 +439,7 @@ const breakPenaltyResult = await pool.query(
   [employeeId]
 );
 
-const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.penalty_amount) || 0;
+const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.break_penalty) || 0;
 const breakPenalty = totalBreakBlocks * perBreakPenalty;
 
 // 7️⃣ Net Pay (updated with breakPenalty)
