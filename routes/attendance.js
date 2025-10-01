@@ -331,25 +331,26 @@ router.get("/logout/all", async (req, res) => {
       `SELECT * FROM attendance WHERE status = 'Off Duty' ORDER BY timestamp DESC`
     );
 
-    // 2️⃣ Fetch daily summary (current date)
+    // 2️⃣ Fetch daily records for all employees (today)
     const dailyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime
        FROM attendance
        WHERE status = 'Off Duty' AND DATE(timestamp) = CURRENT_DATE
-       ORDER BY timestamp`
+       ORDER BY employee_id, timestamp`
     );
 
-    // 3️⃣ Fetch monthly summary (current month)
+    // 3️⃣ Fetch monthly records for all employees (current month)
     const monthlyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime
        FROM attendance
-       WHERE status = 'Off Duty' AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
-       ORDER BY timestamp`
+       WHERE status = 'Off Duty' 
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+       ORDER BY employee_id, timestamp`
     );
 
     return res.json({
       success: true,
-      message: "Fetched all logout records with daily and monthly summary",
+      message: "Fetched all logout records with daily and monthly summary for all employees",
       data: {
         status: "Off Duty",
         attendance: {
@@ -364,6 +365,7 @@ router.get("/logout/all", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 router.get("/logout/:employeeId", async (req, res) => {
