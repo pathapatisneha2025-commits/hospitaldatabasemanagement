@@ -56,7 +56,7 @@ router.post("/checkout", async (req, res) => {
         expected_delivery, subtotal, delivery_fee, tax, total,
         order_summary, status, created_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'processing', NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending', NOW())
       RETURNING id
     `;
 
@@ -143,6 +143,17 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+// ✅ POST /update-status
+router.post('/update-status', async (req, res) => {
+  const { orderId, status } = req.body;
 
+  try {
+    await pool.query("UPDATE orders SET status = $1 WHERE id = $2", [status, orderId]);
+    res.status(200).json({ message: "Status updated successfully" });
+  } catch (error) {
+    console.error("Failed to update status:", error);
+    res.status(500).json({ message: "Failed to update status" });
+  }
+});
 
 module.exports = router;
