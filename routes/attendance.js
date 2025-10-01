@@ -323,7 +323,6 @@ router.post("/logout", async (req, res) => {
 
 
 
-// ✅ Logout all with daily and monthly summary
 router.get("/logout/all", async (req, res) => {
   try {
     // 1️⃣ Fetch all "Off Duty" records
@@ -335,7 +334,8 @@ router.get("/logout/all", async (req, res) => {
     const dailyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime
        FROM attendance
-       WHERE status = 'Off Duty' AND DATE(timestamp) = CURRENT_DATE
+       WHERE status = 'Off Duty' 
+         AND DATE(timestamp) = CURRENT_DATE
        ORDER BY employee_id, timestamp`
     );
 
@@ -343,7 +343,7 @@ router.get("/logout/all", async (req, res) => {
     const monthlyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime
        FROM attendance
-       WHERE status = 'Off Duty' 
+       WHERE status = 'Off Duty'
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
        ORDER BY employee_id, timestamp`
     );
@@ -355,8 +355,8 @@ router.get("/logout/all", async (req, res) => {
         status: "Off Duty",
         attendance: {
           all: allRes.rows,
-          daily: dailyRes.rows,
-          monthly: monthlyRes.rows,
+          daily: dailyRes.rows,      // Includes all employees for today
+          monthly: monthlyRes.rows,  // Includes all employees for the current month
         },
       },
     });
