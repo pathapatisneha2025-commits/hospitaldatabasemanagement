@@ -336,7 +336,7 @@ router.get("/logout/all", async (req, res) => {
        FROM attendance
        WHERE status = 'Off Duty' 
          AND DATE(timestamp) = CURRENT_DATE
-       ORDER BY employee_id, timestamp`
+       ORDER BY timestamp`
     );
 
     // 3️⃣ Fetch monthly records for all employees (current month)
@@ -345,7 +345,7 @@ router.get("/logout/all", async (req, res) => {
        FROM attendance
        WHERE status = 'Off Duty'
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
-       ORDER BY employee_id, timestamp`
+       ORDER BY timestamp`
     );
 
     return res.json({
