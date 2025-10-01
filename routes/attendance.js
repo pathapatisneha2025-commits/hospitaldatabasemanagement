@@ -326,15 +326,15 @@ router.post("/logout", async (req, res) => {
 
 router.get("/logout/all", async (req, res) => {
   try {
-    // Fetch all logout records
+    // 1️⃣ Fetch all logout records for all employees
     const allRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance 
+       FROM attendance
        WHERE status = 'Off Duty'
        ORDER BY timestamp DESC`
     );
 
-    // Fetch daily logout records (today only in IST)
+    // 2️⃣ Fetch daily logout records (today only in IST)
     const dailyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -343,7 +343,7 @@ router.get("/logout/all", async (req, res) => {
        ORDER BY timestamp DESC`
     );
 
-    // Fetch monthly logout records (current month in IST)
+    // 3️⃣ Fetch monthly logout records (current month in IST)
     const monthlyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -353,6 +353,7 @@ router.get("/logout/all", async (req, res) => {
        ORDER BY timestamp DESC`
     );
 
+    // 4️⃣ Return in same response format
     return res.json({
       success: true,
       message: "Fetched all logout records with daily and monthly summary",
@@ -365,6 +366,7 @@ router.get("/logout/all", async (req, res) => {
         },
       },
     });
+
   } catch (error) {
     console.error("Get logout error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
