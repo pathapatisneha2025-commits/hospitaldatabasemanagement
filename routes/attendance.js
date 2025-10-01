@@ -326,52 +326,111 @@ router.post("/logout", async (req, res) => {
 
 router.get("/logout/all", async (req, res) => {
   try {
-    // 1️⃣ Fetch all logout records for all employees
+    // Helper to format seconds into "X hrs Y mins"
+    const formatHours = (seconds) => {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return `${hrs} hrs ${mins} mins`;
+    };
+
+    // 1️⃣ Fetch all Off Duty records with employee schedule_out
     const allRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty'
-       ORDER BY timestamp DESC`
+      `SELECT a.id, a.employee_id, a.timestamp, a.image_url,
+              e.schedule_out
+       FROM attendance a
+       LEFT JOIN employees e ON a.employee_id = e.id
+       WHERE a.status = 'Off Duty'
+       ORDER BY a.timestamp DESC`
     );
 
-    // 2️⃣ Fetch daily logout records (today only in IST)
-    const dailyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty'
-         AND DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE
-       ORDER BY timestamp DESC`
-    );
+    // Function to calculate remaining_hours and overtime dynamically
+    const processRecord = async (record) => {
+      const lastOnDutyRes = await pool.query(
+        `SELECT timestamp 
+         FROM attendance 
+         WHERE employee_id = $1 AND status = 'On Duty' AND timestamp < $2
+         ORDER BY timestamp DESC
+         LIMIT 1`,
+        [record.employee_id, record.timestamp]
+      );
 
-    // 3️⃣ Fetch monthly logout records (current month in IST)
-    const monthlyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty'
-         AND DATE_PART('year', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = DATE_PART('year', CURRENT_DATE)
-         AND DATE_PART('month', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = DATE_PART('month', CURRENT_DATE)
-       ORDER BY timestamp DESC`
-    );
+      if (lastOnDutyRes.rows.length === 0) {
+        return {
+          ...record,
+          session_hours: "0 hrs 0 mins",
+          remaining_hours: "0 hrs 0 mins",
+          overtime: "0 hrs 0 mins",
+        };
+      }
 
-    // 4️⃣ Return in same response format
+      const onDutyTime = lastOnDutyRes.rows[0].timestamp;
+      const sessionSecondsRes = await pool.query(
+        `SELECT EXTRACT(EPOCH FROM ($1::timestamp AT TIME ZONE 'Asia/Kolkata' - $2::timestamp AT TIME ZONE 'Asia/Kolkata')) AS seconds`,
+        [record.timestamp, onDutyTime]
+      );
+      const sessionSeconds = parseInt(sessionSecondsRes.rows[0].seconds, 10);
+      const session_hours = formatHours(sessionSeconds);
+
+      const totalDaySeconds = 10 * 3600;
+      const remainingSeconds = Math.max(totalDaySeconds - sessionSeconds, 0);
+      const remaining_hours = formatHours(remainingSeconds);
+
+      let overtime = "0 hrs 0 mins";
+      if (record.schedule_out) {
+        const overtimeRes = await pool.query(
+          `SELECT GREATEST(
+            EXTRACT(EPOCH FROM ($1::timestamp AT TIME ZONE 'Asia/Kolkata' - (DATE($1) + $2::time AT TIME ZONE 'Asia/Kolkata'))), 0
+          ) AS overtime_seconds`,
+          [record.timestamp, record.schedule_out]
+        );
+        const overtimeSeconds = parseInt(overtimeRes.rows[0].overtime_seconds, 10);
+        if (overtimeSeconds > 0) overtime = formatHours(overtimeSeconds);
+      }
+
+      return {
+        ...record,
+        session_hours,
+        remaining_hours,
+        overtime,
+      };
+    };
+
+    // 2️⃣ Process all records
+    const allProcessed = await Promise.all(allRes.rows.map(processRecord));
+
+    // 3️⃣ Filter for daily and monthly
+    const dailyProcessed = allProcessed.filter((r) => {
+      const ts = new Date(r.timestamp).toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" });
+      const today = new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" });
+      return ts === today;
+    });
+
+    const monthlyProcessed = allProcessed.filter((r) => {
+      const ts = new Date(r.timestamp).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" });
+      const date = new Date(ts);
+      const now = new Date();
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    });
+
     return res.json({
       success: true,
-      message: "Fetched all logout records with daily and monthly summary",
+      message: "Fetched all logout records with daily and monthly summaries including hours, remaining, and overtime",
       data: {
         status: "Off Duty",
         attendance: {
-          all: allRes.rows,
-          daily: dailyRes.rows,
-          monthly: monthlyRes.rows,
+          all: allProcessed,
+          daily: dailyProcessed,
+          monthly: monthlyProcessed,
         },
       },
     });
 
   } catch (error) {
-    console.error("Get logout error:", error.message);
+    console.error("Get logout all error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 router.get("/logout/:employeeId", async (req, res) => {
