@@ -340,7 +340,7 @@ router.get("/logout/all", async (req, res) => {
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance 
        WHERE status = 'Off Duty'
-         AND DATE(timestamp) = CURRENT_DATE
+AND DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE
        ORDER BY timestamp DESC`
     );
 
@@ -349,7 +349,7 @@ router.get("/logout/all", async (req, res) => {
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance 
        WHERE status = 'Off Duty'
-         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+AND DATE_TRUNC('month', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = DATE_TRUNC('month', CURRENT_DATE)
        ORDER BY timestamp DESC`
     );
 
