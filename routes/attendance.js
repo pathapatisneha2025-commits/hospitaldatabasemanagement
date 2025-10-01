@@ -324,7 +324,6 @@ router.post("/logout", async (req, res) => {
 
 
 
-// ✅ Logout queries with daily + monthly summary (same format as POST /logout)
 router.get("/logout/all", async (req, res) => {
   try {
     // Fetch all logout records
@@ -335,21 +334,22 @@ router.get("/logout/all", async (req, res) => {
        ORDER BY timestamp DESC`
     );
 
-    // Fetch daily logout records (today only)
+    // Fetch daily logout records (today only in IST)
     const dailyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance 
+       FROM attendance
        WHERE status = 'Off Duty'
-AND DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE
+         AND DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE
        ORDER BY timestamp DESC`
     );
 
-    // Fetch monthly logout records (current month)
+    // Fetch monthly logout records (current month in IST)
     const monthlyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance 
+       FROM attendance
        WHERE status = 'Off Duty'
-AND DATE_TRUNC('month', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = DATE_TRUNC('month', CURRENT_DATE)
+         AND DATE_PART('year', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = DATE_PART('year', CURRENT_DATE)
+         AND DATE_PART('month', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = DATE_PART('month', CURRENT_DATE)
        ORDER BY timestamp DESC`
     );
 
@@ -365,7 +365,6 @@ AND DATE_TRUNC('month', timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
         },
       },
     });
-
   } catch (error) {
     console.error("Get logout error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
