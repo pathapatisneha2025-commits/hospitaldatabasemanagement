@@ -373,25 +373,64 @@ router.get("/logout/all", async (req, res) => {
 
 
 
+// ✅ Logout by Employee ID with daily and monthly summaries
 router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const result = await pool.query(
-      `SELECT * FROM attendance WHERE status = 'Off Duty' AND employee_id = $1 ORDER BY timestamp DESC`,
+
+    // 1️⃣ Fetch all "Off Duty" records for this employee
+    const allRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+       ORDER BY timestamp DESC`,
       [employeeId]
     );
 
-    if (result.rows.length === 0) {
+    if (allRes.rows.length === 0) {
       return res
         .status(404)
         .json({ success: false, message: "No logout records found for this employee" });
     }
-    return res.json({ success: true, data: result.rows });
+
+    // 2️⃣ Fetch daily records for this employee (today)
+    const dailyRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+         AND DATE(timestamp) = CURRENT_DATE
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    // 3️⃣ Fetch monthly records for this employee (current month)
+    const monthlyRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    return res.json({
+      success: true,
+      message: "Fetched logout records with daily and monthly summary for this employee",
+      data: {
+        status: "Off Duty",
+        attendance: {
+          all: allRes.rows,
+          daily: dailyRes.rows,
+          monthly: monthlyRes.rows,
+        },
+      },
+    });
   } catch (error) {
     console.error("Get logout by ID error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 router.delete("/logout/delete/:id", async (req, res) => {
   try {
