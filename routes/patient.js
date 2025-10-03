@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const db = require("../db");
 const jwt = require("jsonwebtoken");
-const authenticateJWT = require('../middleware/auth');
+// const authenticateJWT = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -121,7 +121,7 @@ router.get("/all", async (req, res) => {
 });
 
 // GET Patient by ID (Protected)
-router.get("/:id", authenticateJWT, async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
