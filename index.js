@@ -37,6 +37,7 @@ const Breakpenality = require("./routes/AdminApis/breakpenality");
 const Generateinvoice = require("./routes/AdminApis/generateinvoice"); 
 const DeliveryBoy = require("./routes/AdminApis/deliveryboy"); 
 
+require("./cron");
 
 // WebSocket setup
 const WebSocket = require("ws");
