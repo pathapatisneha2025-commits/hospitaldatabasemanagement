@@ -34,7 +34,7 @@ function getNextDates(startDate, endDate, recurringType) {
 async function generateRecurringTasks() {
   try {
     const { rows: tasks } = await pool.query(
-      "SELECT * FROM Admintasks WHERE RecurringType != 'Not Recurring'"
+      "SELECT * FROM admintasks WHERE RecurringType != 'Not Recurring'"
     );
 
     const today = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
@@ -47,13 +47,13 @@ async function generateRecurringTasks() {
 
       // Check if a task already exists for the next occurrence
       const exists = await pool.query(
-        "SELECT * FROM Admintasks WHERE Title=$1 AND StartDate=$2",
+        "SELECT * FROM admintasks WHERE Title=$1 AND StartDate=$2",
         [task.Title, newStart]
       );
 
       if (exists.rows.length === 0) {
         await pool.query(
-          `INSERT INTO Admintasks
+          `INSERT INTO admintasks
             (Title, StartDate, DueDate, AssignedTo, Priority, Project, Collaborators, Attachment, Description, Status, RecurringType)
             VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10, $11)`,
           [
