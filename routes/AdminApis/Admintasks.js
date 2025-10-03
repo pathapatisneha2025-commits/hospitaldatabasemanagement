@@ -39,7 +39,7 @@ router.post("/add", async (req, res) => {
       Array.isArray(assignedTo) ? assignedTo : null,
       priority || null,
       project || null,
-      collaborators || null,
+   Array.isArray(collaborators) ? collaborators : (collaborators ? [collaborators] : null),
       attachment || null,
       description || null,
       status,
