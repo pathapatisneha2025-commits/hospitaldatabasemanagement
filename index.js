@@ -35,6 +35,7 @@ const LeavesDeduction = require("./routes/AdminApis/leavesdeduction");
 const Latepenality = require("./routes/AdminApis/latepenalities"); 
 const Breakpenality = require("./routes/AdminApis/breakpenality"); 
 const Generateinvoice = require("./routes/AdminApis/generateinvoice"); 
+const Billingpatient = require("./routes/billingpatient"); 
 const DeliveryBoy = require("./routes/AdminApis/deliveryboy"); 
 
 require("./cron");
@@ -81,6 +82,7 @@ app.use("/leavededuction",LeavesDeduction );
 app.use("/latepenalities",Latepenality ); 
 app.use("/breakpenality",Breakpenality ); 
 app.use("/invoice",Generateinvoice ); 
+app.use("/billingpatient", Billingpatient ); 
 app.use("/deliveryboy",DeliveryBoy ); 
 
 // Start HTTP server
