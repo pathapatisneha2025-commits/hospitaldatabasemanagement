@@ -1,5 +1,5 @@
 const cron = require("node-cron");
-const pool = require("../db"); // PostgreSQL pool
+const pool = require("./db");
 
 // Helper function to get next occurrence
 function getNextDates(startDate, endDate, recurringType) {
