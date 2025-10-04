@@ -85,7 +85,7 @@ router.get("/all", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query("SELECT * FROM Admintasks WHERE TaskID = $1", [id]);
+    const result = await pool.query("SELECT * FROM Admintasks WHERE id = $1", [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
