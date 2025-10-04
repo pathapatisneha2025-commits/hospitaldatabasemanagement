@@ -5,15 +5,13 @@ const pool = require("../db"); // PostgreSQL connection pool
 // ---------------- CREATE PATIENT ----------------
 router.post("/add", async (req, res) => {
   try {
-    const { name, phone, age } = req.body;
+    const { name, phone, age, gender, address } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ success: false, message: "Name is required" });
-    }
+   
 
     const result = await pool.query(
-      "INSERT INTO billingpatient (name, phone, age) VALUES ($1, $2, $3) RETURNING *",
-      [name, phone || null, age || null]
+      "INSERT INTO billingpatient (name, phone, age, gender, address) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [name, phone || null, age || null, gender || null, address || null]
     );
 
     res.status(201).json({
@@ -59,11 +57,11 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, phone, age } = req.body;
+    const { name, phone, age, gender, address } = req.body;
 
     const result = await pool.query(
-      "UPDATE billingpatient SET name=$1, phone=$2, age=$3 WHERE id=$4 RETURNING *",
-      [name, phone, age, id]
+      "UPDATE billingpatient SET name=$1, phone=$2, age=$3, gender=$4, address=$5 WHERE id=$6 RETURNING *",
+      [name, phone, age, gender, address, id]
     );
 
     if (result.rows.length === 0) {
