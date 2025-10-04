@@ -8,8 +8,8 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
-const JWT_SECRET = process.env.JWT_SECRET;
-const authenticateJWT = require('../middleware/auth');
+// const JWT_SECRET = process.env.JWT_SECRET;
+// const authenticateJWT = require('../middleware/auth');
 
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
@@ -181,7 +181,6 @@ router.post("/update-status", async (req, res) => {
 });
 
 // Employee login
-// routes/auth.js
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -198,25 +197,21 @@ router.post("/login", async (req, res) => {
     }
 
     const isMatch = await bcrypt.compare(password, employee.password);
-    if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
-    // Generate token
-    const token = jwt.sign(
-      { id: employee.id, email: employee.email, role: employee.role },
-      JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-   res.json({
+    // No JWT, just return employee details directly
+    res.json({
       message: "Login successful",
-      employee, // send full employee row directly
-      token
+      employee, // send employee data
     });
   } catch (error) {
     console.error("Login error:", error.message);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
@@ -281,7 +276,7 @@ router.get('/all', async (req, res) => {
 
 // Fetch employee by ID
 
-router.get('/:id', authenticateJWT, async (req, res) => {
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
