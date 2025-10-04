@@ -7,8 +7,6 @@ router.post("/add", async (req, res) => {
   try {
     const { name, phone, age, gender, address } = req.body;
 
-   
-
     const result = await pool.query(
       "INSERT INTO billingpatient (name, phone, age, gender, address) VALUES ($1, $2, $3, $4, $5) RETURNING *",
       [name, phone || null, age || null, gender || null, address || null]
@@ -24,6 +22,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 });
+
 
 // ---------------- GET ALL PATIENTS ----------------
 router.get("/all", async (req, res) => {
