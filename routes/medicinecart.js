@@ -27,6 +27,7 @@ const upload = multer({ storage });
 router.post("/add", upload.array("images", 5), async (req, res) => {
   const {
     patient_id,
+    employeeid, // added employeeid
     name,
     category,
     manufacturer,
@@ -37,18 +38,22 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     stock,
     quantity,
   } = req.body;
+
   const files = req.files || [];
 
   try {
+    // Map uploaded files to their paths
     const imageUrls = files.map((file) => file.path);
 
+    // Insert into cart
     const result = await pool.query(
       `INSERT INTO cart
-       (patient_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       (patient_id, employeeid, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
-        patient_id,
+        patient_id || null,  // either patient_id
+        employeeid || null,  // or employeeid
         name,
         category || null,
         manufacturer || null,
@@ -72,6 +77,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
   }
 });
 
+
 // -------------------- GET ALL CART ITEMS --------------------
 router.get("/all", async (req, res) => {
   try {
@@ -89,6 +95,29 @@ router.get("/:patient_id", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM cart WHERE patient_id = $1", [patient_id]);
     res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching cart items:", err.message);
+    res.status(500).json({ error: "Failed to fetch cart items" });
+  }
+});
+// Get cart items by employeeid
+router.get("/employee/:employeeid", async (req, res) => {
+  const { employeeid } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM cart WHERE employeeid = $1`,
+      [employeeid]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No cart items found for this employee." });
+    }
+
+    res.status(200).json({
+      employeeid,
+      items: result.rows,
+    });
   } catch (err) {
     console.error("Error fetching cart items:", err.message);
     res.status(500).json({ error: "Failed to fetch cart items" });
