@@ -27,6 +27,7 @@ const upload = multer({ storage });
 router.post("/add", upload.array("images", 5), async (req, res) => {
   const {
     patient_id,
+    employee_id, // added employee_id
     name,
     category,
     manufacturer,
@@ -37,6 +38,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     stock,
     quantity,
   } = req.body;
+
   const files = req.files || [];
 
   try {
@@ -44,11 +46,12 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO cart
-       (patient_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       (patient_id, employee_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
-        patient_id,
+        patient_id || null, // either patient_id
+        employee_id || null, // or employee_id
         name,
         category || null,
         manufacturer || null,
@@ -71,6 +74,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     res.status(500).json({ error: "Cart item creation failed" });
   }
 });
+
 
 // -------------------- GET ALL CART ITEMS --------------------
 router.get("/all", async (req, res) => {
