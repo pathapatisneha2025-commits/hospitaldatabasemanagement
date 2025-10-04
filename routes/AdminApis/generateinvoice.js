@@ -21,7 +21,7 @@ function generateInvoiceNo() {
 }
 
 // POST: Generate Invoice (direct PDF response)
-router.post('/generate', authenticateJWT, async (req, res) => {
+router.post('/generate', async (req, res) => {
   try {
     const invoiceData = req.body;
 
