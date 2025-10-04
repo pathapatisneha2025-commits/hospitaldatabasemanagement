@@ -1,6 +1,6 @@
 const express = require('express');
 const PDFDocument = require('pdfkit');
-const pool = require("../../db");
+const pool = require("../../db"); 
 
 const router = express.Router();
 
@@ -49,7 +49,7 @@ router.post('/generate', async (req, res) => {
 
     // Create PDF document
     const doc = new PDFDocument({ margin: 30 });
-    doc.pipe(res);
+    doc.pipe(res); // Pipe directly to response
 
     // Title
     doc.fontSize(20).text('Medicine Store Invoice', { align: 'center' });
@@ -97,7 +97,7 @@ router.post('/generate', async (req, res) => {
     doc.text(`Grand Total: ${invoiceData.grandTotal}`, { align: 'right' });
     doc.text(`Payment Mode: ${invoiceData.paymentMode}`, { align: 'right' });
 
-    // End PDF
+    // End and send PDF
     doc.end();
 
   } catch (error) {
