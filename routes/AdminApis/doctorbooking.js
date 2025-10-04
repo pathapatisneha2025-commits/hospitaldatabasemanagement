@@ -24,10 +24,22 @@ router.post("/add", async (req, res) => {
       paymentType
     } = req.body;
 
-    if (!employeeId || !patientName || !doctorName || !appointmentDate) {
+    if (!employeeId || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
+    // ✅ Check if doctor is already booked for the given date and time
+    const existingAppointment = await pool.query(
+      `SELECT * FROM doctorbooking 
+       WHERE doctor_name = $1 AND appointment_date = $2 AND appointment_time = $3`,
+      [doctorName, appointmentDate, appointmentTime]
+    );
+
+    if (existingAppointment.rows.length > 0) {
+      return res.status(400).json({ error: "Doctor is already booked for this time slot" });
+    }
+
+    // ✅ If not booked, insert new appointment
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         employee_id, patient_name, patient_age, patient_phone,
@@ -59,6 +71,7 @@ router.post("/add", async (req, res) => {
       message: "Appointment created successfully",
       appointment: result.rows[0],
     });
+
   } catch (err) {
     console.error("Error booking appointment:", err);
     res.status(500).json({ error: "Server error" });
