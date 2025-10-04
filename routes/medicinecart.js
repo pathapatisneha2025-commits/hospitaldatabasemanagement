@@ -27,7 +27,6 @@ const upload = multer({ storage });
 router.post("/add", upload.array("images", 5), async (req, res) => {
   const {
     patient_id,
-    employeeid, // added employee_id
     name,
     category,
     manufacturer,
@@ -38,7 +37,6 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     stock,
     quantity,
   } = req.body;
-
   const files = req.files || [];
 
   try {
@@ -46,12 +44,11 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO cart
-       (patient_id, employeeid, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       (patient_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
-        patient_id || null, // either patient_id
-        employeeid || null, // or employee_id
+        patient_id,
         name,
         category || null,
         manufacturer || null,
@@ -75,34 +72,11 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
   }
 });
 
-
 // -------------------- GET ALL CART ITEMS --------------------
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM cart");
     res.status(200).json(result.rows);
-  } catch (err) {
-    console.error("Error fetching cart items:", err.message);
-    res.status(500).json({ error: "Failed to fetch cart items" });
-  }
-});
-router.get("/employee/:employee_id", async (req, res) => {
-  const {  employeeid } = req.params;
-
-  try {
-    const result = await pool.query(
-      `SELECT * FROM cart WHERE employeeid  = $1`,
-      [employee_id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No cart items found for this employee" });
-    }
-
-    res.status(200).json({
-      message: "Cart items retrieved successfully",
-      items: result.rows,
-    });
   } catch (err) {
     console.error("Error fetching cart items:", err.message);
     res.status(500).json({ error: "Failed to fetch cart items" });
