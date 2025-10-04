@@ -37,6 +37,8 @@ const Breakpenality = require("./routes/AdminApis/breakpenality");
 const Generateinvoice = require("./routes/AdminApis/generateinvoice"); 
 const Billingpatient = require("./routes/billingpatient"); 
 const DeliveryBoy = require("./routes/AdminApis/deliveryboy"); 
+const doctorBooking = require("./routes/AdminApis/doctorbooking"); 
+
 
 require("./cron");
 
@@ -84,6 +86,7 @@ app.use("/breakpenality",Breakpenality );
 app.use("/invoice",Generateinvoice ); 
 app.use("/billingpatient", Billingpatient ); 
 app.use("/deliveryboy",DeliveryBoy ); 
+app.use("/doctorbooking",doctorBooking  ); 
 
 // Start HTTP server
 const server = app.listen(PORT, () => {

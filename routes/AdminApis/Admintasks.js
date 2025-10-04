@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db"); // PostgreSQL connection pool
 
+// -------------------- ADD TASK --------------------
 router.post("/add", async (req, res) => {
   try {
     const {
@@ -10,7 +11,6 @@ router.post("/add", async (req, res) => {
       endDate,
       assignedTo,
       priority,
-      project,
       collaborators,
       attachment,
       description,
@@ -27,8 +27,8 @@ router.post("/add", async (req, res) => {
 
     const query = `
       INSERT INTO Admintasks
-      (Title, StartDate, DueDate, AssignedTo, Priority, Project, Collaborators, Attachment, Description, Status, RecurringType)
-      VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10, $11)
+      (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
+      VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)
       RETURNING *;
     `;
 
@@ -38,8 +38,7 @@ router.post("/add", async (req, res) => {
       endDate,
       Array.isArray(assignedTo) ? assignedTo : null,
       priority || null,
-      project || null,
-   Array.isArray(collaborators) ? collaborators : (collaborators ? [collaborators] : null),
+      Array.isArray(collaborators) ? collaborators : (collaborators ? [collaborators] : null),
       attachment || null,
       description || null,
       status,
@@ -51,7 +50,7 @@ router.post("/add", async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Task created successfully",
-      data: result.rows[0] // return raw row directly
+      data: result.rows[0]
     });
 
   } catch (error) {
@@ -63,6 +62,7 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+
 // -------------------- GET ALL TASKS --------------------
 router.get("/all", async (req, res) => {
   try {
@@ -118,7 +118,6 @@ router.put("/update/:id", async (req, res) => {
       endDate,
       assignedTo,
       priority,
-      project,
       collaborators,
       attachment,
       description,
@@ -134,13 +133,12 @@ router.put("/update/:id", async (req, res) => {
         DueDate = $3,
         AssignedTo = $4::text[],
         Priority = $5,
-        Project = $6,
-        Collaborators = $7,
-        Attachment = $8,
-        Description = $9,
-        Status = $10,
-        RecurringType = $11
-      WHERE TaskID = $12
+        Collaborators = $6,
+        Attachment = $7,
+        Description = $8,
+        Status = $9,
+        RecurringType = $10
+      WHERE TaskID = $11
       RETURNING *;
     `;
 
@@ -150,7 +148,6 @@ router.put("/update/:id", async (req, res) => {
       endDate,
       Array.isArray(assignedTo) ? assignedTo : null,
       priority || null,
-      project || null,
       collaborators || null,
       attachment || null,
       description || null,
@@ -210,6 +207,5 @@ router.delete("/delete/:id", async (req, res) => {
     });
   }
 });
-
 
 module.exports = router;

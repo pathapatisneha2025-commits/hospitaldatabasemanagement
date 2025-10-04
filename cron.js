@@ -52,24 +52,24 @@ async function generateRecurringTasks() {
       );
 
       if (exists.rows.length === 0) {
-        await pool.query(
-          `INSERT INTO admintasks
-            (Title, StartDate, DueDate, AssignedTo, Priority, Project, Collaborators, Attachment, Description, Status, RecurringType)
-            VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10, $11)`,
-          [
-            task.Title,
-            newStart,
-            newEnd,
-            task.AssignedTo,
-            task.Priority,
-            task.Project,
-            task.Collaborators,
-            task.Attachment,
-            task.Description,
-            "Not Started",
-            task.RecurringType
-          ]
-        );
+     await pool.query(
+  `INSERT INTO admintasks
+    (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
+    VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`,
+  [
+    task.Title,
+    newStart,
+    newEnd,
+    task.AssignedTo,
+    task.Priority,
+    task.Collaborators,
+    task.Attachment,
+    task.Description,
+    "Not Started",
+    task.RecurringType
+  ]
+);
+
         console.log(`Generated recurring task: ${task.Title} for ${newStart}`);
       }
     }
