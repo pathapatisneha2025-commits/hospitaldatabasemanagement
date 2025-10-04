@@ -66,7 +66,7 @@ router.post("/add", async (req, res) => {
 // -------------------- GET ALL TASKS --------------------
 router.get("/all", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM Admintasks ORDER BY TaskID DESC");
+    const result = await pool.query("SELECT * FROM Admintasks ORDER BY id DESC");
     res.status(200).json({
       success: true,
       data: result.rows
