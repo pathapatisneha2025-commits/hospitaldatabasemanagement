@@ -21,22 +21,39 @@ function generateInvoiceNo() {
 // POST: Generate Invoice (PDF)
 router.post('/generate', async (req, res) => {
   try {
-    const { cartIds, patientName, patientAge, patientPhone, date, subtotal, discount, tax, grandTotal, paymentMode } = req.body;
+    const {
+      cartIds,
+      patientName,
+      patientAge,
+      patientPhone,
+      date,
+      subtotal,
+      discount,
+      tax,
+      grandTotal,
+      paymentMode
+    } = req.body;
 
     if (!cartIds || cartIds.length === 0) {
       return res.status(400).json({ error: "Cart IDs required to generate invoice" });
     }
 
-    // Fetch cart items along with employee IDs
+    // Fetch cart items with employee names, cast employeeid to int
     const cartResult = await pool.query(
-      "SELECT c.*, e.full_name as employee_name FROM cart c LEFT JOIN employees e ON c.employeeid = e.id WHERE c.id = ANY($1)",
+      `SELECT c.*, e.full_name AS employee_name
+       FROM cart c
+       LEFT JOIN employees e ON c.employeeid::int = e.id
+       WHERE c.id = ANY($1)`,
       [cartIds]
     );
 
     const cartItems = cartResult.rows;
 
     // Extract unique employee names
-    const employeeNames = [...new Set(cartItems.map(item => item.employee_name).filter(name => name))].join(", ") || 'Unknown';
+    const employeeNames = [...new Set(cartItems
+      .map(item => item.employee_name)
+      .filter(name => name)
+    )].join(", ") || 'Unknown';
 
     // Generate invoice number
     const invoiceNo = generateInvoiceNo();
