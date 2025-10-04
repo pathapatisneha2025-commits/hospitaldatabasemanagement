@@ -78,10 +78,16 @@ async function generateRecurringTasks() {
   }
 }
 
-// Run every day at midnight
-// Run every minute (for testing)
-cron.schedule("0 0 * * *", () => {
-  console.log("⏰ Running recurring task generator...");
-  generateRecurringTasks();
-});
+// Schedule cron job — runs every day at midnight (Asia/Kolkata time)
+cron.schedule(
+  "0 0 * * *",
+  () => {
+    console.log("⏰ Running recurring task generator (Asia/Kolkata timezone)...");
+    generateRecurringTasks();
+  },
+  {
+    scheduled: true,
+    timezone: "Asia/Kolkata", // ensure it runs according to Indian time
+  }
+);
 
