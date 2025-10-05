@@ -1,7 +1,6 @@
 const cron = require("node-cron");
 const pool = require("./db");
 
-// Helper function to get next occurrence
 function getNextDates(startDate, endDate, recurringType) {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -12,17 +11,14 @@ function getNextDates(startDate, endDate, recurringType) {
       newStart = new Date(start.setDate(start.getDate() + 1));
       newEnd = new Date(end.setDate(end.getDate() + 1));
       break;
-
     case "Weekly":
       newStart = new Date(start.setDate(start.getDate() + 7));
       newEnd = new Date(end.setDate(end.getDate() + 7));
       break;
-
     case "Monthly":
       newStart = new Date(start.setMonth(start.getMonth() + 1));
       newEnd = new Date(end.setMonth(end.getMonth() + 1));
       break;
-
     default:
       return null;
   }
@@ -30,47 +26,47 @@ function getNextDates(startDate, endDate, recurringType) {
   return { newStart, newEnd };
 }
 
-// Function to create recurring tasks
 async function generateRecurringTasks() {
   try {
-    const { rows: tasks } = await pool.query(
-      "SELECT * FROM admintasks WHERE RecurringType != 'Not Recurring'"
-    );
-
-    const today = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
+    // ✅ get only the latest record per Title
+    const { rows: tasks } = await pool.query(`
+      SELECT DISTINCT ON (Title) *
+      FROM admintasks
+      WHERE RecurringType != 'Not Recurring'
+      ORDER BY Title, StartDate DESC
+    `);
 
     for (let task of tasks) {
-      const nextDates = getNextDates(task.StartDate, task.DueDate, task.RecurringType);
+      const nextDates = getNextDates(task.startdate, task.duedate, task.recurringtype);
       if (!nextDates) continue;
 
       const { newStart, newEnd } = nextDates;
+      const newStartDate = newStart.toISOString().split("T")[0];
 
-      // Check if a task already exists for the next occurrence
       const exists = await pool.query(
-        "SELECT * FROM admintasks WHERE Title=$1 AND StartDate=$2",
-        [task.Title, newStart]
+        "SELECT * FROM admintasks WHERE Title=$1 AND DATE(StartDate)=$2",
+        [task.title, newStartDate]
       );
 
       if (exists.rows.length === 0) {
-     await pool.query(
-  `INSERT INTO admintasks
-    (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
-    VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`,
-  [
-    task.Title,
-    newStart,
-    newEnd,
-    task.AssignedTo,
-    task.Priority,
-    task.Collaborators,
-    task.Attachment,
-    task.Description,
-    "Not Started",
-    task.RecurringType
-  ]
-);
-
-        console.log(`Generated recurring task: ${task.Title} for ${newStart}`);
+        await pool.query(
+          `INSERT INTO admintasks
+            (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
+           VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`,
+          [
+            task.title,
+            newStart,
+            newEnd,
+            task.assignedto,
+            task.priority,
+            task.collaborators,
+            task.attachment,
+            task.description,
+            "Not Started",
+            task.recurringtype,
+          ]
+        );
+        console.log(`✅ Generated recurring task: ${task.title} for ${newStartDate}`);
       }
     }
   } catch (err) {
@@ -78,16 +74,11 @@ async function generateRecurringTasks() {
   }
 }
 
-// Schedule cron job — runs every day at midnight (Asia/Kolkata time)
-cron.schedule(
-  "0 0 * * *",
-  () => {
-    console.log("⏰ Running recurring task generator (Asia/Kolkata timezone)...");
-    generateRecurringTasks();
-  },
-  {
-    scheduled: true,
-    timezone: "Asia/Kolkata", // ensure it runs according to Indian time
-  }
-);
+// Run at midnight daily (Asia/Kolkata)
+cron.schedule("0 0 * * *", () => {
+  console.log("⏰ Running recurring task generator...");
+  generateRecurringTasks();
+}, { timezone: "Asia/Kolkata" });
 
+// Run once immediately for testing
+generateRecurringTasks();
