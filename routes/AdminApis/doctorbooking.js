@@ -3,6 +3,18 @@ const pool = require("../../db");
 const router = express.Router();
 
 /* =========================================================
+   🆕 Helper function to generate random 6-character Appointment ID
+========================================================= */
+function generateRandomId(length = 6) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/* =========================================================
     1️⃣ BOOK NEW APPOINTMENT
 ========================================================= */
 router.post("/add", async (req, res) => {
@@ -22,14 +34,14 @@ router.post("/add", async (req, res) => {
       appointmentTime,
       doctorDescription,
       paymentType,
-      doctorConsultantFee     // 🆕 Added
+      doctorConsultantFee
     } = req.body;
 
     if (!employeeId || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
-    // ✅ Check if doctor is already booked for that time slot
+    // ✅ Check if doctor is already booked for that slot
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
        WHERE doctor_name = $1 AND appointment_date = $2 AND appointment_time = $3`,
@@ -40,18 +52,20 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ error: "Doctor is already booked for this time slot" });
     }
 
+    // 🆕 Generate unique appointment ID
+    const appointmentId = generateRandomId(6);
+
     // ✅ Insert new appointment
     const result = await pool.query(
-      `INSERT INTO doctorbooking (
-        employee_id, patient_name, patient_age, patient_phone,
+      `INSERT INTO doctorbooking (id, employee_id, patient_name, patient_age, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
-        appointment_date, appointment_time, payment_type,
-        doctor_consultant_fee
+        appointment_date, appointment_time, payment_type, doctor_consultant_fee
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *`,
       [
+        appointmentId,
         employeeId,
         patientName,
         patientAge,
@@ -114,7 +128,7 @@ router.get("/employee/:employeeId", async (req, res) => {
 });
 
 /* =========================================================
-    4️⃣ GET SINGLE APPOINTMENT BY ID
+    4️⃣ GET SINGLE APPOINTMENT BY DATABASE ID
 ========================================================= */
 router.get("/:id", async (req, res) => {
   try {
@@ -154,7 +168,7 @@ router.put("/update/:id", async (req, res) => {
       appointmentTime,
       doctorDescription,
       paymentType,
-      doctorConsultantFee      // 🆕 Added
+      doctorConsultantFee
     } = req.body;
 
     const result = await pool.query(
