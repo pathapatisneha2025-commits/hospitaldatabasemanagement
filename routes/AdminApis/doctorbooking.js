@@ -21,14 +21,15 @@ router.post("/add", async (req, res) => {
       appointmentDate,
       appointmentTime,
       doctorDescription,
-      paymentType
+      paymentType,
+      doctorConsultantFee     // 🆕 Added
     } = req.body;
 
     if (!employeeId || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
-    // ✅ Check if doctor is already booked for the given date and time
+    // ✅ Check if doctor is already booked for that time slot
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
        WHERE doctor_name = $1 AND appointment_date = $2 AND appointment_time = $3`,
@@ -39,15 +40,16 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ error: "Doctor is already booked for this time slot" });
     }
 
-    // ✅ If not booked, insert new appointment
+    // ✅ Insert new appointment
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         employee_id, patient_name, patient_age, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
-        appointment_date, appointment_time, payment_type
+        appointment_date, appointment_time, payment_type,
+        doctor_consultant_fee
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       RETURNING *`,
       [
         employeeId,
@@ -63,7 +65,8 @@ router.post("/add", async (req, res) => {
         doctorDescription,
         appointmentDate,
         appointmentTime,
-        paymentType
+        paymentType,
+        doctorConsultantFee
       ]
     );
 
@@ -150,7 +153,8 @@ router.put("/update/:id", async (req, res) => {
       appointmentDate,
       appointmentTime,
       doctorDescription,
-      paymentType
+      paymentType,
+      doctorConsultantFee      // 🆕 Added
     } = req.body;
 
     const result = await pool.query(
@@ -160,8 +164,8 @@ router.put("/update/:id", async (req, res) => {
            rating = $7, available_days = $8, available_time = $9,
            doctor_description = $10,
            appointment_date = $11, appointment_time = $12,
-           payment_type = $13
-       WHERE id = $14
+           payment_type = $13, doctor_consultant_fee = $14
+       WHERE id = $15
        RETURNING *`,
       [
         patientName,
@@ -177,6 +181,7 @@ router.put("/update/:id", async (req, res) => {
         appointmentDate,
         appointmentTime,
         paymentType,
+        doctorConsultantFee,
         id
       ]
     );
@@ -216,7 +221,7 @@ router.delete("/delete/:id", async (req, res) => {
 });
 
 /* =========================================================
-    7️⃣ UPDATE STATUS (PENDING → CONFIRMED / COMPLETED / CANCELLED)
+    7️⃣ UPDATE STATUS
 ========================================================= */
 router.put("/:id/status", async (req, res) => {
   try {
