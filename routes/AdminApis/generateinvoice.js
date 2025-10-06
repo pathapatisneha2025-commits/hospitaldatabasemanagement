@@ -3,20 +3,15 @@ const pool = require("../../db");
 
 const router = express.Router();
 
-let invoiceCounter = 1;
-
-/* =========================================================
-   🔢 Helper: Generate Unique Invoice Number
-========================================================= */
 function generateInvoiceNo() {
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
-  const datePart = `${yyyy}${mm}${dd}`;
-  const counterPart = String(invoiceCounter).padStart(3, "0");
-  invoiceCounter++;
-  return `INV${datePart}-${counterPart}`;
+
+  // timestamp + random to ensure uniqueness
+  const uniquePart = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  return `INV${yyyy}${mm}${dd}-${uniquePart}`;
 }
 
 /* =========================================================
