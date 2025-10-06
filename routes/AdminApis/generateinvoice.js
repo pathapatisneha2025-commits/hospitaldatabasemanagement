@@ -21,7 +21,6 @@ function generateInvoiceNo() {
 
 /* =========================================================
    🧾 1️⃣ GENERATE INVOICE (POST)
-   Combines all invoice + items into a single table
 ========================================================= */
 router.post("/generate", async (req, res) => {
   try {
@@ -58,10 +57,9 @@ router.post("/generate", async (req, res) => {
     const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
     const invoiceNo = generateInvoiceNo();
 
-    // Convert medicines to JSON string for single-table storage
     const medicinesJSON = JSON.stringify(medicines);
 
-    // Save invoice with embedded medicine list
+    // Save invoice
     const insertInvoice = await pool.query(
       `INSERT INTO invoices 
        (invoice_no, employee_id, employee_name, patient_name, patient_age, patient_phone, 
@@ -81,7 +79,7 @@ router.post("/generate", async (req, res) => {
       ]
     );
 
-    // Optional: Clear employee's cart after generating invoice
+    // Clear employee's cart
     await pool.query("DELETE FROM cart WHERE employeeid = $1", [employeeId]);
 
     res.json({
@@ -116,83 +114,45 @@ router.get("/all", async (req, res) => {
 });
 
 /* =========================================================
-   3️⃣ GET SINGLE INVOICE BY INVOICE NO
+   3️⃣ GET SINGLE INVOICE BY ID
 ========================================================= */
-router.get("/:invoiceNo", async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
-    const { invoiceNo } = req.params;
+    const { id } = req.params;
 
     const result = await pool.query(
-      `SELECT * FROM invoices WHERE invoice_no = $1`,
-      [invoiceNo]
+      `SELECT * FROM invoices WHERE id = $1`,
+      [id]
     );
 
     if (result.rowCount === 0)
       return res.status(404).json({ success: false, message: "Invoice not found" });
 
     const invoice = result.rows[0];
-    invoice.medicines = JSON.parse(invoice.medicines || "[]");
+    invoice.medicines = typeof invoice.medicines === "string" ? JSON.parse(invoice.medicines) : (invoice.medicines || []);
 
     res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error("Fetch single invoice error:", error.message);
+    console.error("Fetch invoice by ID error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
 /* =========================================================
-   4️⃣ UPDATE PATIENT DETAILS / PAYMENT MODE
+   4 DELETE INVOICE BY ID
 ========================================================= */
-router.put("/update/:invoiceNo", async (req, res) => {
+router.delete("/delete/:id", async (req, res) => {
   try {
-    const { invoiceNo } = req.params;
-    const { patientName, patientAge, patientPhone, paymentMode } = req.body;
+    const { id } = req.params;
 
-    const result = await pool.query(
-      `UPDATE invoices
-       SET patient_name = COALESCE($1, patient_name),
-           patient_age = COALESCE($2, patient_age),
-           patient_phone = COALESCE($3, patient_phone),
-           payment_mode = COALESCE($4, payment_mode)
-       WHERE invoice_no = $5
-       RETURNING *`,
-      [patientName, patientAge, patientPhone, paymentMode, invoiceNo]
-    );
-
-    if (result.rowCount === 0)
-      return res.status(404).json({ success: false, message: "Invoice not found" });
-
-    const updatedInvoice = result.rows[0];
-    updatedInvoice.medicines = JSON.parse(updatedInvoice.medicines || "[]");
-
-    res.json({
-      success: true,
-      message: "Invoice updated successfully",
-      data: updatedInvoice,
-    });
-  } catch (error) {
-    console.error("Update invoice error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
-
-/* =========================================================
-   5️⃣ DELETE INVOICE
-========================================================= */
-router.delete("/delete/:invoiceNo", async (req, res) => {
-  try {
-    const { invoiceNo } = req.params;
-
-    const result = await pool.query(`DELETE FROM invoices WHERE invoice_no = $1 RETURNING *`, [
-      invoiceNo,
-    ]);
+    const result = await pool.query(`DELETE FROM invoices WHERE id = $1 RETURNING *`, [id]);
 
     if (result.rowCount === 0)
       return res.status(404).json({ success: false, message: "Invoice not found" });
 
     res.json({ success: true, message: "Invoice deleted successfully" });
   } catch (error) {
-    console.error("Delete invoice error:", error.message);
+    console.error("Delete invoice by ID error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
