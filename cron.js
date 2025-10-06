@@ -28,13 +28,17 @@ function getNextDates(startDate, endDate, recurringType) {
 
 async function generateRecurringTasks() {
   try {
-    // ✅ get only the latest record per Title
     const { rows: tasks } = await pool.query(`
       SELECT DISTINCT ON (Title) *
       FROM admintasks
       WHERE RecurringType != 'Not Recurring'
       ORDER BY Title, StartDate DESC
     `);
+
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
     for (let task of tasks) {
       const nextDates = getNextDates(task.startdate, task.duedate, task.recurringtype);
@@ -43,30 +47,33 @@ async function generateRecurringTasks() {
       const { newStart, newEnd } = nextDates;
       const newStartDate = newStart.toISOString().split("T")[0];
 
-      const exists = await pool.query(
-        "SELECT * FROM admintasks WHERE Title=$1 AND DATE(StartDate)=$2",
-        [task.title, newStartDate]
-      );
-
-      if (exists.rows.length === 0) {
-        await pool.query(
-          `INSERT INTO admintasks
-            (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
-           VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`,
-          [
-            task.title,
-            newStart,
-            newEnd,
-            task.assignedto,
-            task.priority,
-            task.collaborators,
-            task.attachment,
-            task.description,
-            "Not Started",
-            task.recurringtype,
-          ]
+      // Only create task if newStartDate is exactly tomorrow
+      if (newStartDate === tomorrowStr) {
+        const exists = await pool.query(
+          "SELECT * FROM admintasks WHERE Title=$1 AND DATE(StartDate)=$2",
+          [task.title, newStartDate]
         );
-        console.log(`✅ Generated recurring task: ${task.title} for ${newStartDate}`);
+
+        if (exists.rows.length === 0) {
+          await pool.query(
+            `INSERT INTO admintasks
+              (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
+             VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`,
+            [
+              task.title,
+              newStart,
+              newEnd,
+              task.assignedto,
+              task.priority,
+              task.collaborators,
+              task.attachment,
+              task.description,
+              "Not Started",
+              task.recurringtype,
+            ]
+          );
+          console.log(`✅ Generated recurring task: ${task.title} for ${newStartDate}`);
+        }
       }
     }
   } catch (err) {
