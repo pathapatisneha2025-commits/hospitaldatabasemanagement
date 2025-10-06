@@ -61,7 +61,7 @@ router.get("/all", async (req, res) => {
 /* =========================================================
    3️ GET BREAKS BY EMPLOYEE ID
 ========================================================= */
-router.get("/breaks/:employeeId", async (req, res) => {
+router.get("/employee/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
     const result = await pool.query(
@@ -85,7 +85,7 @@ router.get("/breaks/:employeeId", async (req, res) => {
 /* =========================================================
    5️ UPDATE BREAK STATUS (Manual admin correction)
 ========================================================= */
-router.put("/breaks/:id", async (req, res) => {
+router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -113,7 +113,7 @@ router.put("/breaks/:id", async (req, res) => {
 /* =========================================================
    6️⃣ DELETE BREAK LOG (Admin only)
 ========================================================= */
-router.delete("/breaks/:id", async (req, res) => {
+router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(`DELETE FROM break_logs WHERE id = $1 RETURNING *`, [id]);
