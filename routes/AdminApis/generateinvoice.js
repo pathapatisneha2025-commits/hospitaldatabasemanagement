@@ -50,7 +50,7 @@ router.post("/generate", async (req, res) => {
     }));
 
     const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
-    const invoiceNo = generateInvoiceNo();
+    const invoiceNo = generateInvoiceNo(6);
 
     const medicinesJSON = JSON.stringify(medicines);
 
