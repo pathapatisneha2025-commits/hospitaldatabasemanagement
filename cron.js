@@ -1,70 +1,82 @@
 const cron = require("node-cron");
 const pool = require("./db");
 
-function getNextDates(startDate, endDate, recurringType) {
+/* =========================================================
+   🗓 Helper: Get Only Next Recurring Date
+========================================================= */
+function getNextDates(startDate, recurringType) {
   const start = new Date(startDate);
-  const end = new Date(endDate);
-  let newStart, newEnd;
+  let nextDate = null;
 
   switch (recurringType) {
     case "Daily":
-      newStart = new Date(start.setDate(start.getDate() + 1));
-      newEnd = new Date(end.setDate(end.getDate() + 1));
+      nextDate = new Date(start);
+      nextDate.setDate(start.getDate() + 1);
       break;
+
     case "Weekly":
-      newStart = new Date(start.setDate(start.getDate() + 7));
-      newEnd = new Date(end.setDate(end.getDate() + 7));
+      nextDate = new Date(start);
+      nextDate.setDate(start.getDate() + 7);
       break;
+
     case "Monthly":
-      newStart = new Date(start.setMonth(start.getMonth() + 1));
-      newEnd = new Date(end.setMonth(end.getMonth() + 1));
+      nextDate = new Date(start);
+      nextDate.setMonth(start.getMonth() + 1);
       break;
+
     default:
-      return null;
+      return [];
   }
 
-  return { newStart, newEnd };
+  return [nextDate]; // return array for compatibility
 }
 
-async function generateRecurringTasks() {
+/* =========================================================
+   🕗 Schedule Task Creation - Runs Every Day at 6 AM
+========================================================= */
+cron.schedule("0 6 * * *", async () => {
+  console.log("🕗 Running recurring task generator...");
+
   try {
-    const { rows: tasks } = await pool.query(`
-      SELECT DISTINCT ON (Title) *
-      FROM admintasks
-      WHERE RecurringType != 'Not Recurring'
-      ORDER BY Title, StartDate DESC
-    `);
+    // Fetch all tasks that are recurring
+    const result = await pool.query(
+      "SELECT * FROM tasks WHERE recurringtype IS NOT NULL"
+    );
 
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    const tasks = result.rows;
 
-    for (let task of tasks) {
-      const nextDates = getNextDates(task.startdate, task.duedate, task.recurringtype);
-      if (!nextDates) continue;
+    for (const task of tasks) {
+      const nextDates = getNextDates(task.startdate, task.recurringtype);
 
-      const { newStart, newEnd } = nextDates;
-      const newStartDate = newStart.toISOString().split("T")[0];
+      for (const nextDate of nextDates) {
+        // 🧮 Create new start and due dates (same duration as original)
+        const duration =
+          new Date(task.duedate).getTime() -
+          new Date(task.startdate).getTime();
 
-      // Only create task if newStartDate is exactly tomorrow
-      if (newStartDate === tomorrowStr) {
-        const exists = await pool.query(
-          "SELECT * FROM admintasks WHERE Title=$1 AND DATE(StartDate)=$2",
-          [task.title, newStartDate]
-        );
+        const newStart = new Date(nextDate);
+        const newDue = new Date(nextDate.getTime() + duration);
 
-        if (exists.rows.length === 0) {
+        // Only create for tomorrow (not for same day or beyond)
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+
+        const tomorrowStr = tomorrow.toISOString().split("T")[0];
+        const newStartStr = newStart.toISOString().split("T")[0];
+
+        if (newStartStr === tomorrowStr) {
           await pool.query(
-            `INSERT INTO admintasks
-              (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
-             VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)`,
+            `INSERT INTO tasks 
+             (title, startdate, duedate, assignedto, priority, project, collaborators, attachment, description, status, recurringtype)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
             [
               task.title,
               newStart,
-              newEnd,
+              newDue,
               task.assignedto,
               task.priority,
+              task.project,
               task.collaborators,
               task.attachment,
               task.description,
@@ -72,20 +84,16 @@ async function generateRecurringTasks() {
               task.recurringtype,
             ]
           );
-          console.log(`✅ Generated recurring task: ${task.title} for ${newStartDate}`);
+
+          console.log(`✅ Created next-day task for: ${task.title}`);
+        } else {
+          console.log(`⏩ Skipped ${task.title} (not for tomorrow)`);
         }
       }
     }
+
+    console.log("🎯 Task generation complete.");
   } catch (err) {
-    console.error("Error generating recurring tasks:", err.message);
+    console.error("❌ Error generating recurring tasks:", err);
   }
-}
-
-// Run at midnight daily (Asia/Kolkata)
-cron.schedule("0 0 * * *", () => {
-  console.log("⏰ Running recurring task generator...");
-  generateRecurringTasks();
-}, { timezone: "Asia/Kolkata" });
-
-// Run once immediately for testing
-generateRecurringTasks();
+});
