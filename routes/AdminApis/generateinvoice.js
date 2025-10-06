@@ -74,15 +74,8 @@ router.post('/generate', async (req, res) => {
       totalAmount: totalAmount.toFixed(2)
     };
 
-    // (Optional) Save to database
-    await pool.query(
-      `INSERT INTO invoices 
-         (invoice_no, employee_id, patient_name, patient_age, patient_phone, total_amount, payment_mode, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'Asia/Kolkata')`,
-      [invoiceNo, employeeId, patientName, patientAge, patientPhone, totalAmount, paymentMode]
-    );
-
-    // ✅ Send JSON response
+  
+// ✅ Send JSON response
     res.json({
       success: true,
       message: "Invoice generated successfully",
