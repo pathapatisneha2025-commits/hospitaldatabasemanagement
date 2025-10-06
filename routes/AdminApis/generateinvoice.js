@@ -143,7 +143,7 @@ router.get("/:invoiceNo", async (req, res) => {
 /* =========================================================
    4️⃣ UPDATE PATIENT DETAILS / PAYMENT MODE
 ========================================================= */
-router.put("/:invoiceNo", async (req, res) => {
+router.put("/update/:invoiceNo", async (req, res) => {
   try {
     const { invoiceNo } = req.params;
     const { patientName, patientAge, patientPhone, paymentMode } = req.body;
@@ -179,7 +179,7 @@ router.put("/:invoiceNo", async (req, res) => {
 /* =========================================================
    5️⃣ DELETE INVOICE
 ========================================================= */
-router.delete("/:invoiceNo", async (req, res) => {
+router.delete("/delete/:invoiceNo", async (req, res) => {
   try {
     const { invoiceNo } = req.params;
 
