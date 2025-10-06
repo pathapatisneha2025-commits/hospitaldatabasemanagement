@@ -41,6 +41,92 @@ router.post("/breaks", async (req, res) => {
   }
 });
 
+/* =========================================================
+   2️ GET ALL BREAK LOGS (Admin / HR view)
+========================================================= */
+router.get("/breaks", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, employee_id, break_type, timestamp, image_url, status
+       FROM break_logs
+       ORDER BY timestamp DESC`
+    );
+    res.json({ success: true, count: result.rowCount, data: result.rows });
+  } catch (error) {
+    console.error("Get breaks error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* =========================================================
+   3️ GET BREAKS BY EMPLOYEE ID
+========================================================= */
+router.get("/breaks/:employeeId", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const result = await pool.query(
+      `SELECT id, employee_id, break_type, timestamp, image_url, status
+       FROM break_logs
+       WHERE employee_id = $1
+       ORDER BY timestamp DESC`,
+      [employeeId]
+    );
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ success: false, message: "No break logs found" });
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error("Get employee breaks error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* =========================================================
+   5️ UPDATE BREAK STATUS (Manual admin correction)
+========================================================= */
+router.put("/breaks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ["On Break", "Returned", "Rejected"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status value" });
+    }
+
+    const result = await pool.query(
+      `UPDATE break_logs SET status = $1 WHERE id = $2 RETURNING *`,
+      [status, id]
+    );
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ success: false, message: "Break log not found" });
+
+    res.json({ success: true, message: "Break status updated", data: result.rows[0] });
+  } catch (error) {
+    console.error("Update break error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* =========================================================
+   6️⃣ DELETE BREAK LOG (Admin only)
+========================================================= */
+router.delete("/breaks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`DELETE FROM break_logs WHERE id = $1 RETURNING *`, [id]);
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ success: false, message: "Break log not found" });
+
+    res.json({ success: true, message: "Break log deleted successfully" });
+  } catch (error) {
+    console.error("Delete break error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 // =========================
 // 5️ Summary: present, absent, on break, late (today)
 // =========================
