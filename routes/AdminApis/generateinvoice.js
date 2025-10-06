@@ -101,7 +101,7 @@ router.post("/generate", async (req, res) => {
 /* =========================================================
    2️⃣ GET ALL INVOICES
 ========================================================= */
-router.get("/", async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
     const result = await pool.query(`SELECT * FROM invoices ORDER BY created_at DESC`);
     const data = result.rows.map((row) => ({
