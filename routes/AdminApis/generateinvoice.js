@@ -106,7 +106,7 @@ router.get("/all", async (req, res) => {
     const result = await pool.query(`SELECT * FROM invoices ORDER BY created_at DESC`);
     const data = result.rows.map((row) => ({
       ...row,
-      medicines: JSON.parse(row.medicines || "[]"),
+      medicines: typeof row.medicines === "string" ? JSON.parse(row.medicines) : (row.medicines || []),
     }));
     res.json({ success: true, count: result.rowCount, data });
   } catch (error) {
