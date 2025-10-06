@@ -44,7 +44,7 @@ router.post("/breaks", async (req, res) => {
 /* =========================================================
    2️ GET ALL BREAK LOGS (Admin / HR view)
 ========================================================= */
-router.get("/breaks", async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, employee_id, break_type, timestamp, image_url, status
