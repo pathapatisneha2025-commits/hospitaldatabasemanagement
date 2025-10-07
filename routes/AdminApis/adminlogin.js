@@ -150,28 +150,60 @@ router.get("/:id", async (req, res) => {
 /* =========================================================
    6. Update Admin by ID
 ========================================================= */
+/* =========================================================
+   6. Update Admin by ID (with optional password change)
+========================================================= */
 router.put("/update/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, email, joining_date, phone } = req.body;
+  const { name, email, joining_date, phone, password, confirm_password } = req.body;
 
   try {
-    const result = await pool.query(
-      `UPDATE admin 
-       SET name=$1, email=$2, joining_date=$3, phone=$4 
-       WHERE id=$5 RETURNING *`,
-      [name, email, joining_date, phone, id]
-    );
-
-    if (result.rows.length === 0) {
+    // Check if admin exists
+    const existingAdmin = await pool.query("SELECT * FROM admin WHERE id = $1", [id]);
+    if (existingAdmin.rows.length === 0) {
       return res.status(404).json({ error: "Admin not found" });
     }
 
-    res.json({ success: true, message: "Admin updated successfully", admin: result.rows[0] });
+    let updateQuery;
+    let updateValues;
+
+    // 🧾 If password fields are provided, validate and hash
+    if (password && confirm_password) {
+      if (password !== confirm_password) {
+        return res.status(400).json({ error: "Passwords do not match" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      updateQuery = `
+        UPDATE admin 
+        SET name=$1, email=$2, joining_date=$3, phone=$4, password=$5 
+        WHERE id=$6 
+        RETURNING *`;
+      updateValues = [name, email, joining_date, phone, hashedPassword, id];
+    } else {
+      // 🧾 If no password change
+      updateQuery = `
+        UPDATE admin 
+        SET name=$1, email=$2, joining_date=$3, phone=$4 
+        WHERE id=$5 
+        RETURNING *`;
+      updateValues = [name, email, joining_date, phone, id];
+    }
+
+    const result = await pool.query(updateQuery, updateValues);
+
+    res.json({
+      success: true,
+      message: password ? "Admin  updated successfully" : "Admin updated successfully",
+      admin: result.rows[0],
+    });
   } catch (error) {
     console.error("Error updating admin:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 /* =========================================================
    7. Delete Admin by ID

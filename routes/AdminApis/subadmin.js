@@ -159,23 +159,46 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, joining_date, status } = req.body;
+    const { name, email, phone, joining_date, status, password, confirm_password } = req.body;
 
-    const result = await pool.query(
-      `UPDATE subadmin 
-       SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5 
-       WHERE id = $6 
-       RETURNING *`,
-      [name, email, phone, joining_date, status, id]
-    );
-
-    if (result.rows.length === 0) {
+    // 🧾 Check if subadmin exists
+    const existing = await pool.query("SELECT * FROM subadmin WHERE id = $1", [id]);
+    if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Subadmin not found" });
     }
 
+    let updateQuery;
+    let updateValues;
+
+    // ✅ If password is provided, validate and hash
+    if (password && confirm_password) {
+      if (password !== confirm_password) {
+        return res.status(400).json({ success: false, message: "Passwords do not match" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      updateQuery = `
+        UPDATE subadmin 
+        SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5, password = $6
+        WHERE id = $7 
+        RETURNING *`;
+      updateValues = [name, email, phone, joining_date, status, hashedPassword, id];
+    } else {
+      // ✅ If no password change
+      updateQuery = `
+        UPDATE subadmin 
+        SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5
+        WHERE id = $6 
+        RETURNING *`;
+      updateValues = [name, email, phone, joining_date, status, id];
+    }
+
+    const result = await pool.query(updateQuery, updateValues);
+
     res.status(200).json({
       success: true,
-      message: "Subadmin updated successfully",
+      message: password ? "Subadmin & password updated successfully" : "Subadmin updated successfully",
       data: result.rows[0],
     });
   } catch (error) {
