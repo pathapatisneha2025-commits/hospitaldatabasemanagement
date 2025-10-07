@@ -133,8 +133,7 @@ router.get("/all", async (req, res) => {
 
 router.put("/update-status", async (req, res) => {
   try {
-    const { status } = req.body; // 'approved' or 'rejected'
-    const { id } = req.params;
+    const {id, status } = req.body; // 'approved' or 'rejected'
 
     const result = await pool.query(
       "UPDATE subadmin SET status = $1 WHERE id = $2 RETURNING *",

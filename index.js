@@ -39,6 +39,7 @@ const Billingpatient = require("./routes/billingpatient");
 const DeliveryBoy = require("./routes/AdminApis/deliveryboy"); 
 const doctorBooking = require("./routes/AdminApis/doctorbooking"); 
 const SubAdmin = require("./routes/AdminApis/subadmin"); 
+const AdminLogin = require("./routes/AdminApis/adminlogin"); 
 
 
 require("./cron");
@@ -89,6 +90,7 @@ app.use("/billingpatient", Billingpatient );
 app.use("/deliveryboy",DeliveryBoy ); 
 app.use("/doctorbooking",doctorBooking  ); 
 app.use("/subadmin",SubAdmin ); 
+app.use("/adminlogin",AdminLogin ); 
 
 
 // Start HTTP server
