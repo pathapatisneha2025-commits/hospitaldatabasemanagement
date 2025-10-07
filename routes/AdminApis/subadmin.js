@@ -21,9 +21,11 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      `INSERT INTO subadmin (name, email, password, confirm_password, joining_date, phone)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+     const result = await pool.query(
+      `INSERT INTO subadmin 
+        (name, email, password, confirm_password, joining_date, phone, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'))
+       RETURNING *`,
       [name, email, hashedPassword, hashedPassword, joiningdate || new Date(), phone]
     );
 
