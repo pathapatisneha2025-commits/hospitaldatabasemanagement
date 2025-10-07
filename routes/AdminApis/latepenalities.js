@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db");
 
-// 1️⃣ Add Penalty
+// 1️ Add Penalty
 router.post("/add", async (req, res) => {
   try {
     const { employee_id, employee_name, penalty_amount } = req.body;
@@ -20,7 +20,7 @@ router.post("/add", async (req, res) => {
   }
 });
 
-// 2️⃣ Get All Penalties
+// 2️ Get All Penalties
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM latepenalties ORDER BY created_at DESC");
@@ -31,7 +31,7 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// 3️⃣ Get Penalty by ID (Primary Key)
+// 3️ Get Penalty by ID (Primary Key)
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -51,17 +51,22 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// 4️⃣ Update Penalty Amount
+// 4️.Update Penalty Amount
+
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { penalty_amount } = req.body;
+    const { employee_id, employee_name, penalty_amount } = req.body;
 
     const result = await pool.query(
-      `UPDATE latepenalties 
-       SET penalty_amount = $1, updated_at = NOW() 
-       WHERE id = $2 RETURNING *`,
-      [penalty_amount, id]
+      `UPDATE latepenalties
+       SET employee_id = $1,
+           employee_name = $2,
+           penalty_amount = $3,
+           updated_at = NOW()
+       WHERE id = $4
+       RETURNING *`,
+      [employee_id, employee_name, penalty_amount, id]
     );
 
     if (result.rows.length === 0) {
@@ -75,7 +80,8 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
-// 5️⃣ Delete Penalty
+
+// 5️ Delete Penalty
 router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
