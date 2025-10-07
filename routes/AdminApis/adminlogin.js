@@ -127,6 +127,71 @@ router.get("/all", async (req, res) => {
     console.error("Error fetching admins:", error);
     res.status(500).json({ error: "Server error" });
   }
+});/* =========================================================
+   5. Get Admin by ID
+========================================================= */
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query("SELECT * FROM admin WHERE id = $1", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+
+    res.json({ success: true, admin: result.rows[0] });
+  } catch (error) {
+    console.error("Error fetching admin by ID:", error);
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
+/* =========================================================
+   6. Update Admin by ID
+========================================================= */
+router.put("/update/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, email, joining_date, phone } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE admin 
+       SET name=$1, email=$2, joining_date=$3, phone=$4 
+       WHERE id=$5 RETURNING *`,
+      [name, email, joining_date, phone, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+
+    res.json({ success: true, message: "Admin updated successfully", admin: result.rows[0] });
+  } catch (error) {
+    console.error("Error updating admin:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* =========================================================
+   7. Delete Admin by ID
+========================================================= */
+router.delete("/delete/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query("DELETE FROM admin WHERE id=$1 RETURNING *", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Admin not found" });
+    }
+
+    res.json({ success: true, message: "Admin deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting admin:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 module.exports = router;

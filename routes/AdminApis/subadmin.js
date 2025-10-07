@@ -129,6 +129,84 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+/* ======================================================
+   5. Get Subadmin by ID
+====================================================== */
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query("SELECT * FROM subadmin WHERE id = $1", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Subadmin not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Subadmin fetched successfully",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error fetching subadmin by ID:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ======================================================
+   6. Update Subadmin
+====================================================== */
+router.put("/update/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, joining_date, status } = req.body;
+
+    const result = await pool.query(
+      `UPDATE subadmin 
+       SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5 
+       WHERE id = $6 
+       RETURNING *`,
+      [name, email, phone, joining_date, status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Subadmin not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Subadmin updated successfully",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error updating subadmin:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ======================================================
+   7. Delete Subadmin
+====================================================== */
+router.delete("/delete/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query("DELETE FROM subadmin WHERE id = $1 RETURNING *", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Subadmin not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Subadmin deleted successfully",
+      deleted: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error deleting subadmin:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 
 router.put("/update-status", async (req, res) => {
