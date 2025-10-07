@@ -171,6 +171,19 @@ router.post("/assign-delivery", async (req, res) => {
     client.release();
   }
 });
+// -------------------- GET ALL DELIVERY BOYS --------------------
+router.get("/all", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name, phone, email, address, bike_number, profile_pic, bike_photo, status FROM delivery_boys ORDER BY id ASC"
+    );
+    res.status(200).json({ deliveryBoys: result.rows });
+  } catch (err) {
+    console.error("Error fetching delivery boys:", err);
+    res.status(500).json({ error: "Failed to fetch delivery boys" });
+  }
+});
+
 
 // ✅ Get orders assigned to a specific delivery boy
 router.get("/:deliveryboyId", async (req, res) => {
