@@ -112,6 +112,25 @@ router.put("/forgot-password", async (req, res) => {
   }
 });
 
+/* ======================================================
+   4. Get All Subadmins
+====================================================== */
+router.get("/all", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT id, name, email, phone, joining_date, status, created_at FROM subadmin ORDER BY created_at DESC");
+
+    res.status(200).json({ 
+      success: true, 
+      message: "All subadmins fetched successfully", 
+      data: result.rows 
+    });
+  } catch (error) {
+    console.error("Error fetching subadmins:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 router.put("/update-status", async (req, res) => {
   try {
     const { status } = req.body; // 'approved' or 'rejected'
