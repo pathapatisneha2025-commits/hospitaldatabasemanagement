@@ -21,13 +21,14 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-     const result = await pool.query(
-      `INSERT INTO subadmin 
-        (name, email, password, confirm_password, joining_date, phone, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'))
-       RETURNING *`,
-      [name, email, hashedPassword, hashedPassword, joiningdate || new Date(), phone]
-    );
+    const result = await pool.query(
+  `INSERT INTO subadmin 
+    (name, email, password, confirm_password, joining_date, phone, status, created_at)
+   VALUES ($1, $2, $3, $4, $5, $6, $7, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'))
+   RETURNING *`,
+  [name, email, hashedPassword, hashedPassword, joiningdate || new Date(), phone, 'pending']
+);
+
 
     res.status(201).json({ success: true, message: "Subadmin registered", data: result.rows[0] });
   } catch (error) {
@@ -55,12 +56,20 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid email or password" });
     }
 
+    if (user.status !== 'approved') {
+      return res.status(403).json({ 
+        success: false, 
+        message: `Your account is currently '${user.status}'. Please wait for admin approval.` 
+      });
+    }
+
     res.status(200).json({ success: true, message: "Login successful", user });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 /* ======================================================
     3.Forgot Password
@@ -99,6 +108,27 @@ router.put("/forgot-password", async (req, res) => {
     res.status(200).json({ success: true, message: "Password updated successfully" });
   } catch (error) {
     console.error("Forgot password error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.put("/update-status", async (req, res) => {
+  try {
+    const { status } = req.body; // 'approved' or 'rejected'
+    const { id } = req.params;
+
+    const result = await pool.query(
+      "UPDATE subadmin SET status = $1 WHERE id = $2 RETURNING *",
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Subadmin not found" });
+    }
+
+    res.status(200).json({ success: true, message: `Status updated to ${status}`, data: result.rows[0] });
+  } catch (error) {
+    console.error("Update status error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
