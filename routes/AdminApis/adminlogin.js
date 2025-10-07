@@ -78,28 +78,43 @@ router.post("/login", async (req, res) => {
    3. Forgot Password
 ========================================================= */
 router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
+  const { email, new_password, confirm_password } = req.body;
+
+  // 🧾 Validate input
+  if (!email || !new_password || !confirm_password) {
+    return res.status(400).json({ error: "All fields are required" });
+  }
+
+  if (new_password !== confirm_password) {
+    return res.status(400).json({ error: "Passwords do not match" });
+  }
 
   try {
+    // Check if admin exists
     const result = await pool.query("SELECT * FROM admin WHERE email=$1", [email]);
     const admin = result.rows[0];
 
     if (!admin) return res.status(404).json({ error: "Admin not found" });
 
-    // Generate 6-digit code
-    const resetCode = Math.floor(100000 + Math.random() * 900000);
+    // 🔒 Hash new password
+    const hashedPassword = await bcrypt.hash(new_password, 10);
 
-    // (You can later store this in DB or send via email)
+    // Update password in DB
+    await pool.query("UPDATE admin SET password=$1 WHERE email=$2", [
+      hashedPassword,
+      email,
+    ]);
+
     res.json({
       success: true,
-      message: "Password reset code generated successfully",
-      resetCode,
+      message: "Password updated successfully",
     });
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 /* =========================================================
    4. Get All Admins
