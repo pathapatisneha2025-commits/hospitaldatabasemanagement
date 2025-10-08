@@ -77,7 +77,7 @@ router.post("/generate", async (req, res) => {
     );
 
     // Clear cart
-    await pool.query("DELETE FROM cart WHERE employeeid = $1 OR subadminid = $2", [employeeId || null, subadminId || null]);
+    await pool.query("DELETE FROM cart WHERE employeeid = $1 OR subadmin_id = $2", [employeeId || null, subadminId || null]);
 
     res.json({
       success: true,
