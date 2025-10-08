@@ -134,6 +134,31 @@ router.get("/employee/:employeeid", async (req, res) => {
   }
 });
 
+// -------------------- GET CART ITEMS BY SUBADMIN --------------------
+router.get("/subadmin/:subadmin_id", async (req, res) => {
+  const { subadmin_id } = req.params;
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM cart WHERE subadmin_id = $1",
+      [subadmin_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No cart items found for this subadmin." });
+    }
+
+    res.status(200).json({
+      subadmin_id,
+      items: result.rows,
+    });
+  } catch (err) {
+    console.error("Error fetching cart items for subadmin:", err.message);
+    res.status(500).json({ error: "Failed to fetch cart items" });
+  }
+});
+
+
 // -------------------- UPDATE CART ITEM --------------------
 router.put("/:id", upload.array("images", 5), async (req, res) => {
   const { id } = req.params;
