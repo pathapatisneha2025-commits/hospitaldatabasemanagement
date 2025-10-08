@@ -38,7 +38,7 @@ router.post("/generate", async (req, res) => {
 
     // Fetch cart items (depending on type)
     const cartResult = await pool.query(
-      `SELECT id, name, quantity, price FROM cart WHERE employeeid = $1 OR subadminid = $2`,
+      `SELECT id, name, quantity, price FROM cart WHERE employeeid = $1 OR subadmin_id = $2`,
       [employeeId || null, subadminId || null]
     );
 
