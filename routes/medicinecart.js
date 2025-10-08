@@ -28,6 +28,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
   const {
     patient_id,
     employeeid,
+    subadmin_id,
     name,
     category,
     manufacturer,
@@ -39,26 +40,28 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     quantity,
   } = req.body;
 
-  // Validate that either patient_id OR employeeid is provided, but not both
-  if ((patient_id && employeeid) || (!patient_id && !employeeid)) {
+  // Validate that exactly one of patient_id, employeeid, or subadmin_id is provided
+  const providedIds = [patient_id, employeeid, subadmin_id].filter(id => id);
+  if (providedIds.length !== 1) {
     return res.status(400).json({
-      error: "Provide either patient_id or employeeid, but not both."
+      error: "Provide exactly one of patient_id, employeeid, or subadmin_id."
     });
   }
 
   const files = req.files || [];
 
   try {
-    const imageUrls = files.map((file) => file.path);
+    const imageUrls = files.map(file => file.path);
 
     const result = await pool.query(
       `INSERT INTO cart
-       (patient_id, employeeid, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       (patient_id, employeeid, subadmin_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING *`,
       [
         patient_id || null,
         employeeid || null,
+        subadmin_id || null,
         name,
         category || null,
         manufacturer || null,
@@ -81,6 +84,7 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     res.status(500).json({ error: "Cart item creation failed" });
   }
 });
+
 
 
 

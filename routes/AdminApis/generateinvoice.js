@@ -15,34 +15,38 @@ function generateInvoiceNo() {
 }
 
 /* =========================================================
-   🧾 1️⃣ GENERATE INVOICE (POST)
+    1️ GENERATE INVOICE (POST)
 ========================================================= */
 router.post("/generate", async (req, res) => {
   try {
-    const { employeeId, patientName, patientAge, patientPhone, paymentMode } = req.body;
+    const { employeeId, subadminId, patientName, patientAge, patientPhone, paymentMode } = req.body;
 
-    if (!employeeId) {
-      return res.status(400).json({ success: false, message: "Employee ID is required" });
+    if (!employeeId && !subadminId) {
+      return res.status(400).json({ success: false, message: "Employee ID or Subadmin ID is required" });
     }
 
-    // Fetch full employee name
-    const empResult = await pool.query(
-      "SELECT full_name FROM employees WHERE id = $1",
-      [employeeId]
-    );
-    const employeeName = empResult.rows[0]?.full_name || "Unknown";
+    // Determine the user type
+    if (employeeId) {
+      const empResult = await pool.query("SELECT full_name FROM employees WHERE id = $1", [employeeId]);
+      userName = empResult.rows[0]?.full_name || "Unknown Employee";
+      userId = employeeId;
+    } else if (subadminId) {
+      const subResult = await pool.query("SELECT name FROM subadmin WHERE id = $1", [subadminId]);
+      userName = subResult.rows[0]?.name || "Unknown Subadmin";
+      userId = subadminId;
+    }
 
-    // Fetch cart items
+    // Fetch cart items (depending on type)
     const cartResult = await pool.query(
-      `SELECT id, name, quantity, price FROM cart WHERE employeeid = $1`,
-      [employeeId]
+      `SELECT id, name, quantity, price FROM cart WHERE employeeid = $1 OR subadminid = $2`,
+      [employeeId || null, subadminId || null]
     );
 
     if (cartResult.rowCount === 0) {
       return res.status(404).json({ success: false, message: "No items found in cart" });
     }
 
-    const medicines = cartResult.rows.map((item) => ({
+    const medicines = cartResult.rows.map(item => ({
       name: item.name,
       quantity: item.quantity,
       unitPrice: parseFloat(item.price),
@@ -50,40 +54,35 @@ router.post("/generate", async (req, res) => {
     }));
 
     const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
-    const invoiceNo = generateInvoiceNo(6);
-
-    const medicinesJSON = JSON.stringify(medicines);
+    const invoiceNo = generateInvoiceNo();
 
     // Save invoice
     const insertInvoice = await pool.query(
       `INSERT INTO invoices 
-       (invoice_no, employee_id, employee_name, patient_name, patient_age, patient_phone, 
-        medicines, total_amount, payment_mode, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW() AT TIME ZONE 'Asia/Kolkata')
+       (invoice_no, employee_id, subadmin_id, employee_name, patient_name, patient_age, patient_phone, medicines, total_amount, payment_mode, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW() AT TIME ZONE 'Asia/Kolkata')
        RETURNING *`,
       [
         invoiceNo,
-        employeeId,
-        employeeName,
+        employeeId || null,
+        subadminId || null,
+        userName,
         patientName,
         patientAge,
         patientPhone,
-        medicinesJSON,
+        JSON.stringify(medicines),
         totalAmount,
         paymentMode,
       ]
     );
 
-    // Clear employee's cart
-    await pool.query("DELETE FROM cart WHERE employeeid = $1", [employeeId]);
+    // Clear cart
+    await pool.query("DELETE FROM cart WHERE employeeid = $1 OR subadminid = $2", [employeeId || null, subadminId || null]);
 
     res.json({
       success: true,
       message: "Invoice generated successfully",
-      data: {
-        ...insertInvoice.rows[0],
-        medicines: medicines,
-      },
+      data: { ...insertInvoice.rows[0], medicines },
     });
   } catch (error) {
     console.error("Invoice generation error:", error.message);
@@ -91,8 +90,9 @@ router.post("/generate", async (req, res) => {
   }
 });
 
+
 /* =========================================================
-   2️⃣ GET ALL INVOICES
+   2️ GET ALL INVOICES
 ========================================================= */
 router.get("/all", async (req, res) => {
   try {
@@ -109,7 +109,7 @@ router.get("/all", async (req, res) => {
 });
 
 /* =========================================================
-   3️⃣ GET SINGLE INVOICE BY ID
+   3️ GET SINGLE INVOICE BY ID
 ========================================================= */
 router.get("/:id", async (req, res) => {
   try {
