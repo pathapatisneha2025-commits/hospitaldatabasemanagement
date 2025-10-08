@@ -158,16 +158,18 @@ router.put("/update/:id", async (req, res) => {
   const { name, email, joining_date, phone, password, confirm_password } = req.body;
 
   try {
-    // Check if admin exists
-    const existingAdmin = await pool.query("SELECT * FROM admin WHERE id = $1", [id]);
-    if (existingAdmin.rows.length === 0) {
+    //  Check if admin exists
+    const existingAdminQuery = await pool.query("SELECT * FROM admin WHERE id = $1", [id]);
+    const existingAdmin = existingAdminQuery.rows[0];
+
+    if (!existingAdmin) {
       return res.status(404).json({ error: "Admin not found" });
     }
 
     let updateQuery;
     let updateValues;
 
-    // 🧾 If password fields are provided, validate and hash
+    //  If password fields are provided
     if (password && confirm_password) {
       if (password !== confirm_password) {
         return res.status(400).json({ error: "Passwords do not match" });
@@ -180,29 +182,47 @@ router.put("/update/:id", async (req, res) => {
         SET name=$1, email=$2, joining_date=$3, phone=$4, password=$5 
         WHERE id=$6 
         RETURNING *`;
-      updateValues = [name, email, joining_date, phone, hashedPassword, id];
+
+      //  Keep old joining_date if not provided
+      updateValues = [
+        name || existingAdmin.name,
+        email || existingAdmin.email,
+        joining_date || existingAdmin.joining_date,
+        phone || existingAdmin.phone,
+        hashedPassword,
+        id,
+      ];
     } else {
-      // 🧾 If no password change
+      //  If no password change
       updateQuery = `
         UPDATE admin 
         SET name=$1, email=$2, joining_date=$3, phone=$4 
         WHERE id=$5 
         RETURNING *`;
-      updateValues = [name, email, joining_date, phone, id];
+
+      //  Use old joining_date if new one isn’t sent
+      updateValues = [
+        name || existingAdmin.name,
+        email || existingAdmin.email,
+        joining_date || existingAdmin.joining_date,
+        phone || existingAdmin.phone,
+        id,
+      ];
     }
 
     const result = await pool.query(updateQuery, updateValues);
 
     res.json({
       success: true,
-      message: password ? "Admin  updated successfully" : "Admin updated successfully",
+      message: "Admin updated successfully",
       admin: result.rows[0],
     });
   } catch (error) {
-    console.error("Error updating admin:", error);
+    console.error("❌ Error updating admin:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 /* =========================================================
