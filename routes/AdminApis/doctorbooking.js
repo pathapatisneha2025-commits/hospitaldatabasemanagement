@@ -237,12 +237,13 @@ router.delete("/delete/:id", async (req, res) => {
 /* =========================================================
     7️⃣ UPDATE STATUS
 ========================================================= */
-router.put("/:id/status", async (req, res) => {
+router.put("/status", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
+    const { id, status } = req.body;
 
-    if (!status) return res.status(400).json({ error: "Status required" });
+    // ✅ Validate both fields
+    if (!id) return res.status(400).json({ error: "ID is required" });
+    if (!status) return res.status(400).json({ error: "Status is required" });
 
     const result = await pool.query(
       "UPDATE doctorbooking SET status = $1 WHERE id = $2 RETURNING *",
@@ -261,5 +262,6 @@ router.put("/:id/status", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 module.exports = router;

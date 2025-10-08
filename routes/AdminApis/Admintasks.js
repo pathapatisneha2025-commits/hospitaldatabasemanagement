@@ -138,7 +138,7 @@ router.put("/update/:id", async (req, res) => {
         Description = $8,
         Status = $9,
         RecurringType = $10
-      WHERE TaskID = $11
+      WHERE id = $11
       RETURNING *;
     `;
 
