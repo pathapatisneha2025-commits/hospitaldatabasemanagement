@@ -184,7 +184,7 @@ router.put("/update/:id", async (req, res) => {
 router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query("DELETE FROM Admintasks WHERE TaskID = $1 RETURNING *", [id]);
+    const result = await pool.query("DELETE FROM Admintasks WHERE id = $1 RETURNING *", [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
