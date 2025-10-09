@@ -111,10 +111,11 @@ router.get('/all', async (req, res) => {
 });
 
 // Get appointments by patientId
+// Get appointments by patientId
 router.get('/patient/:patientId', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, doctorId, doctorName, department, date, timeSlot, consultantFees, paymentStatus 
+      `SELECT * 
        FROM appointments 
        WHERE patientId = $1 
        ORDER BY createdAt DESC`,
@@ -125,12 +126,18 @@ router.get('/patient/:patientId', async (req, res) => {
       return res.status(404).json({ error: "No appointments found for this patient" });
     }
 
-    res.json(result.rows);
+    // Return all appointment details
+    res.json({
+      message: "Appointments fetched successfully",
+      total: result.rows.length,
+      appointments: result.rows
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching appointments by patient ID:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ✅ Get appointments by doctorId
 router.get('/doctor/:doctorId', async (req, res) => {
