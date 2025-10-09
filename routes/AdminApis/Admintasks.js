@@ -11,10 +11,8 @@ router.post("/add", async (req, res) => {
       endDate,
       assignedTo,
       priority,
-      collaborators,
       attachment,
       description,
-      status = "Not Started",
       recurringType = "Not Recurring"
     } = req.body;
 
@@ -27,8 +25,8 @@ router.post("/add", async (req, res) => {
 
     const query = `
       INSERT INTO Admintasks
-      (Title, StartDate, DueDate, AssignedTo, Priority, Collaborators, Attachment, Description, Status, RecurringType)
-      VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10)
+      (Title, StartDate, DueDate, AssignedTo, Priority, Attachment, Description, RecurringType)
+      VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8)
       RETURNING *;
     `;
 
@@ -38,10 +36,8 @@ router.post("/add", async (req, res) => {
       endDate,
       Array.isArray(assignedTo) ? assignedTo : null,
       priority || null,
-      Array.isArray(collaborators) ? collaborators : (collaborators ? [collaborators] : null),
       attachment || null,
       description || null,
-      status,
       recurringType
     ];
 
@@ -118,10 +114,8 @@ router.put("/update/:id", async (req, res) => {
       endDate,
       assignedTo,
       priority,
-      collaborators,
       attachment,
       description,
-      status,
       recurringType
     } = req.body;
 
@@ -133,12 +127,10 @@ router.put("/update/:id", async (req, res) => {
         DueDate = $3,
         AssignedTo = $4::text[],
         Priority = $5,
-        Collaborators = $6,
-        Attachment = $7,
-        Description = $8,
-        Status = $9,
-        RecurringType = $10
-      WHERE id = $11
+        Attachment = $6,
+        Description = $7,
+        RecurringType = $8
+      WHERE id = $9
       RETURNING *;
     `;
 
@@ -148,10 +140,8 @@ router.put("/update/:id", async (req, res) => {
       endDate,
       Array.isArray(assignedTo) ? assignedTo : null,
       priority || null,
-      collaborators || null,
       attachment || null,
       description || null,
-      status || "Not Started",
       recurringType || "Not Recurring",
       id
     ];

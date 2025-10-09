@@ -21,6 +21,7 @@ router.post("/add", async (req, res) => {
   try {
     const {
       employeeId,
+      patientId,         // 🆕 Added this line
       patientName,
       patientAge,
       patientPhone,
@@ -37,7 +38,7 @@ router.post("/add", async (req, res) => {
       doctorConsultantFee
     } = req.body;
 
-    if (!employeeId || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
+    if (!employeeId || !patientId || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
@@ -55,18 +56,19 @@ router.post("/add", async (req, res) => {
     // 🆕 Generate unique appointment ID
     const appointmentId = generateRandomId(6);
 
-    // ✅ Insert new appointment
+    // ✅ Insert new appointment including patient_id
     const result = await pool.query(
-      `INSERT INTO doctorbooking (id, employee_id, patient_name, patient_age, patient_phone,
+      `INSERT INTO doctorbooking (id, employee_id, patient_id, patient_name, patient_age, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
         appointment_date, appointment_time, payment_type, doctor_consultant_fee
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING *`,
       [
         appointmentId,
         employeeId,
+        patientId, // 🆕 Added here
         patientName,
         patientAge,
         patientPhone,
@@ -126,6 +128,20 @@ router.get("/employee/:employeeId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+router.get("/patient/:patientId", async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await pool.query(
+      "SELECT * FROM doctorbooking WHERE patient_id = $1 ORDER BY created_at DESC",
+      [patientId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching patient appointments:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 /* =========================================================
     4️⃣ GET SINGLE APPOINTMENT BY DATABASE ID
