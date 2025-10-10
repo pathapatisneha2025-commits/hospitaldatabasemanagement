@@ -62,7 +62,7 @@ router.post('/add', async (req, res) => {
       INSERT INTO appointments
       (id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
        paymentStatus,status, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending' $9, $10, $11, $12, $13, $14, $15, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending', $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
