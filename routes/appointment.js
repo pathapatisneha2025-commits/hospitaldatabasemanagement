@@ -61,8 +61,8 @@ router.post('/add', async (req, res) => {
     const insertQuery = `
       INSERT INTO appointments
       (id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
-       paymentStatus, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14, $15, NOW())
+       paymentStatus,status, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending' $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
@@ -271,6 +271,41 @@ router.delete('/delete/:id', async (req, res) => {
         console.error(err);
         res.status(500).json({ error: "Server error" });
     }
+});
+// -------------------- UPDATE STATUS --------------------
+router.put('/update-status', async (req, res) => {
+  const { id, status } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: "Appointment ID is required" });
+  }
+
+  if (!status) {
+    return res.status(400).json({ error: "Status is required" });
+  }
+
+  try {
+    const updateQuery = `
+      UPDATE appointments
+      SET status = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+
+    const result = await db.query(updateQuery, [status, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    res.json({
+      message: "Appointment status updated successfully",
+      appointment: result.rows[0]
+    });
+  } catch (err) {
+    console.error("Error updating appointment status:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 module.exports = router;
