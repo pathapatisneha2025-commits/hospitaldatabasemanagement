@@ -40,7 +40,7 @@ const DeliveryBoy = require("./routes/AdminApis/deliveryboy");
 const doctorBooking = require("./routes/AdminApis/doctorbooking"); 
 const SubAdmin = require("./routes/AdminApis/subadmin"); 
 const AdminLogin = require("./routes/AdminApis/adminlogin"); 
-const cronRoutes = require("./routes/cron"); // Adjust path if needed
+const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
 
 
