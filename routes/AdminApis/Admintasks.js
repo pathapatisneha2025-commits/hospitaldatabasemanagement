@@ -27,7 +27,7 @@ router.post("/add", async (req, res) => {
     let employeeIds = [];
     if (assignedTo && assignedTo.length > 0) {
       const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
-      const employeeQuery = `SELECT employee_id, email FROM Employees WHERE email IN (${placeholders})`;
+      const employeeQuery = `SELECT id, email FROM Employees WHERE email IN (${placeholders})`;
       const employeeResult = await pool.query(employeeQuery, assignedTo);
       
       employeeIds = employeeResult.rows.map(row => row.employee_id);
