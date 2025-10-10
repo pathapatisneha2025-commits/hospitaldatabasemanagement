@@ -9,7 +9,7 @@ router.post("/add", async (req, res) => {
       title,
       startDate,
       endDate,
-      assignedTo,
+      assignedTo, // array of emails
       priority,
       attachment,
       description,
@@ -23,10 +23,28 @@ router.post("/add", async (req, res) => {
       });
     }
 
+    // 1️⃣ Get employee IDs from emails
+    let employeeIds = [];
+    if (assignedTo && assignedTo.length > 0) {
+      const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
+      const employeeQuery = `SELECT employee_id, email FROM Employees WHERE email IN (${placeholders})`;
+      const employeeResult = await pool.query(employeeQuery, assignedTo);
+      
+      employeeIds = employeeResult.rows.map(row => row.employee_id);
+
+      if (employeeIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid employees found for assigned emails"
+        });
+      }
+    }
+
+    // 2️⃣ Insert the task with both emails and employee IDs
     const query = `
       INSERT INTO Admintasks
-      (Title, StartDate, DueDate, AssignedTo, Priority, Attachment, Description, RecurringType)
-      VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8)
+      (Title, StartDate, DueDate, AssignedTo, EmployeeIDs, Priority, Attachment, Description, RecurringType)
+      VALUES ($1, $2, $3, $4::text[], $5::int[], $6, $7, $8, $9)
       RETURNING *;
     `;
 
@@ -35,6 +53,7 @@ router.post("/add", async (req, res) => {
       startDate,
       endDate,
       Array.isArray(assignedTo) ? assignedTo : null,
+      employeeIds.length ? employeeIds : null,
       priority || null,
       attachment || null,
       description || null,
@@ -58,6 +77,7 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+
 
 // -------------------- GET ALL TASKS --------------------
 router.get("/all", async (req, res) => {
@@ -112,13 +132,30 @@ router.put("/update/:id", async (req, res) => {
       title,
       startDate,
       endDate,
-      assignedTo,
+      assignedTo, // array of emails
       priority,
       attachment,
       description,
       recurringType
     } = req.body;
 
+    // 1️⃣ Get employee IDs from emails
+    let employeeIds = [];
+    if (assignedTo && assignedTo.length > 0) {
+      const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
+      const employeeQuery = `SELECT employee_id, email FROM Employees WHERE email IN (${placeholders})`;
+      const employeeResult = await pool.query(employeeQuery, assignedTo);
+      employeeIds = employeeResult.rows.map(row => row.employee_id);
+
+      if (employeeIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid employees found for assigned emails"
+        });
+      }
+    }
+
+    // 2️⃣ Update the task with both emails and employee IDs
     const query = `
       UPDATE Admintasks
       SET 
@@ -126,11 +163,12 @@ router.put("/update/:id", async (req, res) => {
         StartDate = $2,
         DueDate = $3,
         AssignedTo = $4::text[],
-        Priority = $5,
-        Attachment = $6,
-        Description = $7,
-        RecurringType = $8
-      WHERE id = $9
+        EmployeeIDs = $5::int[],
+        Priority = $6,
+        Attachment = $7,
+        Description = $8,
+        RecurringType = $9
+      WHERE id = $10
       RETURNING *;
     `;
 
@@ -139,6 +177,7 @@ router.put("/update/:id", async (req, res) => {
       startDate,
       endDate,
       Array.isArray(assignedTo) ? assignedTo : null,
+      employeeIds.length ? employeeIds : null,
       priority || null,
       attachment || null,
       description || null,
@@ -160,8 +199,44 @@ router.put("/update/:id", async (req, res) => {
       message: "Task updated successfully",
       data: result.rows[0]
     });
+
   } catch (error) {
     console.error("Error updating task:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+});
+
+// -------------------- GET TASKS BY EMPLOYEE ID --------------------
+router.get("/employee/:employeeId", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    // Query tasks where EmployeeIDs array contains the given employeeId
+    const query = `
+      SELECT *
+      FROM Admintasks
+      WHERE $1 = ANY(EmployeeIDs)
+      ORDER BY id DESC
+    `;
+    const result = await pool.query(query, [employeeId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No tasks found for this employee"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error("Error fetching tasks by employee ID:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error",
