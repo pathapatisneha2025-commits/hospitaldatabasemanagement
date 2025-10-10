@@ -1,104 +1,92 @@
-const cron = require("node-cron");
-const pool = require("./db");
+// routes/cron.js
+const express = require("express");
+const router = express.Router();
+const pool = require("../../db"); // adjust path if needed
 
-/* =========================================================
-   🗓 Helper: Get Only Next Recurring Date
-========================================================= */
-function getNextDates(startDate, recurringType) {
-  const start = new Date(startDate);
-  let nextDate = null;
+// 🔐 Optional security key to protect endpoint
+const CRON_SECRET = process.env.CRON_SECRET || "my_secret_key";
 
-  switch (recurringType) {
-    case "Daily":
-      nextDate = new Date(start);
-      nextDate.setDate(start.getDate() + 1);
-      break;
-
-    case "Weekly":
-      nextDate = new Date(start);
-      nextDate.setDate(start.getDate() + 7);
-      break;
-
-    case "Monthly":
-      nextDate = new Date(start);
-      nextDate.setMonth(start.getMonth() + 1);
-      break;
-
-    default:
-      return [];
-  }
-
-  return [nextDate]; // return array for compatibility
-}
-
-/* =========================================================
-   🕗 Schedule Task Creation - Runs Every Day at 6 AM Asia/Kolkata
-========================================================= */
-cron.schedule(
-  "0 6 * * *",
-  async () => {
-    console.log("🕗 Running recurring task generator...");
-
-    try {
-      // Fetch all recurring tasks
-      const result = await pool.query(
-        "SELECT * FROM tasks WHERE recurringtype IS NOT NULL"
-      );
-      const tasks = result.rows;
-
-      for (const task of tasks) {
-        const nextDates = getNextDates(task.startdate, task.recurringtype);
-
-        for (const nextDate of nextDates) {
-          const duration =
-            new Date(task.duedate).getTime() - new Date(task.startdate).getTime();
-
-          const newStart = new Date(nextDate);
-          const newDue = new Date(nextDate.getTime() + duration);
-
-          // Only create task if it is for tomorrow in Asia/Kolkata
-          const today = new Date();
-          const istOffset = 5.5 * 60; // IST = UTC+5:30
-          const istToday = new Date(today.getTime() + istOffset * 60 * 1000);
-          const tomorrow = new Date(istToday);
-          tomorrow.setDate(istToday.getDate() + 1);
-
-          const tomorrowStr = tomorrow.toISOString().split("T")[0];
-          const newStartStr = newStart.toISOString().split("T")[0];
-
-          if (newStartStr === tomorrowStr) {
-            await pool.query(
-              `INSERT INTO tasks 
-               (title, startdate, duedate, assignedto, priority, project, collaborators, attachment, description, status, recurringtype)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-              [
-                task.title,
-                newStart,
-                newDue,
-                task.assignedto,
-                task.priority,
-                task.project,
-                task.collaborators,
-                task.attachment,
-                task.description,
-                "Not Started",
-                task.recurringtype,
-              ]
-            );
-
-            console.log(`✅ Created next-day task for: ${task.title}`);
-          } else {
-            console.log(`⏩ Skipped ${task.title} (not for tomorrow)`);
-          }
-        }
-      }
-
-      console.log("🎯 Task generation complete.");
-    } catch (err) {
-      console.error("❌ Error generating recurring tasks:", err);
+// -------------------- RUN RECURRING TASKS --------------------
+router.get("/run-task", async (req, res) => {
+  try {
+    // ✅ Optional: verify secret key
+    const { secret } = req.query;
+    if (secret !== CRON_SECRET) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
     }
-  },
-  {
-    timezone: "Asia/Kolkata", // <--- set timezone here
+
+    console.log("Cron job triggered:", new Date());
+
+    // 🧠 Fetch all recurring tasks from DB
+    const recurringTasks = await pool.query(
+      `SELECT * FROM Admintasks WHERE RecurringType != 'Not Recurring'`
+    );
+
+    if (recurringTasks.rows.length === 0) {
+      return res.status(200).json({ success: true, message: "No recurring tasks found" });
+    }
+
+    // Loop through each recurring task and check if it needs to be recreated
+    for (const task of recurringTasks.rows) {
+      const { id, title, startdate, duedate, recurringtype } = task;
+
+      // Example recurrence logic
+      const now = new Date();
+      const dueDate = new Date(duedate);
+
+      // 🗓️ If the due date has passed, create a new one based on recurring type
+      if (now >= dueDate) {
+        let newStart, newEnd;
+
+        if (recurringtype === "Daily") {
+          newStart = new Date(dueDate.setDate(dueDate.getDate() + 1));
+          newEnd = new Date(newStart);
+          newEnd.setDate(newStart.getDate() + 1);
+        } else if (recurringtype === "Weekly") {
+          newStart = new Date(dueDate.setDate(dueDate.getDate() + 7));
+          newEnd = new Date(newStart);
+          newEnd.setDate(newStart.getDate() + 7);
+        } else if (recurringtype === "Monthly") {
+          newStart = new Date(dueDate.setMonth(dueDate.getMonth() + 1));
+          newEnd = new Date(newStart);
+          newEnd.setMonth(newStart.getMonth() + 1);
+        } else {
+          continue; // Skip if not a recognized type
+        }
+
+        // 🆕 Create a new recurring task entry
+        const insertQuery = `
+          INSERT INTO Admintasks (Title, StartDate, DueDate, AssignedTo, Priority, Attachment, Description, RecurringType)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `;
+
+        await pool.query(insertQuery, [
+          title,
+          newStart,
+          newEnd,
+          task.assignedto,
+          task.priority,
+          task.attachment,
+          task.description,
+          task.recurringtype,
+        ]);
+
+        console.log(`Recurring task duplicated: ${title} (${recurringtype})`);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Recurring task check completed successfully",
+    });
+  } catch (error) {
+    console.error("Error running recurring task:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
   }
-);
+});
+
+module.exports = router;
