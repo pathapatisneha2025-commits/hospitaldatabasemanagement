@@ -9,7 +9,6 @@ const CRON_SECRET = process.env.CRON_SECRET || "my_secret_key";
 // -------------------- RUN RECURRING TASKS --------------------
 router.get("/run-task", async (req, res) => {
   try {
-    // ✅ Optional: verify secret key
     const { secret } = req.query;
     if (secret !== CRON_SECRET) {
       return res.status(403).json({ success: false, message: "Unauthorized" });
@@ -17,7 +16,7 @@ router.get("/run-task", async (req, res) => {
 
     console.log("Cron job triggered:", new Date());
 
-    // 🧠 Fetch all recurring tasks from DB
+    // 🧠 Fetch all recurring tasks
     const recurringTasks = await pool.query(
       `SELECT * FROM Admintasks WHERE RecurringType != 'Not Recurring'`
     );
@@ -26,66 +25,79 @@ router.get("/run-task", async (req, res) => {
       return res.status(200).json({ success: true, message: "No recurring tasks found" });
     }
 
-    // Loop through each recurring task and check if it needs to be recreated
-    for (const task of recurringTasks.rows) {
-      const { id, title, startdate, duedate, recurringtype } = task;
+    const now = new Date();
 
-      // Example recurrence logic
-      const now = new Date();
+    for (const task of recurringTasks.rows) {
+      const { id, title, startdate, duedate, recurringtype, assignedto, priority, attachment, description } = task;
+
       const dueDate = new Date(duedate);
 
-      // 🗓️ If the due date has passed, create a new one based on recurring type
+      // ✅ Only create a new task if current date is past dueDate
       if (now >= dueDate) {
-        let newStart, newEnd;
 
-        if (recurringtype === "Daily") {
-          newStart = new Date(dueDate.setDate(dueDate.getDate() + 1));
-          newEnd = new Date(newStart);
-          newEnd.setDate(newStart.getDate() + 1);
-        } else if (recurringtype === "Weekly") {
-          newStart = new Date(dueDate.setDate(dueDate.getDate() + 7));
-          newEnd = new Date(newStart);
-          newEnd.setDate(newStart.getDate() + 7);
-        } else if (recurringtype === "Monthly") {
-          newStart = new Date(dueDate.setMonth(dueDate.getMonth() + 1));
-          newEnd = new Date(newStart);
-          newEnd.setMonth(newStart.getMonth() + 1);
-        } else {
-          continue; // Skip if not a recognized type
+        // Calculate next start and end date without mutating original
+        let newStart = new Date(startdate);
+        let newEnd;
+
+        switch (recurringtype) {
+          case "Daily":
+            newStart.setDate(newStart.getDate() + 1);
+            newEnd = new Date(newStart);
+            newEnd.setDate(newEnd.getDate() + 1);
+            break;
+
+          case "Weekly":
+            newStart.setDate(newStart.getDate() + 7);
+            newEnd = new Date(newStart);
+            newEnd.setDate(newEnd.getDate() + 7);
+            break;
+
+          case "Monthly":
+            newStart.setMonth(newStart.getMonth() + 1);
+            newEnd = new Date(newStart);
+            newEnd.setMonth(newEnd.getMonth() + 1);
+            break;
+
+          default:
+            continue; // skip if unrecognized
         }
 
-        // 🆕 Create a new recurring task entry
-        const insertQuery = `
-          INSERT INTO Admintasks (Title, StartDate, DueDate, AssignedTo, Priority, Attachment, Description, RecurringType)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `;
+        // 🔎 Check if task for the next start date already exists
+        const existing = await pool.query(
+          `SELECT 1 FROM Admintasks WHERE title=$1 AND startdate=$2`,
+          [title, newStart]
+        );
 
-        await pool.query(insertQuery, [
-          title,
-          newStart,
-          newEnd,
-          task.assignedto,
-          task.priority,
-          task.attachment,
-          task.description,
-          task.recurringtype,
-        ]);
+        if (existing.rowCount === 0) {
+          // 🆕 Insert new recurring task
+          const insertQuery = `
+            INSERT INTO Admintasks 
+            (Title, StartDate, DueDate, AssignedTo, Priority, Attachment, Description, RecurringType)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          `;
 
-        console.log(`Recurring task duplicated: ${title} (${recurringtype})`);
+          await pool.query(insertQuery, [
+            title,
+            newStart,
+            newEnd,
+            assignedto,
+            priority,
+            attachment,
+            description,
+            recurringtype,
+          ]);
+
+          console.log(`Recurring task created: ${title} (${recurringtype})`);
+        } else {
+          console.log(`Recurring task already exists: ${title} (${recurringtype})`);
+        }
       }
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Recurring task check completed successfully",
-    });
+    res.status(200).json({ success: true, message: "Recurring task check completed successfully" });
   } catch (error) {
     console.error("Error running recurring task:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 });
 
