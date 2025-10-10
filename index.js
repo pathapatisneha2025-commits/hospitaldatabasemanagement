@@ -40,9 +40,9 @@ const DeliveryBoy = require("./routes/AdminApis/deliveryboy");
 const doctorBooking = require("./routes/AdminApis/doctorbooking"); 
 const SubAdmin = require("./routes/AdminApis/subadmin"); 
 const AdminLogin = require("./routes/AdminApis/adminlogin"); 
+const cronRoutes = require("./routes/cron"); // Adjust path if needed
 
 
-require("./cron");
 
 // WebSocket setup
 const WebSocket = require("ws");
@@ -91,7 +91,7 @@ app.use("/deliveryboy",DeliveryBoy );
 app.use("/doctorbooking",doctorBooking  ); 
 app.use("/subadmin",SubAdmin ); 
 app.use("/adminlogin",AdminLogin ); 
-
+app.use("/cron", cronRoutes);
 
 // Start HTTP server
 const server = app.listen(PORT, () => {
