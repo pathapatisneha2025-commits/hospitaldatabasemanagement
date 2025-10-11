@@ -143,7 +143,7 @@ router.get('/patient/:patientId', async (req, res) => {
 router.get('/doctor/:doctorId', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees, paymentStatus, patientId, name, age, gender, bloodGroup, reason 
+      `SELECT id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees, paymentStatus,status, patientId, name, age, gender, bloodGroup, reason 
        FROM appointments 
        WHERE doctorId = $1 
        ORDER BY createdAt DESC`,

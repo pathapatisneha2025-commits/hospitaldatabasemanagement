@@ -21,7 +21,7 @@ router.post("/add", async (req, res) => {
   try {
     const {
       employeeId,
-      doctorId,           // 🆕 Added doctorId
+      doctorId,
       patientId,
       patientName,
       patientAge,
@@ -42,7 +42,7 @@ router.post("/add", async (req, res) => {
     // ✅ Validate required fields
     if (
       !employeeId ||
-      !doctorId ||             // 🆕 Added doctorId check
+      !doctorId ||
       !patientId ||
       !patientName ||
       !doctorName ||
@@ -52,7 +52,7 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
-    // ✅ Check if doctor is already booked for that slot
+    // ✅ Check for duplicate booking
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
        WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3`,
@@ -66,21 +66,22 @@ router.post("/add", async (req, res) => {
     // 🆕 Generate unique appointment ID
     const appointmentId = generateRandomId(6);
 
-    // ✅ Insert new appointment including doctor_id and patient_id
+    // ✅ Insert new appointment including doctor_id, patient_id, and status = 'pending'
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         id, employee_id, doctor_id, patient_id,
         patient_name, patient_age, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
-        appointment_date, appointment_time, payment_type, doctor_consultant_fee
+        appointment_date, appointment_time, payment_type, doctor_consultant_fee,
+        status
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending')
       RETURNING *`,
       [
         appointmentId,
         employeeId,
-        doctorId,          // 🆕 Added doctorId in insert
+        doctorId,
         patientId,
         patientName,
         patientAge,
@@ -109,6 +110,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 /* =========================================================
     2️⃣ GET ALL APPOINTMENTS
@@ -279,7 +281,7 @@ router.delete("/delete/:id", async (req, res) => {
 /* =========================================================
     7️⃣ UPDATE STATUS
 ========================================================= */
-router.put("/status", async (req, res) => {
+router.put("/update-status", async (req, res) => {
   try {
     const { id, status } = req.body;
 
