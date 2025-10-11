@@ -13,18 +13,19 @@ router.post("/add", async (req, res) => {
       experience,
       description,
       consultance_fee,
+      email, // ✅ added email
     } = req.body;
 
-    if (!doctor_name || !department || !consultance_fee) {
+    if (!doctor_name || !department || !consultance_fee || !email) {
       return res
         .status(400)
-        .json({ error: "doctor_name, department, and consultance_fee are required" });
+        .json({ error: "doctor_name, department, consultance_fee, and email are required" });
     }
 
     const query = `
       INSERT INTO doctor_fees 
-      (doctor_name, department, role, gender, experience, description, consultance_fee)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      (doctor_name, department, role, gender, experience, description, consultance_fee, email)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *;
     `;
     const values = [
@@ -35,12 +36,13 @@ router.post("/add", async (req, res) => {
       experience,
       description,
       consultance_fee,
+      email, // ✅ added email
     ];
     const result = await pool.query(query, values);
 
     res.status(201).json({
       message: "Doctor consultation fee added successfully",
-      doctor: result.rows[0], // includes auto-generated id
+      doctor: result.rows[0],
     });
   } catch (error) {
     console.error("Error inserting doctor fee:", error);
@@ -88,6 +90,7 @@ router.put("/update/:id", async (req, res) => {
       experience,
       description,
       consultance_fee,
+      email, // ✅ added email
     } = req.body;
 
     const query = `
@@ -98,8 +101,9 @@ router.put("/update/:id", async (req, res) => {
           gender = COALESCE($4, gender),
           experience = COALESCE($5, experience),
           description = COALESCE($6, description),
-          consultance_fee = COALESCE($7, consultance_fee)
-      WHERE id = $8
+          consultance_fee = COALESCE($7, consultance_fee),
+          email = COALESCE($8, email)
+      WHERE id = $9
       RETURNING *;
     `;
     const values = [
@@ -110,6 +114,7 @@ router.put("/update/:id", async (req, res) => {
       experience,
       description,
       consultance_fee,
+      email, // ✅ added email
       id,
     ];
     const result = await pool.query(query, values);
