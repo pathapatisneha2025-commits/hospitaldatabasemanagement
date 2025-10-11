@@ -21,7 +21,8 @@ router.post("/add", async (req, res) => {
   try {
     const {
       employeeId,
-      patientId,         // 🆕 Added this line
+      doctorId,           // 🆕 Added doctorId
+      patientId,
       patientName,
       patientAge,
       patientPhone,
@@ -38,15 +39,24 @@ router.post("/add", async (req, res) => {
       doctorConsultantFee
     } = req.body;
 
-    if (!employeeId || !patientId || !patientName || !doctorName || !appointmentDate || !appointmentTime) {
+    // ✅ Validate required fields
+    if (
+      !employeeId ||
+      !doctorId ||             // 🆕 Added doctorId check
+      !patientId ||
+      !patientName ||
+      !doctorName ||
+      !appointmentDate ||
+      !appointmentTime
+    ) {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
     // ✅ Check if doctor is already booked for that slot
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
-       WHERE doctor_name = $1 AND appointment_date = $2 AND appointment_time = $3`,
-      [doctorName, appointmentDate, appointmentTime]
+       WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3`,
+      [doctorId, appointmentDate, appointmentTime]
     );
 
     if (existingAppointment.rows.length > 0) {
@@ -56,19 +66,22 @@ router.post("/add", async (req, res) => {
     // 🆕 Generate unique appointment ID
     const appointmentId = generateRandomId(6);
 
-    // ✅ Insert new appointment including patient_id
+    // ✅ Insert new appointment including doctor_id and patient_id
     const result = await pool.query(
-      `INSERT INTO doctorbooking (id, employee_id, patient_id, patient_name, patient_age, patient_phone,
+      `INSERT INTO doctorbooking (
+        id, employee_id, doctor_id, patient_id,
+        patient_name, patient_age, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
         appointment_date, appointment_time, payment_type, doctor_consultant_fee
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       RETURNING *`,
       [
         appointmentId,
         employeeId,
-        patientId, // 🆕 Added here
+        doctorId,          // 🆕 Added doctorId in insert
+        patientId,
         patientName,
         patientAge,
         patientPhone,
@@ -142,6 +155,19 @@ router.get("/patient/:patientId", async (req, res) => {
   }
 });
 
+router.get("/doctor/:doctorId", async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const result = await pool.query(
+      "SELECT * FROM doctorbooking WHERE doctor_id = $1 ORDER BY created_at DESC",
+      [doctorId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching doctor appointments:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 /* =========================================================
     4️⃣ GET SINGLE APPOINTMENT BY DATABASE ID
