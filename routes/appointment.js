@@ -54,20 +54,32 @@ router.post('/add', async (req, res) => {
       return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
     }
 
-    // Generate random alphanumeric ID for appointment
-    const appointmentId = generateRandomId(6);
+    // ✅ Generate DAILY incremental ID based on date
+    const lastAppointmentQuery = `
+      SELECT dailyId 
+      FROM appointments 
+      WHERE date = $1 
+      ORDER BY dailyId DESC 
+      LIMIT 1
+    `;
+    const lastAppointment = await db.query(lastAppointmentQuery, [date]);
+
+    let nextDailyId = 1; // start from 1001 each day
+    if (lastAppointment.rows.length > 0) {
+      nextDailyId = parseInt(lastAppointment.rows[0].dailyid, 10) + 1;
+    }
 
     // Insert appointment
     const insertQuery = `
       INSERT INTO appointments
-      (id, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
-       paymentStatus,status, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
+      (dailyId, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
+       paymentStatus, status, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending', $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
     const values = [
-      appointmentId,
+      nextDailyId,
       doctorId,
       doctorName,
       experience,
