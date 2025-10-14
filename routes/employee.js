@@ -244,7 +244,7 @@ router.post('/forgot-password', async (req, res) => {
     // 4. Update password in database
     await pool.query(
       'UPDATE employees SET password = $1 WHERE id = $2 AND email = $3',
-      [hashedPassword, employeeId, email]
+      [hashedPassword, email]
     );
 
     res.json({ message: 'Password updated successfully' });
