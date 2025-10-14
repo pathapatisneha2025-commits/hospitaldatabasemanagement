@@ -53,22 +53,22 @@ router.post("/add", async (req, res) => {
 
     // ✅ Generate DAILY incremental ID (based on appointment_date)
     const lastAppointment = await pool.query(
-      `SELECT id FROM doctorbooking 
+      `SELECT daily_id FROM doctorbooking 
        WHERE appointment_date = $1
-       ORDER BY id DESC 
+       ORDER BY daily_id DESC 
        LIMIT 1`,
       [appointmentDate] // this ensures it's based on the date being booked
     );
 
     let nextDailyId = 1001; //  start from 1001 each day
     if (lastAppointment.rows.length > 0) {
-nextDailyId = parseInt(lastAppointment.rows[0].id, 10) + 1;
+nextDailyId = parseInt(lastAppointment.rows[0].daily_id, 10) + 1;
     }
 
     // ✅ Insert the appointment
     const result = await pool.query(
       `INSERT INTO doctorbooking (
-        id, employee_id, doctor_id, patient_id,
+        daily_id, employee_id, doctor_id, patient_id,
         patient_name, patient_age, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
