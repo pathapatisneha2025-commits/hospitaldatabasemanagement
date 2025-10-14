@@ -216,11 +216,11 @@ router.post("/login", async (req, res) => {
 
 
 router.post('/forgot-password', async (req, res) => {
-  const { employeeId, email, newPassword, confirmNewPassword } = req.body;
+  const {  email, newPassword, confirmNewPassword } = req.body;
 
   try {
     // 1. Validate input
-    if (!employeeId || !email || !newPassword || !confirmNewPassword) {
+    if ( !email || !newPassword || !confirmNewPassword) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
