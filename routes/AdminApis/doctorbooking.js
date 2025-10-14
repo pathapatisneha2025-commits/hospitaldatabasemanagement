@@ -55,7 +55,7 @@ router.post("/add", async (req, res) => {
     const lastAppointment = await pool.query(
       `SELECT id FROM doctorbooking 
        WHERE appointment_date = $1
-       ORDER BY daily_id DESC 
+       ORDER BY id DESC 
        LIMIT 1`,
       [appointmentDate] // this ensures it's based on the date being booked
     );
