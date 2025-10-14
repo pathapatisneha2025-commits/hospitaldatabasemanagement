@@ -71,32 +71,32 @@ router.post('/add', async (req, res) => {
       return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
     }
 
-    // ✅ Generate DAILY incremental ID based on date
+    // ✅ Generate TOKEN incremental ID based on date
     const lastAppointmentQuery = `
-      SELECT dailyid 
+      SELECT tokenid 
       FROM appointments 
       WHERE date = $1 
-      ORDER BY dailyid DESC 
+      ORDER BY tokenid DESC 
       LIMIT 1
     `;
     const lastAppointment = await db.query(lastAppointmentQuery, [date]);
 
-    let nextDailyId = 1; // start from 1 each day
+    let nextTokenId = 1; // start from 1 each day
     if (lastAppointment.rows.length > 0) {
-      nextDailyId = parseInt(lastAppointment.rows[0].dailyid, 10) + 1;
+      nextTokenId = parseInt(lastAppointment.rows[0].tokenid, 10) + 1;
     }
 
-    // ✅ Insert appointment with dailyid
+    // ✅ Insert appointment with tokenid
     const insertQuery = `
       INSERT INTO appointments
-      (dailyid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
+      (tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
        paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, createdat)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending', $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
     const values = [
-      nextDailyId,
+      nextTokenId,
       doctorId,
       doctorName,
       experience,
@@ -124,6 +124,7 @@ router.post('/add', async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
