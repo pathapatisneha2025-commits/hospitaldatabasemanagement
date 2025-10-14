@@ -17,11 +17,11 @@ function generateRandomId(length = 6) {
 // -------------------- CREATE (POST) --------------------
 router.post('/add', async (req, res) => {
   const {
-    doctorId,       
-    doctorName,     
-    experience,     
-    department,    
-    consultantFees, 
+    doctorId,
+    doctorName,
+    experience,
+    department,
+    consultantFees,
     date,
     timeSlot,
     patientId,
@@ -33,22 +33,39 @@ router.post('/add', async (req, res) => {
     patientPhone
   } = req.body;
 
-  // Validate request
-  if (!doctorId || !doctorName || !experience || !department || !consultantFees ||
-      !date || !timeSlot || !patientId || !name || !age || !gender || !bloodGroup || !reason || !patientPhone) {
+  // ✅ Validate request
+  if (
+    !doctorId ||
+    !doctorName ||
+    !experience ||
+    !department ||
+    !consultantFees ||
+    !date ||
+    !timeSlot ||
+    !patientId ||
+    !name ||
+    !age ||
+    !gender ||
+    !bloodGroup ||
+    !reason ||
+    !patientPhone
+  ) {
     return res.status(400).json({ error: "All fields including patientPhone are required!" });
   }
 
   try {
-    // Verify doctor exists
+    // ✅ Verify doctor exists
     const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
     const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
     if (doctorCheck.rows.length === 0) {
       return res.status(404).json({ error: "Doctor ID does not exist in doctor_fees" });
     }
 
-    // Check for double booking
-    const checkQuery = `SELECT * FROM appointments WHERE doctorId = $1 AND date = $2 AND timeSlot = $3`;
+    // ✅ Check for double booking
+    const checkQuery = `
+      SELECT * FROM appointments 
+      WHERE doctorid = $1 AND date = $2 AND timeslot = $3
+    `;
     const existing = await db.query(checkQuery, [doctorId, date, timeSlot]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
@@ -56,24 +73,24 @@ router.post('/add', async (req, res) => {
 
     // ✅ Generate DAILY incremental ID based on date
     const lastAppointmentQuery = `
-      SELECT dailyId 
+      SELECT dailyid 
       FROM appointments 
       WHERE date = $1 
-      ORDER BY dailyId DESC 
+      ORDER BY dailyid DESC 
       LIMIT 1
     `;
     const lastAppointment = await db.query(lastAppointmentQuery, [date]);
 
-    let nextDailyId = 1; // start from 1001 each day
+    let nextDailyId = 1; // start from 1 each day
     if (lastAppointment.rows.length > 0) {
       nextDailyId = parseInt(lastAppointment.rows[0].dailyid, 10) + 1;
     }
 
-    // Insert appointment
+    // ✅ Insert appointment with dailyid
     const insertQuery = `
       INSERT INTO appointments
-      (dailyId, doctorId, doctorName, yearsOfExperience, department, date, timeSlot, consultantFees,
-       paymentStatus, status, patientId, name, age, gender, bloodGroup, reason, patientPhone, createdAt)
+      (dailyid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
+       paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, createdat)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending', $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
@@ -107,6 +124,7 @@ router.post('/add', async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
