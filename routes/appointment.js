@@ -81,7 +81,7 @@ router.post('/add', async (req, res) => {
     `;
     const lastAppointment = await db.query(lastAppointmentQuery, [date]);
 
-    let nextTokenId = 1; // start from 1 each day
+    let nextTokenId = 501; // start from 1 each day
     if (lastAppointment.rows.length > 0) {
       nextTokenId = parseInt(lastAppointment.rows[0].tokenid, 10) + 1;
     }
