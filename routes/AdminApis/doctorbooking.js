@@ -2,21 +2,7 @@ const express = require("express");
 const pool = require("../../db");
 const router = express.Router();
 
-/* =========================================================
-   🆕 Helper function to generate random 6-character Appointment ID
-========================================================= */
-function generateRandomId(length = 6) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
 
-/* =========================================================
-    1️⃣ BOOK NEW APPOINTMENT
-========================================================= */
 router.post("/add", async (req, res) => {
   try {
     const {
@@ -36,7 +22,7 @@ router.post("/add", async (req, res) => {
       appointmentTime,
       doctorDescription,
       paymentType,
-      doctorConsultantFee
+      doctorConsultantFee,
     } = req.body;
 
     // ✅ Validate required fields
@@ -52,7 +38,7 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
-    // ✅ Check for duplicate booking
+    // ✅ Check for duplicate booking for that doctor, date, and time
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
        WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3`,
@@ -60,13 +46,26 @@ router.post("/add", async (req, res) => {
     );
 
     if (existingAppointment.rows.length > 0) {
-      return res.status(400).json({ error: "Doctor is already booked for this time slot" });
+      return res
+        .status(400)
+        .json({ error: "Doctor is already booked for this time slot" });
     }
 
-    // 🆕 Generate unique appointment ID
-    const appointmentId = generateRandomId(6);
+    // ✅ Generate DAILY incremental ID (based on appointment_date)
+    const lastAppointment = await pool.query(
+      `SELECT id FROM doctorbooking 
+       WHERE appointment_date = $1
+       ORDER BY daily_id DESC 
+       LIMIT 1`,
+      [appointmentDate] // this ensures it's based on the date being booked
+    );
 
-    // ✅ Insert new appointment including doctor_id, patient_id, and status = 'pending'
+    let nextDailyId = 1001; //  start from 1001 each day
+    if (lastAppointment.rows.length > 0) {
+      nextDailyId = lastAppointment.rows[0].daily_id + 1;
+    }
+
+    // ✅ Insert the appointment
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         id, employee_id, doctor_id, patient_id,
@@ -79,7 +78,7 @@ router.post("/add", async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending')
       RETURNING *`,
       [
-        appointmentId,
+        nextDailyId,
         employeeId,
         doctorId,
         patientId,
@@ -96,7 +95,7 @@ router.post("/add", async (req, res) => {
         appointmentDate,
         appointmentTime,
         paymentType,
-        doctorConsultantFee
+        doctorConsultantFee,
       ]
     );
 
@@ -104,7 +103,6 @@ router.post("/add", async (req, res) => {
       message: "Appointment created successfully",
       appointment: result.rows[0],
     });
-
   } catch (err) {
     console.error("Error booking appointment:", err);
     res.status(500).json({ error: "Server error" });
