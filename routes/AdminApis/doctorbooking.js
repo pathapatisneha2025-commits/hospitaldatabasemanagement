@@ -62,7 +62,7 @@ router.post("/add", async (req, res) => {
 
     let nextDailyId = 1001; //  start from 1001 each day
     if (lastAppointment.rows.length > 0) {
-      nextDailyId = lastAppointment.rows[0].daily_id + 1;
+      nextDailyId = lastAppointment.rows[0].id + 1;
     }
 
     // ✅ Insert the appointment
