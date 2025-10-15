@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../db"); // PostgreSQL or MySQL connection instance
+const db = require("../../db"); // PostgreSQL or MySQL connection instance
 
 // --------------------------------------
 //  Add Doctor Visit Record
