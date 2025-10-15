@@ -87,6 +87,40 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// -------------------
+// Doctor Forgot Password
+// -------------------
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email, newPassword, confirmNewPassword } = req.body;
+
+    // Validate fields
+    if (!email || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ error: "Passwords do not match" });
+    }
+
+    // Check if doctor exists
+    const doctor = await db.query("SELECT * FROM doctors WHERE email=$1", [email]);
+    if (doctor.rows.length === 0) {
+      return res.status(404).json({ error: "Doctor not found with this email" });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await db.query("UPDATE doctors SET password=$1 WHERE email=$2", [hashedPassword, email]);
+
+    res.json({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // -------------------
 // Get All Doctors
