@@ -163,7 +163,7 @@ router.get("/:id", async (req, res) => {
 // -------------------
 // Update Doctor (with optional password)
 // -------------------
-router.put("/:id", async (req, res) => {
+router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, phoneNumber, department, scheduleIn, scheduleOut, password } = req.body;
@@ -197,7 +197,7 @@ router.put("/:id", async (req, res) => {
 // -------------------
 // Delete Doctor
 // -------------------
-router.delete("/:id", async (req, res) => {
+router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
