@@ -41,6 +41,7 @@ const doctorBooking = require("./routes/AdminApis/doctorbooking");
 const SubAdmin = require("./routes/AdminApis/subadmin"); 
 const AdminLogin = require("./routes/AdminApis/adminlogin"); 
 const EmpPharmacypasswords = require("./routes/AdminApis/pharmacypassword"); 
+const DoctorModule = require("./routes/doctor"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
@@ -94,6 +95,7 @@ app.use("/doctorbooking",doctorBooking  );
 app.use("/subadmin",SubAdmin ); 
 app.use("/adminlogin",AdminLogin ); 
 app.use("/pharmacypassword",EmpPharmacypasswords ); 
+app.use("/doctor",DoctorModule); 
 
 app.use("/cron", cronRoutes);
 
