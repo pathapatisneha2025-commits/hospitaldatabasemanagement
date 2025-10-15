@@ -1,6 +1,6 @@
 // routes/doctorRoutes.js
 const express = require("express");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const db = require("../db"); // Import db connection
 
 const router = express.Router();
