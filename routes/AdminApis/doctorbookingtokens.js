@@ -21,7 +21,9 @@ router.post("/add", async (req, res) => {
       [doctor_email, doctor_name, number_of_visits_per_day, dateToUse]
     );
 
-    res.json({ message: "Visit record added successfully" });
+    res.json({ message: "Visit record added successfully",    
+          data: result.rows[0] // the inserted record
+ });
   } catch (error) {
     console.error("Error adding visit record:", error);
     res.status(500).json({ message: "Server error" });
