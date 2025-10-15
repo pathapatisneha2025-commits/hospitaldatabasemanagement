@@ -42,7 +42,7 @@ const SubAdmin = require("./routes/AdminApis/subadmin");
 const AdminLogin = require("./routes/AdminApis/adminlogin"); 
 const EmpPharmacypasswords = require("./routes/AdminApis/pharmacypassword"); 
 const DoctorModule = require("./routes/doctor"); 
-const Doctorbookingtoken = require("./routes/doctorbookingtokens"); 
+const Doctorbookingtoken = require("./routes/AdminApis/doctorbookingtokens"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
