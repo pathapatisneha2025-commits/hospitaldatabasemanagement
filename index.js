@@ -43,6 +43,7 @@ const AdminLogin = require("./routes/AdminApis/adminlogin");
 const EmpPharmacypasswords = require("./routes/AdminApis/pharmacypassword"); 
 const DoctorModule = require("./routes/doctor"); 
 const Doctorbookingtoken = require("./routes/AdminApis/doctorbookingtokens"); 
+const Doctorrequest = require("./routes/AdminApis/doctorrequest"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
@@ -98,6 +99,7 @@ app.use("/adminlogin",AdminLogin );
 app.use("/pharmacypassword",EmpPharmacypasswords ); 
 app.use("/doctor",DoctorModule); 
 app.use("/doctorbookingtoken",Doctorbookingtoken); 
+app.use("/doctorrequest",Doctorrequest); 
 
 app.use("/cron", cronRoutes);
 
