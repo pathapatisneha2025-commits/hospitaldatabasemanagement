@@ -5,7 +5,7 @@ const router = express.Router();
 /* ===========================
    CREATE NEW DOCTOR REQUEST
 =========================== */
-router.post("/", async (req, res) => {
+router.post("/add", async (req, res) => {
   try {
     const { name, department, query_reason } = req.body;
 
@@ -32,7 +32,7 @@ router.post("/", async (req, res) => {
 /* ===========================
    GET ALL REQUESTS
 =========================== */
-router.get("/", async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
     const result = await db.query(
       "SELECT * FROM doctor_requests ORDER BY created_at DESC"
@@ -69,7 +69,7 @@ router.get("/:id", async (req, res) => {
 /* ===========================
    UPDATE REQUEST DETAILS
 =========================== */
-router.put("/:id", async (req, res) => {
+router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, department, query_reason } = req.body;
@@ -100,10 +100,10 @@ router.put("/:id", async (req, res) => {
 /* ===========================
    UPDATE STATUS (Admin Only)
 =========================== */
-router.put("/:id/status", async (req, res) => {
+router.put("/status", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
+    
+    const {id, status } = req.body;
 
     if (!["pending", "complete", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
@@ -128,7 +128,7 @@ router.put("/:id/status", async (req, res) => {
 /* ===========================
    DELETE REQUEST
 =========================== */
-router.delete("/:id", async (req, res) => {
+router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
