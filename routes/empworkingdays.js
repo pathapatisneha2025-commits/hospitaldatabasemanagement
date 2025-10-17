@@ -1,23 +1,23 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../db"); // your PostgreSQL connection file
+const db = require("../db"); // PostgreSQL connection
 
 /* ===============================
    ADD NEW EMPLOYEE WORKING DAYS
 ================================ */
 router.post("/add", async (req, res) => {
   try {
-    const { employee_id, month, working_days } = req.body;
+    const { employee_name, email, working_days } = req.body;
 
-    if (!employee_id || !month || !working_days) {
+    if (!employee_name || !email || !working_days) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
     const result = await db.query(
-      `INSERT INTO employee_working_days (employee_id, month, working_days)
+      `INSERT INTO employee_working_days (employee_name, email, working_days)
        VALUES ($1, $2, $3)
        RETURNING *`,
-      [employee_id, month, working_days]
+      [employee_name, email, working_days]
     );
 
     res.status(201).json({
@@ -73,18 +73,18 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { employee_id, month, working_days } = req.body;
+    const { employee_name, email, working_days } = req.body;
 
-    if (!employee_id || !month || !working_days) {
+    if (!employee_name || !email || !working_days) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
     const result = await db.query(
       `UPDATE employee_working_days
-       SET employee_id = $1, month = $2, working_days = $3, updated_at = NOW()
+       SET employee_name = $1, email = $2, working_days = $3, updated_at = NOW()
        WHERE id = $4
        RETURNING *`,
-      [employee_id, month, working_days, id]
+      [employee_name, email, working_days, id]
     );
 
     if (result.rows.length === 0) {
@@ -127,5 +127,26 @@ router.delete("/delete/:id", async (req, res) => {
   }
 });
 
+/* ===============================
+   FETCH BY EMAIL
+================================ */
+router.get("/email/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const result = await db.query(
+      `SELECT * FROM employee_working_days WHERE email = $1 ORDER BY id DESC`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No records found for this email" });
+    }
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching by email:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+});
 
 module.exports = router;
