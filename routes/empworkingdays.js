@@ -9,17 +9,30 @@ router.post("/add", async (req, res) => {
   try {
     const { employee_name, email, working_days } = req.body;
 
+    // 1️⃣ Validate input
     if (!employee_name || !email || !working_days) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "employee_name, email, and working_days are required" });
     }
 
-    const result = await db.query(
-      `INSERT INTO employee_working_days (employee_name, email, working_days)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [employee_name, email, working_days]
-    );
+    // 2️⃣ Fetch employee_id from employees table using email
+    const employeeQuery = `SELECT id FROM employees WHERE email = $1`;
+    const employeeResult = await db.query(employeeQuery, [email]);
 
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ message: "Employee not found with the provided email" });
+    }
+
+    const employee_id = employeeResult.rows[0].id;
+
+    // 3️⃣ Insert into employee_working_days (store employee_id as well)
+    const insertQuery = `
+      INSERT INTO employee_working_days (employee_id, employee_name, email, working_days)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+    const result = await db.query(insertQuery, [employee_id, employee_name, email, working_days]);
+
+    // 4️⃣ Respond success
     res.status(201).json({
       message: "Employee working days added successfully",
       data: result.rows[0],
@@ -29,6 +42,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 });
+
 
 /* ===============================
    FETCH ALL RECORDS

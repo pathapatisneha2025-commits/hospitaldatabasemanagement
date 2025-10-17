@@ -114,14 +114,14 @@ router.post("/salary-deduction", async (req, res) => {
     const currentYear = now.getFullYear();
     const totalDaysInMonth = new Date(currentYear, now.getMonth() + 1, 0).getDate();
 
-    // 3️⃣ Fetch working days using email
-    const workResult = await pool.query(
-      `SELECT working_days 
-       FROM employee_working_days 
-       WHERE email = $1 
-       LIMIT 1`,
-      [email]
-    );
+ // 3️⃣ Fetch working days using employee_id
+const workResult = await pool.query(
+  `SELECT working_days 
+   FROM employee_working_days 
+   WHERE employee_id = $1 
+   LIMIT 1`,
+  [employeeId]
+);
 
     let workingDays = 0;
     if (workResult.rows.length > 0) {
