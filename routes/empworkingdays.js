@@ -81,6 +81,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+
 /* ===============================
    UPDATE RECORD
 ================================ */
@@ -89,17 +90,29 @@ router.put("/update/:id", async (req, res) => {
     const { id } = req.params;
     const { employee_name, email, working_days } = req.body;
 
+    // 1️⃣ Validate input
     if (!employee_name || !email || !working_days) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "employee_name, email, and working_days are required" });
     }
 
-    const result = await db.query(
-      `UPDATE employee_working_days
-       SET employee_name = $1, email = $2, working_days = $3, updated_at = NOW()
-       WHERE id = $4
-       RETURNING *`,
-      [employee_name, email, working_days, id]
-    );
+    // 2️⃣ Fetch employee_id from employees table using email
+    const employeeQuery = `SELECT id FROM employees WHERE email = $1`;
+    const employeeResult = await db.query(employeeQuery, [email]);
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ message: "Employee not found with the provided email" });
+    }
+
+    const employee_id = employeeResult.rows[0].id;
+
+    // 3️⃣ Update the record including employee_id
+    const updateQuery = `
+      UPDATE employee_working_days
+      SET employee_id = $1, employee_name = $2, email = $3, working_days = $4, updated_at = NOW()
+      WHERE id = $5
+      RETURNING *;
+    `;
+    const result = await db.query(updateQuery, [employee_id, employee_name, email, working_days, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Record not found" });
@@ -114,6 +127,7 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 });
+
 
 /* ===============================
    DELETE RECORD
