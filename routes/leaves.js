@@ -98,7 +98,7 @@ router.post("/salary-deduction", async (req, res) => {
   try {
     const { employeeId, employeeName, leaveDuration, startDate, endDate } = req.body;
 
-    // 1️⃣ Fetch employee salary from employees table
+    // 1️⃣ Fetch employee salary
     const employeeResult = await pool.query(
       "SELECT monthly_salary FROM employees WHERE id = $1",
       [employeeId]
@@ -108,19 +108,32 @@ router.post("/salary-deduction", async (req, res) => {
 
     const monthlySalary = parseFloat(employeeResult.rows[0].monthly_salary);
 
-    // 2️⃣ Fetch leave policy
-    const policyResult = await pool.query(
-      `SELECT number_of_leaves AS allowed_leaves
-       FROM leave_policies
-       WHERE employee_id = $1`,
-      [employeeId]
+    // 2️⃣ Get current month and total days in month
+    const now = new Date();
+    const currentMonth = now.toLocaleString("default", { month: "long" });
+    const currentYear = now.getFullYear();
+    const totalDaysInMonth = new Date(currentYear, now.getMonth() + 1, 0).getDate();
+
+    // 3️⃣ Fetch working days for the employee from employee_working_days table
+    const workResult = await pool.query(
+      `SELECT working_days 
+       FROM employee_working_days 
+       WHERE employee_id = $1 AND month = $2 LIMIT 1`,
+      [employeeId, `${currentMonth} ${currentYear}`]
     );
-    if (policyResult.rows.length === 0)
-      return res.status(404).json({ message: "No leave policy found" });
 
-    const paidLeaves = parseFloat(policyResult.rows[0].allowed_leaves);
+    let workingDays = 0;
+    if (workResult.rows.length > 0) {
+      workingDays = parseInt(workResult.rows[0].working_days, 10);
+    } else {
+      // Default fallback if no record found
+      workingDays = totalDaysInMonth;
+    }
 
-    // 3️⃣ Convert leave duration to days
+    // 4️⃣ Calculate paid leaves = total days - working days
+    const paidLeaves = totalDaysInMonth - workingDays;
+
+    // 5️⃣ Convert leave duration to days
     let equivalentLeaveDays = 0;
     const workingHoursPerDay = 10;
     if (leaveDuration.toLowerCase() === "hourly") {
@@ -133,7 +146,7 @@ router.post("/salary-deduction", async (req, res) => {
         (new Date(endDate).setHours(0,0,0,0) - new Date(startDate).setHours(0,0,0,0)) / (1000 * 60 * 60 * 24) + 1;
     }
 
-    // 4️⃣ Already used leaves this month
+    // 6️⃣ Calculate used leaves for this month
     const leaveResult = await pool.query(
       `SELECT COALESCE(SUM(leavestaken),0.0) AS used_leaves
        FROM leaves
@@ -145,22 +158,19 @@ router.post("/salary-deduction", async (req, res) => {
     const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
     const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
 
-    // 5️⃣ Remaining paid leaves
+    // 7️⃣ Remaining paid leaves (based on working days logic)
     const remainingPaidLeaves = Math.max(paidLeaves - totalUsedLeaves, 0);
 
-    // 6️⃣ Fetch leave status for this period
+    // 8️⃣ Fetch leave status
     const leaveStatusResult = await pool.query(
-      `SELECT status
-       FROM leaves
-       WHERE employee_id = $1 AND start_date = $2 AND end_date = $3
-       LIMIT 1`,
+      `SELECT status FROM leaves WHERE employee_id = $1 AND start_date = $2 AND end_date = $3 LIMIT 1`,
       [employeeId, startDate, endDate]
     );
     const leaveStatus = leaveStatusResult.rows.length > 0
       ? leaveStatusResult.rows[0].status
       : "pending";
 
-    // 7️⃣ Fetch deduction_per_day & unauthorized_penalty from employee_leavededuction
+    // 9️⃣ Fetch deduction details
     const deductionResult = await pool.query(
       `SELECT deduction_per_day, unauthorized_penalty
        FROM employee_leavededuction
@@ -168,49 +178,35 @@ router.post("/salary-deduction", async (req, res) => {
        LIMIT 1`,
       [employeeId]
     );
+
     let deductionPerDay = 0, unauthorizedPenalty = 0;
     if (deductionResult.rows.length > 0) {
       deductionPerDay = parseFloat(deductionResult.rows[0].deduction_per_day);
       unauthorizedPenalty = parseFloat(deductionResult.rows[0].unauthorized_penalty);
     }
 
-    // 8️⃣ Calculate unpaid days deduction
+    // 🔟 Calculate unpaid days and salary deduction
     const unpaidDays = Math.max(totalUsedLeaves - paidLeaves, 0);
     const salaryDeduction = deductionPerDay * unpaidDays;
 
-    // 9️⃣ Calculate unauthorized leave penalty if leave is cancelled
+    // 11️⃣ Unauthorized leave penalty
     let UnauthorizedLeaves = 0, unauthorizedPenaltyTotal = 0;
     if (leaveStatus.toLowerCase() === "cancelled") {
-      if (leaveDuration.toLowerCase() === "hourly") {
-        const hours = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
-        UnauthorizedLeaves = hours / workingHoursPerDay;
-      } else if (leaveDuration.toLowerCase() === "firsthalf" || leaveDuration.toLowerCase() === "secondhalf") {
-        UnauthorizedLeaves = 0.5;
-      } else {
-        const attendanceResult = await pool.query(
-          `SELECT COUNT(*) AS off_duty_days
-           FROM attendance
-           WHERE employee_id = $1
-             AND status ILIKE 'Absent'
-             AND timestamp >= $2::date
-             AND timestamp < ($3::date + interval '1 day')`,
-          [employeeId, startDate, endDate]
-        );
-        UnauthorizedLeaves = parseInt(attendanceResult.rows[0].off_duty_days, 10) || 0;
-      }
-
+      UnauthorizedLeaves = equivalentLeaveDays;
       unauthorizedPenaltyTotal = UnauthorizedLeaves * unauthorizedPenalty;
     }
 
-    // 🔟 Total penalty
     const totalPenalty = salaryDeduction + unauthorizedPenaltyTotal;
 
-    // 11️⃣ Return response
+    // 12️⃣ Final response
     res.json({
       employeeId,
       employeeName,
+      month: `${currentMonth} ${currentYear}`,
+      totalDaysInMonth,
+      workingDays,
+      paidLeaves,
       monthlySalary: monthlySalary.toFixed(2),
-      paidLeaves: paidLeaves.toFixed(2),
       usedLeaves: usedLeaves.toFixed(2),
       leavesTaken: totalUsedLeaves.toFixed(2),
       remainingPaidLeaves: remainingPaidLeaves.toFixed(2),
