@@ -44,6 +44,7 @@ const EmpPharmacypasswords = require("./routes/AdminApis/pharmacypassword");
 const DoctorModule = require("./routes/doctor"); 
 const Doctorbookingtoken = require("./routes/AdminApis/doctorbookingtokens"); 
 const Doctorrequest = require("./routes/AdminApis/doctorrequest"); 
+const Empworkingdays = require("./routes/empworkingdays"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
@@ -100,6 +101,7 @@ app.use("/pharmacypassword",EmpPharmacypasswords );
 app.use("/doctor",DoctorModule); 
 app.use("/doctorbookingtoken",Doctorbookingtoken); 
 app.use("/doctorrequest",Doctorrequest); 
+app.use("/empworkingdays",Empworkingdays); 
 
 app.use("/cron", cronRoutes);
 
