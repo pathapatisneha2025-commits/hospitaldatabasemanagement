@@ -156,7 +156,37 @@ router.post("/mark-attendance", async (req, res) => {
   }
 });
 
- 
+ // ✅ Fetch all "On Duty" attendance records
+router.get("/mark-attendance/all", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM attendance
+      WHERE status = 'On Duty'
+      ORDER BY timestamp DESC
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No 'On Duty' attendance records found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error("Get all On Duty attendance error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 
 
 // ✅ Delete any attendance record by ID
