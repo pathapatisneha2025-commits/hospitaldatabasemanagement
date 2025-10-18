@@ -198,8 +198,8 @@ router.get("/summary/:employee_id", async (req, res) => {
     const workingDaysResult = await pool.query(
       `SELECT working_days 
        FROM employee_working_days 
-       WHERE employee_id = $1 AND EXTRACT(MONTH FROM month_year) = $2 AND EXTRACT(YEAR FROM month_year) = $3`,
-      [req.params.employee_id, currentMonth, currentYear]
+       WHERE employee_id = $1`,
+      [req.params.employee_id]
     );
 
     const totalDays = workingDaysResult.rows[0]?.working_days || 0;
@@ -211,10 +211,12 @@ router.get("/summary/:employee_id", async (req, res) => {
         COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
         COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
-          WHERE a.status = 'On Duty' AND a.timestamp::time > e.schedule_in
+          WHERE a.status = 'On Duty' 
+            AND e.schedule_in IS NOT NULL 
+            AND a.timestamp::time > e.schedule_in
         ) AS total_late
       FROM attendance a
-      JOIN employees e ON a.employee_id = e.id
+      LEFT JOIN employees e ON a.employee_id = e.id
       WHERE a.employee_id = $1
         AND EXTRACT(MONTH FROM a.timestamp) = $2
         AND EXTRACT(YEAR FROM a.timestamp) = $3
@@ -234,9 +236,9 @@ router.get("/summary/:employee_id", async (req, res) => {
       month: currentMonth,
       year: currentYear,
       summary: {
-        total_present: summary.total_present,
-        total_late: summary.total_late,
-        total_absent: summary.total_absent,
+        total_present: parseInt(summary.total_present, 10),
+        total_late: parseInt(summary.total_late, 10),
+        total_absent: parseInt(summary.total_absent, 10),
         total_days: totalDays,
       },
     });
