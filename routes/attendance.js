@@ -189,8 +189,6 @@ router.get("/login/all", async (req, res) => {
 
 router.get("/summary/:employee_id", async (req, res) => {
   try {
-    const employee_id = req.params.employee_id;
-
     // Automatically use current month/year
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
@@ -201,7 +199,7 @@ router.get("/summary/:employee_id", async (req, res) => {
       `SELECT working_days 
        FROM employee_working_days 
        WHERE employee_id = $1 AND EXTRACT(MONTH FROM month_year) = $2 AND EXTRACT(YEAR FROM month_year) = $3`,
-      [employee_id, currentMonth, currentYear]
+      [req.params.employee_id, currentMonth, currentYear]
     );
 
     const totalDays = workingDaysResult.rows[0]?.working_days || 0;
@@ -221,7 +219,7 @@ router.get("/summary/:employee_id", async (req, res) => {
         AND EXTRACT(MONTH FROM a.timestamp) = $2
         AND EXTRACT(YEAR FROM a.timestamp) = $3
       `,
-      [employee_id, currentMonth, currentYear]
+      [req.params.employee_id, currentMonth, currentYear]
     );
 
     const summary = attendanceResult.rows[0] || {
@@ -232,7 +230,7 @@ router.get("/summary/:employee_id", async (req, res) => {
 
     return res.json({
       success: true,
-      employee_id,
+      employee_id: req.params.employee_id,
       month: currentMonth,
       year: currentYear,
       summary: {
@@ -247,6 +245,7 @@ router.get("/summary/:employee_id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 // ✅ Delete any attendance record by ID
