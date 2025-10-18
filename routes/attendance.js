@@ -157,7 +157,7 @@ router.post("/mark-attendance", async (req, res) => {
 });
 
  // ✅ Fetch all "On Duty" attendance records
-router.get("/mark-attendance/all", async (req, res) => {
+router.get("/login/all", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT *
