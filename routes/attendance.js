@@ -457,19 +457,72 @@ router.delete("/logout/delete/:id", async (req, res) => {
 // ✅ Attendance queries
 router.get("/all", async (req, res) => {
   try {
+    const result = await pool.query(
+      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       ORDER BY a.timestamp DESC`
+    );
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    console.error("Get attendance error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+router.get("/combined", async (req, res) => {
+  try {
     const result = await pool.query(`
       SELECT *
       FROM attendance
-      ORDER BY timestamp DESC
+      ORDER BY employee_id, timestamp ASC
     `);
+
+    const rows = result.rows;
+    const sessions = [];
+
+    let activeSession = {}; // store On Duty before Off Duty
+
+    for (const row of rows) {
+      const empId = row.employee_id;
+
+      if (row.status === "On Duty") {
+        // Start of session
+        activeSession[empId] = {
+          employee_id: empId,
+          login_time: row.timestamp,
+          image_url_on: row.image_url,
+        };
+      } else if (row.status === "Off Duty" && activeSession[empId]) {
+        // End of session
+        const loginTime = new Date(activeSession[empId].login_time);
+        const logoutTime = new Date(row.timestamp);
+        const diffMs = logoutTime - loginTime;
+
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+
+        sessions.push({
+          employee_id: empId,
+          login_time: activeSession[empId].login_time,
+          logout_time: row.timestamp,
+          session_hours: `${hours} hrs ${minutes} mins`,
+          overtime: row.overtime,
+          remaining_hours: row.remaining_hours,
+          image_url_on: activeSession[empId].image_url,
+          image_url_off: row.image_url,
+        });
+
+        delete activeSession[empId]; // reset session
+      }
+    }
 
     res.json({
       success: true,
-      count: result.rows.length,
-      data: result.rows,
+      count: sessions.length,
+      data: sessions,
     });
   } catch (error) {
-    console.error("Get attendance error:", error.message);
+    console.error("Combine attendance error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
