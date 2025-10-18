@@ -45,6 +45,7 @@ const DoctorModule = require("./routes/doctor");
 const Doctorbookingtoken = require("./routes/AdminApis/doctorbookingtokens"); 
 const Doctorrequest = require("./routes/AdminApis/doctorrequest"); 
 const Empworkingdays = require("./routes/empworkingdays"); 
+const Employeekpis = require("./routes/employeekpi"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
@@ -102,6 +103,7 @@ app.use("/doctor",DoctorModule);
 app.use("/doctorbookingtoken",Doctorbookingtoken); 
 app.use("/doctorrequest",Doctorrequest); 
 app.use("/empworkingdays",Empworkingdays); 
+app.use("/employeekpi",Employeekpis); 
 
 app.use("/cron", cronRoutes);
 

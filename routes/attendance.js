@@ -187,66 +187,7 @@ router.get("/login/all", async (req, res) => {
   }
 });
 
-router.get("/summary/:employee_id", async (req, res) => {
-  try {
-    // Automatically use current month/year
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
 
-    // 1️⃣ Fetch total working days from employee_working_days table
-    const workingDaysResult = await pool.query(
-      `SELECT working_days 
-       FROM employee_working_days 
-       WHERE employee_id = $1`,
-      [req.params.employee_id]
-    );
-
-    const totalDays = workingDaysResult.rows[0]?.working_days || 0;
-
-    // 2️⃣ Fetch attendance summary for the employee for current month
-    const attendanceResult = await pool.query(
-      `
-      SELECT 
-        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
-        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
-        COUNT(*) FILTER (
-          WHERE a.status = 'On Duty' 
-            AND e.schedule_in IS NOT NULL 
-            AND a.timestamp::time > e.schedule_in
-        ) AS total_late
-      FROM attendance a
-      LEFT JOIN employees e ON a.employee_id = e.id
-      WHERE a.employee_id = $1
-        AND EXTRACT(MONTH FROM a.timestamp) = $2
-        AND EXTRACT(YEAR FROM a.timestamp) = $3
-      `,
-      [req.params.employee_id, currentMonth, currentYear]
-    );
-
-    const summary = attendanceResult.rows[0] || {
-      total_present: 0,
-      total_absent: 0,
-      total_late: 0,
-    };
-
-    return res.json({
-      success: true,
-      employee_id: req.params.employee_id,
-      month: currentMonth,
-      year: currentYear,
-      summary: {
-        total_present: parseInt(summary.total_present, 10),
-        total_late: parseInt(summary.total_late, 10),
-        total_absent: parseInt(summary.total_absent, 10),
-        total_days: totalDays,
-      },
-    });
-  } catch (error) {
-    console.error("Employee monthly summary error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
 
 
 
