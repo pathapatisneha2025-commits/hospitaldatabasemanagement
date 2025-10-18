@@ -189,54 +189,57 @@ router.get("/login/all", async (req, res) => {
 
 router.get("/summary/:employee_id", async (req, res) => {
   try {
+    const employee_id = req.params.employee_id;
+
     // Automatically use current month/year
     const now = new Date();
-    const currentMonth = now.getMonth() + 1; // JS months start at 0
+    const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
-    // Fetch attendance summary for this employee for the current month
-    const result = await pool.query(
+    // 1️⃣ Fetch total working days from employee_working_days table
+    const workingDaysResult = await pool.query(
+      `SELECT working_days 
+       FROM employee_working_days 
+       WHERE employee_id = $1 AND EXTRACT(MONTH FROM month_year) = $2 AND EXTRACT(YEAR FROM month_year) = $3`,
+      [employee_id, currentMonth, currentYear]
+    );
+
+    const totalDays = workingDaysResult.rows[0]?.working_days || 0;
+
+    // 2️⃣ Fetch attendance summary for the employee for current month
+    const attendanceResult = await pool.query(
       `
       SELECT 
         COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
         COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
           WHERE a.status = 'On Duty' AND a.timestamp::time > e.schedule_in
-        ) AS total_late,
-        COUNT(DISTINCT DATE(a.timestamp)) AS total_days
+        ) AS total_late
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
       WHERE a.employee_id = $1
         AND EXTRACT(MONTH FROM a.timestamp) = $2
         AND EXTRACT(YEAR FROM a.timestamp) = $3
       `,
-      [req.params.employee_id, currentMonth, currentYear]
+      [employee_id, currentMonth, currentYear]
     );
 
-    const summary = result.rows[0] || {
+    const summary = attendanceResult.rows[0] || {
       total_present: 0,
       total_absent: 0,
       total_late: 0,
-      total_days: 0,
     };
-
-    // Calculate attendance percentage
-    const attendancePercent =
-      summary.total_days > 0
-        ? ((summary.total_present / summary.total_days) * 100).toFixed(2)
-        : 0;
 
     return res.json({
       success: true,
-      employee_id: req.params.employee_id,
+      employee_id,
       month: currentMonth,
       year: currentYear,
       summary: {
         total_present: summary.total_present,
         total_late: summary.total_late,
         total_absent: summary.total_absent,
-        total_days: summary.total_days,
-        attendance_percent: attendancePercent,
+        total_days: totalDays,
       },
     });
   } catch (error) {
