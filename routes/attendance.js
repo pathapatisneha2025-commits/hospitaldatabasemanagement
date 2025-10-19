@@ -160,10 +160,17 @@ router.post("/mark-attendance", async (req, res) => {
 router.get("/login/all", async (req, res) => {
   try {
     const result = await pool.query(`
-    SELECT employee_id,status, timestamp,image_url,full_name
-      FROM attendance
-      WHERE status = 'On Duty'
-      ORDER BY timestamp DESC
+      SELECT 
+        a.id, 
+        a.employee_id, 
+        e.full_name, 
+        a.timestamp, 
+        a.image_url, 
+        a.status
+      FROM attendance a
+      JOIN employees e ON a.employee_id = e.id
+      WHERE a.status = 'On Duty'
+      ORDER BY a.timestamp DESC
     `);
 
     if (result.rows.length === 0) {
