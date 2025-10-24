@@ -165,7 +165,7 @@ router.delete("/delete/:employee_id", async (req, res) => {
   try {
     console.log("🔹 Received employee_id:", req.params.employee_id);
 
-    const empId =req.params;// 👈 ensure number
+    const empId = parseInt(req.params.employee_id); // ✅ correct
     console.log("🔹 Parsed empId:", empId);
 
     const result = await pool.query(
