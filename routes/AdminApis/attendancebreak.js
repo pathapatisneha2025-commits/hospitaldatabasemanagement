@@ -163,17 +163,15 @@ router.delete("/delete/:id", async (req, res) => {
 
 router.delete("/delete/:employee_id", async (req, res) => {
   try {
-    console.log("🔹 Received employee_id:", req.params.employee_id);
-
-    const empId = parseInt(req.params.employee_id); // ✅ correct
-    console.log("🔹 Parsed empId:", empId);
+    const empId = req.params.employee_id; // don't force parseInt
+    console.log("🗑️ Deleting for employee_id:", empId);
 
     const result = await pool.query(
       "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
       [empId]
     );
 
-    console.log("🔹 Deleted rows:", result.rowCount);
+    console.log("🗑️ Deleted rows:", result.rowCount);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -184,14 +182,16 @@ router.delete("/delete/:employee_id", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Break logs deleted successfully",
+      message: `All break logs deleted successfully for employee_id ${empId}`,
+      deletedCount: result.rowCount,
       deleted: result.rows,
     });
   } catch (error) {
-    console.error("Delete error:", error);
+    console.error("❌ Delete error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
