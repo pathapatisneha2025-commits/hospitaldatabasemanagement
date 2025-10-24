@@ -110,33 +110,31 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 // PUT: update all break records by employee_id
-router.put("/update-by-employee/:employee_id", async (req, res) => {
+// ✅ PUT /BreakIn-attendance/update/:employee_id
+router.put("/update/:employee_id", async (req, res) => {
   const { employee_id } = req.params;
   const { status } = req.body;
 
   try {
-    if (!status) {
-      return res.status(400).json({ success: false, message: "Status is required" });
-    }
-
-    const [updatedCount] = await Break.update(
-      { status },
-      { where: { employee_id } }
+    // Update all records for this employee_id
+    const result = await pool.query(
+      "UPDATE break_logs SET status = $1 WHERE employee_id = $2 RETURNING *",
+      [status, employee_id]
     );
 
-    if (updatedCount > 0) {
-      return res.json({
-        success: true,
-        message: `Updated ${updatedCount} records for employee ${employee_id}`,
-      });
-    } else {
-      return res.json({
-        success: false,
-        message: "No records found for this employee",
-      });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "No records found for this employee" });
     }
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+
+    res.json({
+      success: true,
+      message: "All records updated successfully",
+      updated: result.rows.length,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -158,23 +156,33 @@ router.delete("/delete/:id", async (req, res) => {
   }
 });
 // DELETE both Break In and Break Out by employee_id
-router.delete("/delete-by-employee/:employee_id", async (req, res) => {
+// ✅ DELETE /BreakIn-attendance/delete/:employee_id
+router.delete("/delete/:employee_id", async (req, res) => {
   const { employee_id } = req.params;
 
   try {
-    const deleted = await Break.destroy({
-      where: { employee_id }, // delete all records of that employee
-    });
+    // Delete all records for the employee
+    const result = await pool.query(
+      "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
+      [employee_id]
+    );
 
-    if (deleted > 0) {
-      return res.json({ success: true, message: "All break records deleted" });
-    } else {
-      return res.json({ success: false, message: "No records found for this employee" });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "No records found for this employee" });
     }
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+
+    res.json({
+      success: true,
+      message: "All records deleted successfully",
+      deleted: result.rowCount,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // =========================
 // 5️ Summary: present, absent, on break, late (today)
