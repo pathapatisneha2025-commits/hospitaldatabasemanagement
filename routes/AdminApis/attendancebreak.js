@@ -111,19 +111,21 @@ router.put("/update/:id", async (req, res) => {
 });
 // PUT: update all break records by employee_id
 // ✅ PUT /BreakIn-attendance/update/:employee_id
+// UPDATE all records for an employee
 router.put("/update/:employee_id", async (req, res) => {
-  const { employee_id } = req.params;
-  const { status } = req.body;
+  const { status } = req.body; 
 
   try {
-    // Update all records for this employee_id
     const result = await pool.query(
       "UPDATE break_logs SET status = $1 WHERE employee_id = $2 RETURNING *",
-      [status, employee_id]
+      [status, req.params.employee_id] // 👈 directly use req.params
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, message: "No records found for this employee" });
+      return res.status(404).json({
+        success: false,
+        message: "No records found for this employee",
+      });
     }
 
     res.json({
@@ -133,10 +135,11 @@ router.put("/update/:employee_id", async (req, res) => {
       data: result.rows,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Update error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 /* =========================================================
    6️⃣ DELETE BREAK LOG (Admin only)
@@ -157,31 +160,32 @@ router.delete("/delete/:id", async (req, res) => {
 });
 // DELETE both Break In and Break Out by employee_id
 // ✅ DELETE /BreakIn-attendance/delete/:employee_id
-router.delete("/delete/:employee_id", async (req, res) => {
-  const { employee_id } = req.params;
 
+router.delete("/delete/:employee_id", async (req, res) => {
   try {
-    // Delete all records for the employee
     const result = await pool.query(
       "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
-      [employee_id]
+      [req.params.employee_id] // 👈 directly use req.params
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, message: "No records found for this employee" });
+      return res.status(404).json({
+        success: false,
+        message: "No break logs found for this employee",
+      });
     }
 
     res.json({
       success: true,
-      message: "All records deleted successfully",
-      deleted: result.rowCount,
-      data: result.rows,
+      message: "Break logs deleted successfully",
+      deleted: result.rows,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("Delete error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 // =========================
