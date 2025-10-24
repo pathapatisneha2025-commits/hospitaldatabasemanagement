@@ -161,14 +161,14 @@ router.delete("/delete/:id", async (req, res) => {
 // DELETE both Break In and Break Out by employee_id
 // ✅ DELETE /BreakIn-attendance/delete/:employee_id
 
-router.delete("/delete/:employee_id", async (req, res) => {
+router.delete("/delete/:employeeId", async (req, res) => {
   try {
-    const empId = req.params.employee_id; // don't force parseInt
+    const employeeId = req.params; // don't force parseInt
     console.log("🗑️ Deleting for employee_id:", empId);
 
     const result = await pool.query(
       "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
-      [empId]
+      [employeeId]
     );
 
     console.log("🗑️ Deleted rows:", result.rowCount);
