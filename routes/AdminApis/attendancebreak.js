@@ -109,6 +109,36 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+// PUT: update all break records by employee_id
+router.put("/update-by-employee/:employee_id", async (req, res) => {
+  const { employee_id } = req.params;
+  const { status } = req.body;
+
+  try {
+    if (!status) {
+      return res.status(400).json({ success: false, message: "Status is required" });
+    }
+
+    const [updatedCount] = await Break.update(
+      { status },
+      { where: { employee_id } }
+    );
+
+    if (updatedCount > 0) {
+      return res.json({
+        success: true,
+        message: `Updated ${updatedCount} records for employee ${employee_id}`,
+      });
+    } else {
+      return res.json({
+        success: false,
+        message: "No records found for this employee",
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 /* =========================================================
    6️⃣ DELETE BREAK LOG (Admin only)
@@ -127,6 +157,25 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+// DELETE both Break In and Break Out by employee_id
+router.delete("/delete-by-employee/:employee_id", async (req, res) => {
+  const { employee_id } = req.params;
+
+  try {
+    const deleted = await Break.destroy({
+      where: { employee_id }, // delete all records of that employee
+    });
+
+    if (deleted > 0) {
+      return res.json({ success: true, message: "All break records deleted" });
+    } else {
+      return res.json({ success: false, message: "No records found for this employee" });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // =========================
 // 5️ Summary: present, absent, on break, late (today)
 // =========================
