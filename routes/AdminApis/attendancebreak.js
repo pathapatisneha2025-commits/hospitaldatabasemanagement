@@ -112,7 +112,7 @@ router.put("/update/:id", async (req, res) => {
 // PUT: update all break records by employee_id
 // ✅ PUT /BreakIn-attendance/update/:employee_id
 // UPDATE all records for an employee
-router.put("/update/:employee_id", async (req, res) => {
+router.put("/updatelogs/:employee_id", async (req, res) => {
   const { status } = req.body; 
 
   try {
