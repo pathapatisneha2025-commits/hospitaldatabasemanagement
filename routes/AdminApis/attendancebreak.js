@@ -163,8 +163,8 @@ router.delete("/delete/:id", async (req, res) => {
 
 router.delete("/delete/:employeeId", async (req, res) => {
   try {
-    const employeeId = req.params; // don't force parseInt
-    console.log("🗑️ Deleting for employee_id:", empId);
+    const { employeeId } = req.params;
+    console.log("🗑️ Deleting for employee_id:", employeeId);
 
     const result = await pool.query(
       "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
@@ -176,13 +176,13 @@ router.delete("/delete/:employeeId", async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: `No break logs found for employee_id ${empId}`,
+        message: `No break logs found for employee_id ${employeeId}`,
       });
     }
 
     res.json({
       success: true,
-      message: `All break logs deleted successfully for employee_id ${empId}`,
+      message: `All break logs deleted successfully for employee_id ${employeeId}`,
       deletedCount: result.rowCount,
       deleted: result.rows,
     });
