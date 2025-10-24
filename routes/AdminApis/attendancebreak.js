@@ -161,7 +161,7 @@ router.delete("/delete/:id", async (req, res) => {
 // DELETE both Break In and Break Out by employee_id
 // ✅ DELETE /BreakIn-attendance/delete/:employee_id
 
-router.delete("/delete/:employeeId", async (req, res) => {
+router.delete("/deletelog/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
 const empId = parseInt(employeeId, 10);
