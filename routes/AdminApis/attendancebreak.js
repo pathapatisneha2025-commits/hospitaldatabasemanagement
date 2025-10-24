@@ -164,12 +164,13 @@ router.delete("/delete/:id", async (req, res) => {
 router.delete("/delete/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
-    console.log("🗑️ Deleting for employee_id:", employeeId);
+const empId = parseInt(employeeId, 10);
 
-    const result = await pool.query(
-      "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
-      [employeeId]
-    );
+const result = await pool.query(
+  "DELETE FROM break_logs WHERE employee_id = $1 RETURNING *",
+  [empId]
+);
+
 
     console.log("🗑️ Deleted rows:", result.rowCount);
 
