@@ -109,36 +109,48 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-// PUT: update all break records by employee_id
-// ✅ PUT /BreakIn-attendance/update/:employee_id
-// UPDATE all records for an employee
-router.put("/updatelogs/:employee_id", async (req, res) => {
-  const { status } = req.body; 
 
+// PUT /BreakIn-attendance/update/:employee_id
+
+router.put("/updatelogs/:employeeId", async (req, res) => {
   try {
+    const { employeeId } = req.params;
+    const { status } = req.body;
+
+    // Convert employeeId to number safely
+    const empId = parseInt(employeeId, 10);
+
+    if (isNaN(empId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid employee_id format",
+      });
+    }
+
     const result = await pool.query(
       "UPDATE break_logs SET status = $1 WHERE employee_id = $2 RETURNING *",
-      [status, req.params.employee_id] // 👈 directly use req.params
+      [status, empId]
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "No records found for this employee",
+        message: `No records found for employee_id ${empId}`,
       });
     }
 
     res.json({
       success: true,
-      message: "All records updated successfully",
-      updated: result.rows.length,
-      data: result.rows,
+      message: `All records updated successfully for employee_id ${empId}`,
+      updatedCount: result.rowCount,
+      updated: result.rows,
     });
   } catch (err) {
-    console.error("Update error:", err);
+    console.error("❌ Update error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 /* =========================================================
