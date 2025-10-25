@@ -47,11 +47,17 @@ router.post("/breaks", async (req, res) => {
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, employee_id, break_type, timestamp, image_url, status
-       FROM break_logs
-       ORDER BY timestamp DESC`
+      `SELECT b.id, b.employee_id, e.full_name, b.break_type, b.timestamp, b.image_url, b.status
+       FROM break_logs b
+       JOIN employees e ON b.employee_id = e.id
+       ORDER BY b.timestamp DESC`
     );
-    res.json({ success: true, count: result.rowCount, data: result.rows });
+
+    res.json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows,
+    });
   } catch (error) {
     console.error("Get breaks error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
