@@ -590,5 +590,38 @@ router.get("/employee/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+// ✅ Delete both login & logout records for an employee (no date filter)
+router.delete("/deletelogs/:employee_id", async (req, res) => {
+  try {
+    const { employee_id } = req.params;
+
+    // Delete all records for this employee (both On Duty + Off Duty)
+    const result = await pool.query(
+      `
+      DELETE FROM attendance
+      WHERE employee_id = $1
+      RETURNING *
+      `,
+      [employee_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No attendance records found for this employee",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "All login & logout records deleted successfully",
+      deleted: result.rows,
+    });
+  } catch (error) {
+    console.error("❌ Delete attendance error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 
 module.exports = router;
