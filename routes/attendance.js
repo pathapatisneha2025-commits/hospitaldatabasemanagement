@@ -235,6 +235,47 @@ router.delete("/delete", async (req, res) => {
   }
 });
 
+router.put("/update", async (req, res) => {
+  try {
+    const { loginId, logoutId, status, checkIn, checkOut } = req.body;
+
+    if (!loginId && !logoutId)
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing attendance IDs" });
+
+    // Update login record if exists
+    if (loginId) {
+      await pool.query(
+        `UPDATE attendance
+         SET timestamp = $1 
+         WHERE id = $2`,
+        [checkIn, loginId]
+      );
+    }
+
+    // Update logout record if exists
+    if (logoutId) {
+      await pool.query(
+        `UPDATE attendance
+         SET timestamp = $1 
+         WHERE id = $2`,
+        [checkOut, logoutId]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: "Attendance record updated successfully",
+    });
+  } catch (error) {
+    console.error("Update error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update attendance record",
+    });
+  }
+});
 
 
 // ✅ Logout Route with session_hours, daily, weekly, monthly
