@@ -45,13 +45,15 @@ router.post("/add", async (req, res) => {
     }
 
     // ✅ Fetch doctor's daily limit from doctor_visits table
-    const visitData = await db.query(
-      `SELECT number_of_visits_per_day 
-       FROM doctor_visits 
-       WHERE doctor_email = $1 AND visit_date = $2
-       LIMIT 1`,
-      [doctorEmail, date]
-    );
+    // ✅ Fetch doctor's daily limit (case-insensitive, date-safe)
+const visitData = await db.query(
+  `SELECT number_of_visits_per_day 
+   FROM doctor_visits 
+   WHERE LOWER(doctor_email) = LOWER($1)
+   AND visit_date::date = $2::date
+   LIMIT 1`,
+  [doctorEmail, date]
+);
 
     if (visitData.rows.length === 0) {
       return res.status(400).json({
