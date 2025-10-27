@@ -23,6 +23,7 @@ router.post("/add", async (req, res) => {
       doctorDescription,
       paymentType,
       doctorConsultantFee,
+      doctorEmail, // 👈 include doctorEmail in the request body
     } = req.body;
 
     // ✅ Validate required fields
@@ -33,12 +34,13 @@ router.post("/add", async (req, res) => {
       !patientName ||
       !doctorName ||
       !appointmentDate ||
-      !appointmentTime
+      !appointmentTime ||
+      !doctorEmail
     ) {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
-    // ✅ Check for duplicate booking for that doctor, date, and time
+    // ✅ Prevent duplicate booking for same doctor/date/time
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
        WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3`,
@@ -51,21 +53,46 @@ router.post("/add", async (req, res) => {
         .json({ error: "Doctor is already booked for this time slot" });
     }
 
-    // ✅ Generate DAILY incremental ID (based on appointment_date)
-    const lastAppointment = await pool.query(
-      `SELECT daily_id FROM doctorbooking 
-       WHERE appointment_date = $1
-       ORDER BY daily_id DESC 
+    // ✅ Get doctor's max visits for the day from doctor_visits
+    const visitData = await pool.query(
+      `SELECT number_of_visits_per_day 
+       FROM doctor_visits 
+       WHERE doctor_email = $1 AND visit_date = $2
        LIMIT 1`,
-      [appointmentDate] // this ensures it's based on the date being booked
+      [doctorEmail, appointmentDate]
     );
 
-    let nextDailyId = 1001; //  start from 1001 each day
-    if (lastAppointment.rows.length > 0) {
-nextDailyId = parseInt(lastAppointment.rows[0].daily_id, 10) + 1;
+    if (visitData.rows.length === 0) {
+      return res.status(400).json({
+        error: `No visit limit set for Dr. ${doctorName} on ${appointmentDate}`,
+      });
     }
 
-    // ✅ Insert the appointment
+    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY =
+      parseInt(visitData.rows[0].number_of_visits_per_day, 10);
+
+    // ✅ Find last daily_id for that doctor on that date
+    const lastAppointment = await pool.query(
+      `SELECT daily_id FROM doctorbooking 
+       WHERE doctor_id = $1 AND appointment_date = $2
+       ORDER BY daily_id DESC 
+       LIMIT 1`,
+      [doctorId, appointmentDate]
+    );
+
+    let nextDailyId = 1; // start from 1 for each doctor per day
+    if (lastAppointment.rows.length > 0) {
+      nextDailyId = parseInt(lastAppointment.rows[0].daily_id, 10) + 1;
+    }
+
+    // ✅ Enforce doctor-specific limit
+    if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
+      return res.status(400).json({
+        error: `Dr. ${doctorName} has reached the daily limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} appointments for ${appointmentDate}`,
+      });
+    }
+
+    // ✅ Insert appointment
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         daily_id, employee_id, doctor_id, patient_id,
@@ -100,7 +127,7 @@ nextDailyId = parseInt(lastAppointment.rows[0].daily_id, 10) + 1;
     );
 
     res.json({
-      message: "Appointment created successfully",
+      message: `Appointment created successfully for Dr. ${doctorName}`,
       appointment: result.rows[0],
     });
   } catch (err) {
@@ -108,6 +135,7 @@ nextDailyId = parseInt(lastAppointment.rows[0].daily_id, 10) + 1;
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 /* =========================================================
