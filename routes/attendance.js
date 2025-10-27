@@ -198,32 +198,43 @@ router.get("/login/all", async (req, res) => {
 
 
 
-// ✅ Delete any attendance record by ID
-router.delete("/delete/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query(
-      `DELETE FROM attendance WHERE id = $1 RETURNING *`,
-      [id]
-    );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Attendance record not found",
-      });
+// ✅ Delete Attendance Login/Logout Pair
+router.delete("/delete", async (req, res) => {
+  try {
+    const { loginId, logoutId } = req.body;
+
+    if (!loginId && !logoutId) {
+      return res.status(400).json({ success: false, message: "No IDs provided" });
     }
 
-    return res.json({
+    const deletedRows = [];
+
+    if (loginId) {
+      const result = await pool.query(`DELETE FROM attendance WHERE id = $1 RETURNING *`, [loginId]);
+      if (result.rowCount > 0) deletedRows.push(result.rows[0]);
+    }
+
+    if (logoutId) {
+      const result = await pool.query(`DELETE FROM attendance WHERE id = $1 RETURNING *`, [logoutId]);
+      if (result.rowCount > 0) deletedRows.push(result.rows[0]);
+    }
+
+    if (deletedRows.length === 0) {
+      return res.status(404).json({ success: false, message: "No matching records found" });
+    }
+
+    res.json({
       success: true,
-      message: "Attendance record deleted successfully",
-      data: result.rows[0],
+      message: "Login/Logout record(s) deleted successfully",
+      data: deletedRows,
     });
   } catch (error) {
     console.error("Delete attendance error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 // ✅ Logout Route with session_hours, daily, weekly, monthly
