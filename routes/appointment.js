@@ -26,27 +26,6 @@ router.post("/add", async (req, res) => {
     doctorEmail, // 👈 include this to fetch visit limit
   } = req.body;
 
-  // ✅ Validate request
-  if (
-    !doctorId ||
-    !doctorName ||
-    !experience ||
-    !department ||
-    !consultantFees ||
-    !date ||
-    !timeSlot ||
-    !patientId ||
-    !name ||
-    !age ||
-    !gender ||
-    !bloodGroup ||
-    !reason ||
-    !patientPhone ||
-    !doctorEmail
-  ) {
-    return res.status(400).json({ error: "All required fields (including doctorEmail) are needed!" });
-  }
-
   try {
     // ✅ Verify doctor exists
     const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
@@ -93,7 +72,7 @@ router.post("/add", async (req, res) => {
       [doctorId, date]
     );
 
-    let nextTokenId = 1; // start from 1 for each doctor/date
+    let nextTokenId = 1;
     if (lastAppointment.rows.length > 0) {
       nextTokenId = parseInt(lastAppointment.rows[0].tokenid, 10) + 1;
     }
@@ -144,6 +123,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
