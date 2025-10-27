@@ -27,6 +27,13 @@ router.post("/add", async (req, res) => {
   } = req.body;
 
   try {
+    // 🗓️ Normalize the date format (to YYYY-MM-DD)
+    const formattedDate = date.includes("T") ? date.split("T")[0] : date;
+
+    console.log("🩺 Doctor Email:", doctorEmail);
+    console.log("📅 Original Date:", date);
+    console.log("🧾 Formatted Date:", formattedDate);
+
     // ✅ Verify doctor exists
     const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
     const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
@@ -38,31 +45,37 @@ router.post("/add", async (req, res) => {
     const existing = await db.query(
       `SELECT * FROM appointments 
        WHERE doctorid = $1 AND date = $2 AND timeslot = $3`,
-      [doctorId, date, timeSlot]
+      [doctorId, formattedDate, timeSlot]
     );
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
-    }
-
-    // ✅ Fetch doctor's daily limit from doctor_visits table
-    // ✅ Fetch doctor's daily limit (case-insensitive, date-safe)
-const visitData = await db.query(
-  `SELECT number_of_visits_per_day 
-   FROM doctor_visits 
-   WHERE LOWER(doctor_email) = LOWER($1)
-   AND visit_date::date = $2::date
-   LIMIT 1`,
-  [doctorEmail, date]
-);
-
-    if (visitData.rows.length === 0) {
-      return res.status(400).json({
-        error: `No daily visit limit set for Dr. ${doctorName} on ${date}`,
+      return res.status(409).json({
+        error: "This time slot is already booked for the selected doctor.",
       });
     }
 
-    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY =
-      parseInt(visitData.rows[0].number_of_visits_per_day, 10);
+    // ✅ Fetch doctor's daily limit (case-insensitive, date-safe)
+    const visitData = await db.query(
+      `SELECT number_of_visits_per_day 
+       FROM doctor_visits 
+       WHERE LOWER(doctor_email) = LOWER($1)
+       AND visit_date::date = TO_DATE($2, 'YYYY-MM-DD')
+       ORDER BY id DESC
+       LIMIT 1`,
+      [doctorEmail, formattedDate]
+    );
+
+    console.log("📊 Visit Data Found:", visitData.rows);
+
+    if (visitData.rows.length === 0) {
+      return res.status(400).json({
+        error: `No daily visit limit set for Dr. ${doctorName} on ${formattedDate}`,
+      });
+    }
+
+    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
+      visitData.rows[0].number_of_visits_per_day,
+      10
+    );
 
     // ✅ Find last token for that doctor and date (shared counter)
     const lastAppointment = await db.query(
@@ -71,7 +84,7 @@ const visitData = await db.query(
        WHERE doctorid = $1 AND date = $2
        ORDER BY tokenid DESC 
        LIMIT 1`,
-      [doctorId, date]
+      [doctorId, formattedDate]
     );
 
     let nextTokenId = 1;
@@ -82,7 +95,7 @@ const visitData = await db.query(
     // ✅ Enforce daily limit
     if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
       return res.status(400).json({
-        error: `Dr. ${doctorName} has reached the daily appointment limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} for ${date}`,
+        error: `Dr. ${doctorName} has reached the daily appointment limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} for ${formattedDate}`,
       });
     }
 
@@ -102,7 +115,7 @@ const visitData = await db.query(
       doctorName,
       experience,
       department,
-      date,
+      formattedDate,
       timeSlot,
       consultantFees,
       patientId,
@@ -121,10 +134,11 @@ const visitData = await db.query(
       appointment: result.rows[0],
     });
   } catch (err) {
-    console.error("Error booking appointment:", err);
+    console.error("❌ Error booking appointment:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
