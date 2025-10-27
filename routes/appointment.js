@@ -2,20 +2,12 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
 
-// -------------------- CREATE (POST) --------------------
 
-// Helper function to generate random 6-character alphanumeric ID
-function generateRandomId(length = 6) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+
+
 
 // -------------------- CREATE (POST) --------------------
-router.post('/add', async (req, res) => {
+router.post("/add", async (req, res) => {
   const {
     doctorId,
     doctorName,
@@ -30,7 +22,8 @@ router.post('/add', async (req, res) => {
     gender,
     bloodGroup,
     reason,
-    patientPhone
+    patientPhone,
+    doctorEmail, // 👈 include this to fetch visit limit
   } = req.body;
 
   // ✅ Validate request
@@ -48,9 +41,10 @@ router.post('/add', async (req, res) => {
     !gender ||
     !bloodGroup ||
     !reason ||
-    !patientPhone
+    !patientPhone ||
+    !doctorEmail
   ) {
-    return res.status(400).json({ error: "All fields including patientPhone are required!" });
+    return res.status(400).json({ error: "All required fields (including doctorEmail) are needed!" });
   }
 
   try {
@@ -58,40 +52,66 @@ router.post('/add', async (req, res) => {
     const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
     const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
     if (doctorCheck.rows.length === 0) {
-      return res.status(404).json({ error: "Doctor ID does not exist in doctor_fees" });
+      return res.status(404).json({ error: "Doctor ID not found in doctor_fees" });
     }
 
-    // ✅ Check for double booking
-    const checkQuery = `
-      SELECT * FROM appointments 
-      WHERE doctorid = $1 AND date = $2 AND timeslot = $3
-    `;
-    const existing = await db.query(checkQuery, [doctorId, date, timeSlot]);
+    // ✅ Prevent double booking
+    const existing = await db.query(
+      `SELECT * FROM appointments 
+       WHERE doctorid = $1 AND date = $2 AND timeslot = $3`,
+      [doctorId, date, timeSlot]
+    );
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: "This time slot is already booked for the selected doctor." });
     }
 
-    // ✅ Generate TOKEN incremental ID based on date
-    const lastAppointmentQuery = `
-      SELECT tokenid 
-      FROM appointments 
-      WHERE date = $1 
-      ORDER BY tokenid DESC 
-      LIMIT 1
-    `;
-    const lastAppointment = await db.query(lastAppointmentQuery, [date]);
+    // ✅ Fetch doctor's daily limit from doctor_visits table
+    const visitData = await db.query(
+      `SELECT number_of_visits_per_day 
+       FROM doctor_visits 
+       WHERE doctor_email = $1 AND visit_date = $2
+       LIMIT 1`,
+      [doctorEmail, date]
+    );
 
-    let nextTokenId = 1; // start from 1 each day
+    if (visitData.rows.length === 0) {
+      return res.status(400).json({
+        error: `No daily visit limit set for Dr. ${doctorName} on ${date}`,
+      });
+    }
+
+    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY =
+      parseInt(visitData.rows[0].number_of_visits_per_day, 10);
+
+    // ✅ Find last token for that doctor and date (shared counter)
+    const lastAppointment = await db.query(
+      `SELECT tokenid 
+       FROM appointments 
+       WHERE doctorid = $1 AND date = $2
+       ORDER BY tokenid DESC 
+       LIMIT 1`,
+      [doctorId, date]
+    );
+
+    let nextTokenId = 1; // start from 1 for each doctor/date
     if (lastAppointment.rows.length > 0) {
       nextTokenId = parseInt(lastAppointment.rows[0].tokenid, 10) + 1;
     }
 
-    // ✅ Insert appointment with tokenid
+    // ✅ Enforce daily limit
+    if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
+      return res.status(400).json({
+        error: `Dr. ${doctorName} has reached the daily appointment limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} for ${date}`,
+      });
+    }
+
+    // ✅ Insert appointment
     const insertQuery = `
       INSERT INTO appointments
       (tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
        paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, createdat)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending','pending', $9, $10, $11, $12, $13, $14, $15, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'pending',
+              $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
@@ -110,22 +130,20 @@ router.post('/add', async (req, res) => {
       gender,
       bloodGroup,
       reason,
-      patientPhone
+      patientPhone,
     ];
 
     const result = await db.query(insertQuery, values);
 
-    return res.status(201).json({
-      message: "Appointment booked successfully",
-      appointment: result.rows[0]
+    res.status(201).json({
+      message: `Appointment booked successfully for Dr. ${doctorName}`,
+      appointment: result.rows[0],
     });
   } catch (err) {
     console.error("Error booking appointment:", err);
-    return res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Server error" });
   }
 });
-
-
 
 
 
