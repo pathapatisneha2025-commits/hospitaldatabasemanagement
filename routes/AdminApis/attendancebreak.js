@@ -91,30 +91,50 @@ router.get("/employee/:employeeId", async (req, res) => {
 /* =========================================================
    5️ UPDATE BREAK STATUS (Manual admin correction)
 ========================================================= */
-router.put("/update/:id", async (req, res) => {
+router.put("/update", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
+    const { breakInId, breakOutId, status } = req.body;
 
     const validStatuses = ["On Break", "Returned", "Rejected"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: "Invalid status value" });
     }
 
-    const result = await pool.query(
-      `UPDATE break_logs SET status = $1 WHERE id = $2 RETURNING *`,
-      [status, id]
-    );
+    let updatedRows = [];
 
-    if (result.rowCount === 0)
-      return res.status(404).json({ success: false, message: "Break log not found" });
+    // Update Break In
+    if (breakInId) {
+      const resultIn = await pool.query(
+        `UPDATE break_logs SET status = $1 WHERE id = $2 RETURNING *`,
+        [status, breakInId]
+      );
+      if (resultIn.rowCount > 0) updatedRows.push(resultIn.rows[0]);
+    }
 
-    res.json({ success: true, message: "Break status updated", data: result.rows[0] });
+    // Update Break Out (if exists)
+    if (breakOutId) {
+      const resultOut = await pool.query(
+        `UPDATE break_logs SET status = $1 WHERE id = $2 RETURNING *`,
+        [status, breakOutId]
+      );
+      if (resultOut.rowCount > 0) updatedRows.push(resultOut.rows[0]);
+    }
+
+    if (updatedRows.length === 0) {
+      return res.status(404).json({ success: false, message: "No matching records found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Break log(s) updated successfully",
+      data: updatedRows,
+    });
   } catch (error) {
     console.error("Update break error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // PUT /BreakIn-attendance/update/:employee_id
 
