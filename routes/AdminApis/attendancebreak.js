@@ -7,16 +7,32 @@ const router = express.Router();
 // =========================
 router.post("/breaks", async (req, res) => {
   try {
-    const { employeeId, capturedUrl, locationVerified, faceVerified, breakType } = req.body;
+    const {
+      employeeId,
+      subadminId, // 👈 optional
+      capturedUrl,
+      locationVerified,
+      faceVerified,
+      breakType,
+    } = req.body;
 
-    if (!employeeId || !capturedUrl || !breakType) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+    // ✅ Determine which ID to use
+    const userId = employeeId || subadminId;
+
+    // ✅ Validate
+    if (!userId || !capturedUrl || !breakType) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing required fields" });
     }
 
     if (breakType !== "Break In" && breakType !== "Break Out") {
-      return res.status(400).json({ success: false, message: "Invalid break type" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid break type" });
     }
 
+    // ✅ Determine status
     const status =
       locationVerified === true && faceVerified === true
         ? breakType === "Break In"
@@ -24,16 +40,17 @@ router.post("/breaks", async (req, res) => {
           : "Returned"
         : "Rejected";
 
+    // ✅ Insert record — only one of employee_id or subadmin_id will be filled
     await pool.query(
-      `INSERT INTO break_logs (employee_id, break_type, timestamp, image_url, status)
-       VALUES ($1, $2, (NOW() AT TIME ZONE 'Asia/Kolkata'), $3, $4)`,
-      [employeeId, breakType, capturedUrl, status]
+      `INSERT INTO break_logs (employee_id, subadmin_id, break_type, timestamp, image_url, status)
+       VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'Asia/Kolkata'), $4, $5)`,
+      [employeeId || null, subadminId || null, breakType, capturedUrl, status]
     );
 
     return res.json({
       success: true,
       message: `${breakType} logged successfully`,
-      data: { employeeId, breakType, status },
+      data: { userId, breakType, status },
     });
   } catch (error) {
     console.error("Break log error:", error.message);
@@ -41,16 +58,28 @@ router.post("/breaks", async (req, res) => {
   }
 });
 
+
 /* =========================================================
    2️ GET ALL BREAK LOGS (Admin / HR view)
 ========================================================= */
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT b.id, b.employee_id, e.full_name, b.break_type, b.timestamp, b.image_url, b.status
-       FROM break_logs b
-       JOIN employees e ON b.employee_id = e.id
-       ORDER BY b.timestamp DESC`
+      `
+      SELECT 
+        b.id,
+        b.employee_id,
+        b.subadmin_id,
+        COALESCE(e.full_name, s.name) AS user_name, -- ✅ Prefer employee name, fallback to subadmin name
+        b.break_type,
+        b.timestamp,
+        b.image_url,
+        b.status
+      FROM break_logs b
+      LEFT JOIN employees e ON b.employee_id = e.id
+      LEFT JOIN subadmin s ON b.subadmin_id = s.id
+      ORDER BY b.timestamp DESC
+      `
     );
 
     res.json({
