@@ -216,11 +216,7 @@ router.delete("/delete/:id", async (req, res) => {
 
 router.get("/appointments/summary/:doctorId", async (req, res) => {
   try {
-    const doctorId = parseInt(req.params.doctorId, 10); // ✅ Convert to integer
-
-    if (isNaN(doctorId)) {
-      return res.status(400).json({ success: false, message: "Invalid doctor ID" });
-    }
+    const { doctorId } = req.params; // keep as text, no parseInt()
 
     const query = `
       SELECT
@@ -228,9 +224,13 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         (
           SELECT COUNT(*) 
           FROM (
-            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctor_id = $1
+            SELECT appointment_date AS appt_date 
+            FROM doctorbooking 
+            WHERE doctor_id::text = $1::text
             UNION ALL
-            SELECT date AS appt_date FROM appointments WHERE doctorid = $1
+            SELECT date AS appt_date 
+            FROM appointments 
+            WHERE doctorid::text = $1::text
           ) all_appointments
           WHERE all_appointments.appt_date >= date_trunc('week', CURRENT_DATE)
         ) AS weekly_appointments,
@@ -239,9 +239,13 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         (
           SELECT COUNT(*) 
           FROM (
-            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctor_id = $1
+            SELECT appointment_date AS appt_date 
+            FROM doctorbooking 
+            WHERE doctor_id::text = $1::text
             UNION ALL
-            SELECT date AS appt_date FROM appointments WHERE doctorid = $1
+            SELECT date AS appt_date 
+            FROM appointments 
+            WHERE doctorid::text = $1::text
           ) all_appointments
           WHERE all_appointments.appt_date >= date_trunc('month', CURRENT_DATE)
         ) AS monthly_appointments,
@@ -250,14 +254,18 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         (
           SELECT COUNT(*) 
           FROM (
-            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctor_id = $1
+            SELECT appointment_date AS appt_date 
+            FROM doctorbooking 
+            WHERE doctor_id::text = $1::text
             UNION ALL
-            SELECT date AS appt_date FROM appointments WHERE doctorid = $1
+            SELECT date AS appt_date 
+            FROM appointments 
+            WHERE doctorid::text = $1::text
           ) all_appointments
         ) AS total_appointments
     `;
 
-    const result = await db.query(query, [doctorId]);
+    const result = await db.query(query, [doctorId]); // doctorId stays as text
 
     return res.json({
       success: true,
