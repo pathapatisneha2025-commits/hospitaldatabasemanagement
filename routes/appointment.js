@@ -77,20 +77,29 @@ router.post("/add", async (req, res) => {
       10
     );
 
-    // ✅ Find last token for that doctor and date (shared counter)
-    const lastAppointment = await db.query(
-      `SELECT tokenid 
-       FROM appointments 
-       WHERE doctorid = $1 AND date = $2
-       ORDER BY tokenid DESC 
-       LIMIT 1`,
-      [doctorId, formattedDate]
-    );
+   const lastToken = await db.query(
+  `
+  SELECT MAX(tokenid) AS last_token
+  FROM (
+    SELECT tokenid 
+    FROM appointments 
+    WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+    
+    UNION ALL
+    
+    SELECT daily_id AS tokenid 
+    FROM doctorbooking 
+    WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+  ) AS combined;
+  `,
+  [doctorId, formattedDate]
+);
 
-    let nextTokenId = 1;
-    if (lastAppointment.rows.length > 0) {
-      nextTokenId = parseInt(lastAppointment.rows[0].tokenid, 10) + 1;
-    }
+let nextTokenId = 1;
+if (lastToken.rows[0].last_token) {
+  nextTokenId = parseInt(lastToken.rows[0].last_token, 10) + 1;
+}
+
 
     // ✅ Enforce daily limit
     if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
