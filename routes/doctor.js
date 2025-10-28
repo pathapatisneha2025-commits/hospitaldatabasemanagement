@@ -224,7 +224,7 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         (
           SELECT COUNT(*) 
           FROM (
-            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctorid = $1
+            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctor_id = $1
             UNION ALL
             SELECT date AS appt_date FROM appointments WHERE doctorid = $1
           ) all_appointments
@@ -235,7 +235,7 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         (
           SELECT COUNT(*) 
           FROM (
-            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctorid = $1
+            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctor_id = $1
             UNION ALL
             SELECT date AS appt_date FROM appointments WHERE doctorid = $1
           ) all_appointments
@@ -246,7 +246,7 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         (
           SELECT COUNT(*) 
           FROM (
-            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctorid = $1
+            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctor_id = $1
             UNION ALL
             SELECT date AS appt_date FROM appointments WHERE doctorid = $1
           ) all_appointments
