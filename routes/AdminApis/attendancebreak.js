@@ -285,10 +285,10 @@ router.get("/totalemployeescount", async (req, res) => {
   }
 });
 
-router.get("/employee-attendance-summary/:employeeId", async (req, res) => {
+router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { filter } = req.query; // "daily", "weekly", or "monthly"
+    const { filter } = req.body; // now comes from body instead of query
     let dateCondition = "";
 
     // 🕒 Date range filter logic
@@ -320,7 +320,7 @@ router.get("/employee-attendance-summary/:employeeId", async (req, res) => {
 
     // 🧘 Employee currently on break (only for daily)
     let breakResult = { rows: [{ employees_on_break: 0 }] };
-    if (filter === "daily") {
+    if (filter === "daily" || !filter) {
       breakResult = await pool.query(
         `
         SELECT COUNT(DISTINCT employee_id) AS employees_on_break
@@ -362,7 +362,7 @@ router.get("/employee-attendance-summary/:employeeId", async (req, res) => {
         total_absent: attendanceResult.rows[0]?.total_absent || 0,
         total_late: attendanceResult.rows[0]?.total_late || 0,
         employees_on_break:
-          filter === "daily"
+          filter === "daily" || !filter
             ? breakResult.rows[0]?.employees_on_break || 0
             : null,
         working_days: workResult.rows[0]?.working_days || null
@@ -373,6 +373,7 @@ router.get("/employee-attendance-summary/:employeeId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
