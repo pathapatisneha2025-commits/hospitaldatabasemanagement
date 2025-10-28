@@ -33,8 +33,7 @@ router.post("/register", upload.single("image"), async (req, res) => {
     const { name, email, password, cnfpass, joiningdate, phone } = req.body;
     const file = req.file;
 
-    console.log("BODY:", req.body);
-    console.log("FILE:", req.file);
+   
 
     if (!name || !email || !password || !cnfpass || !phone)
       return res.status(400).json({ success: false, message: "All required fields must be filled" });
