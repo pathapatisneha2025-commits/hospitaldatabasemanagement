@@ -285,6 +285,94 @@ router.get("/totalemployeescount", async (req, res) => {
   }
 });
 
+router.get("/employee-attendance-summary/:employeeId", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { filter } = req.query; // "daily", "weekly", or "monthly"
+    let dateCondition = "";
+
+    // 🕒 Date range filter logic
+    if (filter === "weekly") {
+      dateCondition = `a.timestamp >= date_trunc('week', CURRENT_DATE)`;
+    } else if (filter === "monthly") {
+      dateCondition = `a.timestamp >= date_trunc('month', CURRENT_DATE)`;
+    } else {
+      dateCondition = `DATE(a.timestamp) = CURRENT_DATE`;
+    }
+
+    // 🧮 Total present, absent, and late counts for one employee
+    const attendanceResult = await pool.query(
+      `
+      SELECT 
+        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
+        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
+        COUNT(*) FILTER (
+          WHERE a.status = 'On Duty'
+            AND a.timestamp > (DATE(a.timestamp) + e.schedule_in)
+        ) AS total_late
+      FROM attendance a
+      JOIN employees e ON a.employee_id = e.id
+      WHERE e.id = $1
+        AND ${dateCondition};
+      `,
+      [employeeId]
+    );
+
+    // 🧘 Employee currently on break (only for daily)
+    let breakResult = { rows: [{ employees_on_break: 0 }] };
+    if (filter === "daily") {
+      breakResult = await pool.query(
+        `
+        SELECT COUNT(DISTINCT employee_id) AS employees_on_break
+        FROM break_logs bl
+        WHERE bl.employee_id = $1
+          AND break_type = 'Break In'
+          AND bl.status = 'On Break'
+          AND DATE(bl.timestamp) = CURRENT_DATE
+          AND NOT EXISTS (
+            SELECT 1
+            FROM break_logs bo
+            WHERE bo.employee_id = bl.employee_id
+              AND bo.break_type = 'Break Out'
+              AND DATE(bo.timestamp) = CURRENT_DATE
+              AND bo.timestamp > bl.timestamp
+          )
+        `,
+        [employeeId]
+      );
+    }
+
+    // 🧰 Working days info
+    const workResult = await pool.query(
+      `
+      SELECT working_days 
+      FROM employee_working_days 
+      WHERE employee_id = $1 
+      LIMIT 1;
+      `,
+      [employeeId]
+    );
+
+    // ✅ Format and send final response
+    return res.json({
+      success: true,
+      period: filter || "daily",
+      summary: {
+        total_present: attendanceResult.rows[0]?.total_present || 0,
+        total_absent: attendanceResult.rows[0]?.total_absent || 0,
+        total_late: attendanceResult.rows[0]?.total_late || 0,
+        employees_on_break:
+          filter === "daily"
+            ? breakResult.rows[0]?.employees_on_break || 0
+            : null,
+        working_days: workResult.rows[0]?.working_days || null
+      }
+    });
+  } catch (error) {
+    console.error("Employee attendance summary error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 
 
