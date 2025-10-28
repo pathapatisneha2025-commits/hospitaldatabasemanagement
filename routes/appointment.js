@@ -89,11 +89,12 @@ router.post("/add", async (req, res) => {
     
     SELECT daily_id AS tokenid 
     FROM doctorbooking 
-    WHERE doctor_id = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+    WHERE doctor_id::integer = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
   ) AS combined;
   `,
   [doctorId, formattedDate]
 );
+
 
 let nextTokenId = 1;
 if (lastToken.rows[0].last_token) {
