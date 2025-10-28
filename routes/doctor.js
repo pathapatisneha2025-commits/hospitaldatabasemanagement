@@ -214,4 +214,52 @@ router.delete("/delete/:id", async (req, res) => {
   }
 });
 
+router.get("/appointments/summary/:doctorId", async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    const query = `
+      SELECT
+        -- weekly appointments (from both tables)
+        (
+          SELECT COUNT(*) 
+          FROM (
+            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctorid = $1
+            UNION ALL
+            SELECT date AS appt_date FROM appointments WHERE doctorid = $1
+          ) all_appointments
+          WHERE all_appointments.appt_date >= date_trunc('week', CURRENT_DATE)
+        ) AS weekly_appointments,
+
+        -- monthly appointments (from both tables)
+        (
+          SELECT COUNT(*) 
+          FROM (
+            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctorid = $1
+            UNION ALL
+            SELECT date AS appt_date FROM appointments WHERE doctorid = $1
+          ) all_appointments
+          WHERE all_appointments.appt_date >= date_trunc('month', CURRENT_DATE)
+        ) AS monthly_appointments,
+
+        -- total appointments
+        (
+          SELECT COUNT(*) 
+          FROM (
+            SELECT appointment_date AS appt_date FROM doctorbooking WHERE doctorid = $1
+            UNION ALL
+            SELECT date AS appt_date FROM appointments WHERE doctorid = $1
+          ) all_appointments
+        ) AS total_appointments
+    `;
+
+    const result = await pool.query(query, [doctorId]);
+    return res.json({ success: true, doctorId, summary: result.rows[0] });
+  } catch (error) {
+    console.error("❌ Error fetching doctor summary:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 module.exports = router;
