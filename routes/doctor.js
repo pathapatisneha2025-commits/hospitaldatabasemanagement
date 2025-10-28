@@ -253,7 +253,7 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         ) AS total_appointments
     `;
 
-    const result = await pool.query(query, [doctorId]);
+const result = await db.query(query, [doctorId]);
     return res.json({ success: true, doctorId, summary: result.rows[0] });
   } catch (error) {
     console.error("❌ Error fetching doctor summary:", error.message);
