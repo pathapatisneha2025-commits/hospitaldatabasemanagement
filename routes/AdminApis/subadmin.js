@@ -32,6 +32,8 @@ router.post("/register", upload.single("image"), async (req, res) => {
   try {
     const { name, email, password, cnfpass, joiningdate, phone } = req.body;
     const file = req.file;
+console.log("BODY:", req.body);
+console.log("FILE:", req.file);
 
     // ✅ Validate inputs
     if (!name || !email || !password || !cnfpass || !phone) {
