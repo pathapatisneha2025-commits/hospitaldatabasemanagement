@@ -153,21 +153,25 @@ router.post("/verify-location", (req, res) => {
 // ✅ Mark attendance
 router.post("/mark-attendance", async (req, res) => {
   try {
-    const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
+    const { employeeId, subadminId, capturedUrl, locationVerified, faceVerified } = req.body;
 
-    if (!employeeId || !capturedUrl) {
+    if ((!employeeId && !subadminId) || !capturedUrl) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
     const status =
       locationVerified === true && faceVerified === true ? "On Duty" : "Absent";
 
-    // Insert and return timestamp
+    // ✅ Determine which ID to use — employee or subadmin
+    const idToUse = employeeId || subadminId;
+    const columnToUse = employeeId ? "employee_id" : "subadmin_id";
+
+    // ✅ Insert and return timestamp
     const insertResult = await pool.query(
-      `INSERT INTO attendance (employee_id, timestamp, image_url, status)
+      `INSERT INTO attendance (${columnToUse}, timestamp, image_url, status)
        VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
-       RETURNING id, employee_id, status, timestamp`,
-      [employeeId, capturedUrl, status]
+       RETURNING id, ${columnToUse}, status, timestamp`,
+      [idToUse, capturedUrl, status]
     );
 
     const row = insertResult.rows[0];
@@ -176,9 +180,10 @@ router.post("/mark-attendance", async (req, res) => {
       success: true,
       message: "Attendance marked successfully",
       data: {
-        employeeId: row.employee_id,
+        employeeId: employeeId || null,
+        subadminId: subadminId || null,
         status: row.status,
-        timestamp: row.timestamp   // ✅ timestamp added here
+        timestamp: row.timestamp
       },
     });
   } catch (error) {
@@ -186,6 +191,7 @@ router.post("/mark-attendance", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
  // ✅ Fetch all "On Duty" attendance records
 router.get("/login/all", async (req, res) => {
