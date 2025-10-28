@@ -52,7 +52,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
       }
       registeredUrl = result.rows[0].image;
     } else {
-      const result = await pool.query("SELECT image FROM subadmins WHERE id = $1", [subadminId]);
+      const result = await pool.query("SELECT image FROM subadmin WHERE id = $1", [subadminId]);
       if (result.rowCount === 0) {
         return res.status(404).json({ success: false, message: "Subadmin not found" });
       }
