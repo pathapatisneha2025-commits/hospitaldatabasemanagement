@@ -9,24 +9,21 @@ router.post("/breaks", async (req, res) => {
   try {
     const {
       employeeId,
-      subadminId, // 👈 optional
+      subadminId, // optional
       capturedUrl,
       locationVerified,
       faceVerified,
       breakType,
     } = req.body;
 
-    // ✅ Determine which ID to use
-    const userId = employeeId || subadminId;
-
-    // ✅ Validate
-    if (!userId || !capturedUrl || !breakType) {
+    // ✅ Validate inputs
+    if ((!employeeId && !subadminId) || !capturedUrl || !breakType) {
       return res
         .status(400)
         .json({ success: false, message: "Missing required fields" });
     }
 
-    if (breakType !== "Break In" && breakType !== "Break Out") {
+    if (!["Break In", "Break Out"].includes(breakType)) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid break type" });
@@ -34,13 +31,13 @@ router.post("/breaks", async (req, res) => {
 
     // ✅ Determine status
     const status =
-      locationVerified === true && faceVerified === true
+      locationVerified && faceVerified
         ? breakType === "Break In"
           ? "On Break"
           : "Returned"
         : "Rejected";
 
-    // ✅ Insert record — only one of employee_id or subadmin_id will be filled
+    // ✅ Insert record (only one ID will be filled)
     await pool.query(
       `INSERT INTO break_logs (employee_id, subadmin_id, break_type, timestamp, image_url, status)
        VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'Asia/Kolkata'), $4, $5)`,
@@ -50,13 +47,19 @@ router.post("/breaks", async (req, res) => {
     return res.json({
       success: true,
       message: `${breakType} logged successfully`,
-      data: { userId, breakType, status },
+      data: {
+        employeeId: employeeId || null,
+        subadminId: subadminId || null,
+        breakType,
+        status,
+      },
     });
   } catch (error) {
     console.error("Break log error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 /* =========================================================
