@@ -312,9 +312,10 @@ router.put("/update", async (req, res) => {
 // ✅ Logout Route with session_hours, daily, weekly, monthly
 router.post("/logout", async (req, res) => {
   try {
-    const { employeeId, capturedUrl, locationVerified, faceVerified } = req.body;
+    const { employeeId, subadminId, capturedUrl, locationVerified, faceVerified } = req.body;
 
-    if (!employeeId || !capturedUrl) {
+    // ✅ Either employeeId or subadminId must be present
+    if ((!employeeId && !subadminId) || !capturedUrl) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
@@ -326,6 +327,8 @@ router.post("/logout", async (req, res) => {
     }
 
     const status = "Off Duty";
+    const idToUse = employeeId || subadminId; // use whichever exists
+    const idColumn = employeeId ? "employee_id" : "subadmin_id"; // dynamic column
 
     const formatHours = (seconds) => {
       const hrs = Math.floor(seconds / 3600);
@@ -337,17 +340,17 @@ router.post("/logout", async (req, res) => {
     const onDutyResult = await pool.query(
       `SELECT id, timestamp
        FROM attendance
-       WHERE employee_id = $1 AND status = 'On Duty'
+       WHERE ${idColumn} = $1 AND status = 'On Duty'
        ORDER BY timestamp DESC
        LIMIT 1`,
-      [employeeId]
+      [idToUse]
     );
 
     if (onDutyResult.rows.length === 0) {
       return res.json({
         success: true,
         message: "Logout marked (no matching On Duty found).",
-        data: { employeeId, status },
+        data: { [idColumn]: idToUse, status },
       });
     }
 
@@ -368,7 +371,8 @@ router.post("/logout", async (req, res) => {
 
     // 4️⃣ Calculate overtime
     let overtime = "0 hrs 0 mins";
-    const empRes = await pool.query(`SELECT schedule_out FROM employees WHERE id = $1`, [employeeId]);
+    const tableName = employeeId ? "employees" : "subadmin";
+    const empRes = await pool.query(`SELECT schedule_out FROM ${tableName} WHERE id = $1`, [idToUse]);
     if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
       const scheduleOut = empRes.rows[0].schedule_out;
       const overtimeRes = await pool.query(
@@ -388,25 +392,25 @@ router.post("/logout", async (req, res) => {
     const dailyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS daily_seconds
        FROM attendance
-       WHERE employee_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
-      [employeeId]
+       WHERE ${idColumn} = $1 AND DATE(timestamp) = CURRENT_DATE`,
+      [idToUse]
     );
 
     const weeklyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS weekly_seconds
        FROM attendance
-       WHERE employee_id = $1
+       WHERE ${idColumn} = $1
          AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
          AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
-      [employeeId]
+      [idToUse]
     );
 
     const monthlyRes = await pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS monthly_seconds
        FROM attendance
-       WHERE employee_id = $1
+       WHERE ${idColumn} = $1
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
-      [employeeId]
+      [idToUse]
     );
 
     const dailyHoursStr = formatHours(dailyRes.rows[0].daily_seconds);
@@ -416,10 +420,10 @@ router.post("/logout", async (req, res) => {
     // 6️⃣ Insert Off Duty record including daily, weekly, and monthly hours
     const insertResult = await pool.query(
       `INSERT INTO attendance 
-        (employee_id, timestamp, image_url, status, session_hours, overtime, remaining_hours, daily_hours, weekly_hours, monthly_hours)
+        (${idColumn}, timestamp, image_url, status, session_hours, overtime, remaining_hours, daily_hours, weekly_hours, monthly_hours)
        VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, timestamp`,
-      [employeeId, capturedUrl, status, sessionHours, overtime, remainingHours, dailyHoursStr, weeklyHoursStr, monthlyHoursStr]
+      [idToUse, capturedUrl, status, sessionHours, overtime, remainingHours, dailyHoursStr, weeklyHoursStr, monthlyHoursStr]
     );
 
     const offDutyRow = insertResult.rows[0];
@@ -428,7 +432,7 @@ router.post("/logout", async (req, res) => {
       success: true,
       message: "Logout marked successfully with hours, overtime, and aggregated daily/weekly/monthly hours",
       data: {
-        employeeId,
+        [idColumn]: idToUse,
         status,
         timestamp: offDutyRow.timestamp,
         sessionHours,

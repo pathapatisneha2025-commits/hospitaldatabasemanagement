@@ -3,7 +3,7 @@ const bcrypt = require("bcrypt");
 const path = require("path");
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const cloudinary = require("../cloudinary"); // ✅ your custom cloudinary config file
+const cloudinary = require("../../cloudinary"); // ✅ your custom cloudinary config file
 const pool = require("../../db");
 
 const router = express.Router();
