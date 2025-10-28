@@ -1,41 +1,85 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const pool = require("../../db"); // your DB connection file
+const path = require("path");
+const multer = require("multer");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../cloudinary"); // ✅ your custom cloudinary config file
+const pool = require("../../db");
+
 const router = express.Router();
 
 /* ======================================================
-   1.Register Subadmin
+    Cloudinary + Multer Config
 ====================================================== */
-router.post("/register", async (req, res) => {
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "subadmin/profile_images", // ✅ folder in Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name;
+      return Date.now() + "-" + nameWithoutExt;
+    },
+  },
+});
+
+const upload = multer({ storage });
+
+/* ======================================================
+   1️ Register Subadmin (with Cloudinary Image Upload)
+====================================================== */
+router.post("/register", upload.single("image"), async (req, res) => {
   try {
     const { name, email, password, cnfpass, joiningdate, phone } = req.body;
+    const file = req.file;
+
+    // ✅ Validate inputs
+    if (!name || !email || !password || !cnfpass || !phone) {
+      return res.status(400).json({ success: false, message: "All required fields must be filled" });
+    }
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: "Profile image is required" });
+    }
 
     if (password !== cnfpass) {
       return res.status(400).json({ success: false, message: "Passwords do not match" });
     }
 
-    const existingUser = await pool.query("SELECT * FROM subadmin WHERE email = $1", [email]);
-    if (existingUser.rows.length > 0) {
+    // ✅ Check for duplicate email
+    const existing = await pool.query("SELECT * FROM subadmin WHERE email = $1", [email]);
+    if (existing.rows.length > 0) {
       return res.status(400).json({ success: false, message: "Email already registered" });
     }
 
+    // ✅ Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // ✅ Cloudinary image URL
+    const imageUrl = file.path;
+
+    // ✅ Insert into database
     const result = await pool.query(
-  `INSERT INTO subadmin 
-    (name, email, password, confirm_password, joining_date, phone, status, created_at)
-   VALUES ($1, $2, $3, $4, $5, $6, $7, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'))
-   RETURNING *`,
-  [name, email, hashedPassword, hashedPassword, joiningdate || new Date(), phone, 'pending']
-);
+      `INSERT INTO subadmin 
+        (name, email, password, confirm_password, joining_date, phone, status, created_at, image)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'), $8)
+       RETURNING *`,
+      [name, email, hashedPassword, hashedPassword, joiningdate || new Date(), phone, "pending", imageUrl]
+    );
 
-
-    res.status(201).json({ success: true, message: "Subadmin registered", data: result.rows[0] });
+    res.status(201).json({
+      success: true,
+      message: "Subadmin registered successfully",
+      data: result.rows[0],
+    });
   } catch (error) {
-    console.error("Error during registration:", error);
+    console.error("❌ Subadmin registration error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
+
 
 /* ======================================================
    2. Login Subadmin
