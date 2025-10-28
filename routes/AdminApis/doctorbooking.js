@@ -10,6 +10,8 @@ router.post("/add", async (req, res) => {
       patientId,
       patientName,
       patientAge,
+      patientGender,          
+      patientBloodGroup,      
       patientPhone,
       doctorName,
       specialization,
@@ -72,7 +74,7 @@ router.post("/add", async (req, res) => {
         
         SELECT daily_id AS tokenid 
         FROM doctorbooking 
-        WHERE doctor_id::integer = $1 AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
+        WHERE doctor_id::text = $1 AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
       ) AS combined;
       `,
       [doctorId, appointmentDate]
@@ -90,17 +92,24 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // ✅ Insert new doctor booking
+    // ✅ Insert new doctor booking (added gender & blood group)
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         daily_id, employee_id, doctor_id, patient_id,
-        patient_name, patient_age, patient_phone,
+        patient_name, patient_age, patient_gender, patient_bloodgroup, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
         appointment_date, appointment_time, payment_type, doctor_consultant_fee,
         status
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending')
+      VALUES (
+        $1,$2,$3,$4,
+        $5,$6,$7,$8,$9,
+        $10,$11,$12,$13,
+        $14,$15,$16,
+        $17,$18,$19,$20,
+        'pending'
+      )
       RETURNING *`,
       [
         nextDailyId,
@@ -109,6 +118,8 @@ router.post("/add", async (req, res) => {
         patientId,
         patientName,
         patientAge,
+        patientGender,        // 👈 added
+        patientBloodGroup,    // 👈 added
         patientPhone,
         doctorName,
         specialization,
