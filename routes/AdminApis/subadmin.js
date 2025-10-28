@@ -53,11 +53,8 @@ router.post("/register", upload.single("image"), async (req, res) => {
     const imageUrl = file.path;
 
     // ✅ Convert date
-    let formattedDate = null;
-    if (joiningdate) {
-      const [day, month, year] = joiningdate.split("-");
-      formattedDate = `${year}-${month}-${day}`;
-    }
+   // ✅ Use the date directly — frontend sends in ISO format
+const formattedDate = joiningdate || new Date().toISOString().split('T')[0];
 
     const result = await pool.query(
       `INSERT INTO subadmin 
