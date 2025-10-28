@@ -216,7 +216,11 @@ router.delete("/delete/:id", async (req, res) => {
 
 router.get("/appointments/summary/:doctorId", async (req, res) => {
   try {
-    const { doctorId } = req.params;
+    const doctorId = parseInt(req.params.doctorId, 10); // ✅ Convert to integer
+
+    if (isNaN(doctorId)) {
+      return res.status(400).json({ success: false, message: "Invalid doctor ID" });
+    }
 
     const query = `
       SELECT
@@ -253,8 +257,13 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
         ) AS total_appointments
     `;
 
-const result = await db.query(query, [doctorId]);
-    return res.json({ success: true, doctorId, summary: result.rows[0] });
+    const result = await db.query(query, [doctorId]);
+
+    return res.json({
+      success: true,
+      doctorId,
+      summary: result.rows[0],
+    });
   } catch (error) {
     console.error("❌ Error fetching doctor summary:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
