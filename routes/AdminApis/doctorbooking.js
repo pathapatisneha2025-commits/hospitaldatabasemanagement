@@ -96,7 +96,7 @@ router.post("/add", async (req, res) => {
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         daily_id, employee_id, doctor_id, patient_id,
-        patient_name, patient_age, patient_gender, patient_bloodgroup, patient_phone,
+        patient_name, patient_age, patient_gender, patient_blood_group, patient_phone,
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
         appointment_date, appointment_time, payment_type, doctor_consultant_fee,
