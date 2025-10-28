@@ -61,6 +61,35 @@ router.post("/breaks", async (req, res) => {
 });
 
 
+router.get("/employee/all", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT 
+        b.id,
+        b.employee_id,
+        COALESCE(e.full_name, 'Unknown Employee') AS user_name,
+        b.break_type,
+        b.timestamp,
+        b.image_url,
+        b.status
+      FROM break_logs b
+      LEFT JOIN employees e ON b.employee_id = e.id
+      WHERE b.employee_id IS NOT NULL  -- ✅ Only employee records
+      ORDER BY b.timestamp DESC
+      `
+    );
+
+    res.json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error("Get employee breaks error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 /* =========================================================
    2️ GET ALL BREAK LOGS (Admin / HR view)
