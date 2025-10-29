@@ -387,7 +387,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     let totalBlocks = 0;
     lateRows.forEach((row, idx) => {
-      if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0;
+      if (idx >= 2) totalBlocks += parseInt(row.blocks, 10) || 0;
     });
     const latedays = lateRows.length;
 
