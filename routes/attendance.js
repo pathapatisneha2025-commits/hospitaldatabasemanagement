@@ -755,32 +755,40 @@ router.get("/summary", async (req, res) => {
     const startStr = start.toISOString().split("T")[0];
     const endStr = end.toISOString().split("T")[0];
 
-    // 🧩 Main SQL Query
-    const query = `
-      SELECT 
-        e.id AS employee_id,
-        e.full_name AS employee_name,
-        e.department,
-        d::date AS date,
-        COALESCE(a.status, CASE WHEN l.id IS NOT NULL THEN 'On Leave' ELSE 'Absent' END) AS status,
-        MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
-        MAX(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_out
-      FROM employees e
-      CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
-      LEFT JOIN attendance a 
-        ON e.id = a.employee_id 
-        AND DATE(a.timestamp) = d
-      LEFT JOIN leaves l 
-        ON e.id = l.employee_id
-        AND l.status = 'Approved'
-        AND d BETWEEN l.start_date AND l.end_date
-      GROUP BY e.id, e.full_name, e.department, d, l.id, a.status
-      ORDER BY e.full_name, d;
-    `;
+    // 🧩 Main SQL Query (includes both On Duty + Off Duty)
+   // 🧩 Main SQL Query (combines On Duty + Off Duty into one row per day)
+const query = `
+  SELECT 
+    e.id AS employee_id,
+    e.full_name AS employee_name,
+    e.department,
+    d::date AS date,
+    MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
+    MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') AS check_out,
+    CASE
+      WHEN l.id IS NOT NULL THEN 'On Leave'
+      WHEN MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') IS NOT NULL
+           OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
+      THEN 'Present'
+      ELSE 'Absent'
+    END AS status
+  FROM employees e
+  CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
+  LEFT JOIN attendance a 
+    ON e.id = a.employee_id 
+    AND DATE(a.timestamp) = d
+  LEFT JOIN leaves l 
+    ON e.id = l.employee_id
+    AND l.status = 'Approved'
+    AND d BETWEEN l.start_date AND l.end_date
+  GROUP BY e.id, e.full_name, e.department, d, l.id
+  ORDER BY e.full_name, d;
+`;
+
 
     const result = await pool.query(query, [startStr, endStr]);
 
-    // 🧮 Group data by employee
+    // 🧮 Group and process data
     const employeeMap = {};
     result.rows.forEach(row => {
       if (!employeeMap[row.employee_id]) {
@@ -794,21 +802,27 @@ router.get("/summary", async (req, res) => {
         };
       }
 
-      // Add daily record without schedule times
+      const formatTime = (t) =>
+        t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
+
+      // 🕒 Calculate working hours (if both times available)
+      let totalHours = "-";
+      if (row.check_in && row.check_out) {
+        const diffMs = new Date(row.check_out) - new Date(row.check_in);
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        totalHours = `${hours}h ${minutes}m`;
+      }
+
       employeeMap[row.employee_id].days.push({
-        employee_name: row.employee_name,
-        department: row.department,
         date: row.date,
         status: row.status,
-        check_in: row.check_in
-          ? new Date(row.check_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "-",
-        check_out: row.check_out
-          ? new Date(row.check_out).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "-",
+        check_in: formatTime(row.check_in),
+        check_out: formatTime(row.check_out),
+        working_hours: totalHours,
       });
 
-      if (row.status === "On Duty") employeeMap[row.employee_id].presentDays++;
+      if (row.status === "Present") employeeMap[row.employee_id].presentDays++;
       employeeMap[row.employee_id].totalDays++;
     });
 
