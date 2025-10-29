@@ -30,10 +30,10 @@ router.post("/add", async (req, res) => {
 
     // 💾 Insert into latepenalties
     const insertResult = await pool.query(
-      `INSERT INTO latepenalties (employee_id, employee_name, penalty_amount)
-       VALUES ($1, $2, $3)
+      `INSERT INTO latepenalties (employee_id, employee_name, employee_email,penalty_amount)
+       VALUES ($1, $2, $3,$4)
        RETURNING *`,
-      [employee_id, employee_name, penalty_amount]
+      [employee_id, employee_name, employee_email,penalty_amount]
     );
 
     res.status(201).json({
