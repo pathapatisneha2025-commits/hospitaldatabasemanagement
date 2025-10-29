@@ -759,7 +759,7 @@ router.get("/attendance/summary", async (req, res) => {
     const query = `
       SELECT 
         e.id AS employee_id,
-        e.name AS employee_name,
+        e.full_name AS employee_name,
         e.department,
         d::date AS date,
         COALESCE(a.status, CASE WHEN l.id IS NOT NULL THEN 'On Leave' ELSE 'Absent' END) AS status,
@@ -774,7 +774,7 @@ router.get("/attendance/summary", async (req, res) => {
         ON e.id = l.employee_id
         AND l.status = 'Approved'
         AND d BETWEEN l.start_date AND l.end_date
-      GROUP BY e.id, e.name, e.department, d, l.id, a.status
+      GROUP BY e.id, e.full_name, e.department, d, l.id, a.status
       ORDER BY e.name, d;
     `;
 
