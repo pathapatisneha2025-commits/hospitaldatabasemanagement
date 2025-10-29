@@ -300,7 +300,7 @@ const result = await pool.query(
 // =========================
 router.get("/totalemployeescount", async (req, res) => {
   try {
-    // Count attendance (present / absent / late)
+    // 🟢 Count attendance (present / absent / late)
     const attendanceResult = await pool.query(`
       SELECT 
         COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
@@ -314,7 +314,7 @@ router.get("/totalemployeescount", async (req, res) => {
       WHERE DATE(a.timestamp) = CURRENT_DATE
     `);
 
-    // Count employees currently on break
+    // 🟡 Count employees currently on break
     const breakResult = await pool.query(`
       SELECT COUNT(DISTINCT employee_id) AS employees_on_break
       FROM break_logs bl
@@ -331,17 +331,27 @@ router.get("/totalemployeescount", async (req, res) => {
         )
     `);
 
+    // 🔵 Count employees currently on leave
+    const leaveResult = await pool.query(`
+      SELECT COUNT(DISTINCT employee_id) AS total_on_leave
+      FROM leaves
+      WHERE status = 'Approved'
+        AND CURRENT_DATE BETWEEN start_date AND end_date;
+    `);
+
+    // 🧩 Combine all results
     return res.json({
       success: true,
       summary: {
         total_present: attendanceResult.rows[0].total_present,
         total_absent: attendanceResult.rows[0].total_absent,
         total_late: attendanceResult.rows[0].total_late,
-        employees_on_break: breakResult.rows[0].employees_on_break
-      }
+        employees_on_break: breakResult.rows[0].employees_on_break,
+        total_on_leave: leaveResult.rows[0].total_on_leave
+      },
     });
   } catch (error) {
-    console.error("Attendance & break summary error:", error.message);
+    console.error("Attendance & leave summary error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });

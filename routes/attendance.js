@@ -100,8 +100,8 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 
 // ✅ Location verification
-const OFFICE_LAT = 17.677669;
-const OFFICE_LNG =  83.198666;
+const OFFICE_LAT =21.930424;
+const OFFICE_LNG = 86.726709;
 const RADIUS_IN_METERS = 2000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -729,6 +729,103 @@ router.delete("/deletelogs/:employee_id", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Delete attendance error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+router.get("/attendance/summary", async (req, res) => {
+  try {
+    const { view = "weekly" } = req.query;
+    const today = new Date();
+    let start, end;
+
+    // 📅 Determine date range
+    if (view === "monthly") {
+      start = new Date(today.getFullYear(), today.getMonth(), 1);
+      end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    } else {
+      // Weekly (Monday–Sunday)
+      const day = today.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      start = new Date(today);
+      start.setDate(today.getDate() + diffToMonday);
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+    }
+
+    const startStr = start.toISOString().split("T")[0];
+    const endStr = end.toISOString().split("T")[0];
+
+    // 🧩 Main SQL Query
+    const query = `
+      SELECT 
+        e.id AS employee_id,
+        e.name AS employee_name,
+        e.department,
+        d::date AS date,
+        COALESCE(a.status, CASE WHEN l.id IS NOT NULL THEN 'On Leave' ELSE 'Absent' END) AS status,
+        MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
+        MAX(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_out
+      FROM employees e
+      CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
+      LEFT JOIN attendance a 
+        ON e.id = a.employee_id 
+        AND DATE(a.timestamp) = d
+      LEFT JOIN leaves l 
+        ON e.id = l.employee_id
+        AND l.status = 'Approved'
+        AND d BETWEEN l.start_date AND l.end_date
+      GROUP BY e.id, e.name, e.department, d, l.id, a.status
+      ORDER BY e.name, d;
+    `;
+
+    const result = await pool.query(query, [startStr, endStr]);
+
+    // 🧮 Group data by employee
+    const employeeMap = {};
+    result.rows.forEach(row => {
+      if (!employeeMap[row.employee_id]) {
+        employeeMap[row.employee_id] = {
+          employee_id: row.employee_id,
+          employee_name: row.employee_name,
+          department: row.department,
+          days: [],
+          presentDays: 0,
+          totalDays: 0,
+        };
+      }
+
+      // Add daily record without schedule times
+      employeeMap[row.employee_id].days.push({
+        employee_name: row.employee_name,
+        department: row.department,
+        date: row.date,
+        status: row.status,
+        check_in: row.check_in
+          ? new Date(row.check_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "-",
+        check_out: row.check_out
+          ? new Date(row.check_out).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "-",
+      });
+
+      if (row.status === "On Duty") employeeMap[row.employee_id].presentDays++;
+      employeeMap[row.employee_id].totalDays++;
+    });
+
+    // 📊 Attendance summary
+    const summary = Object.values(employeeMap).map(emp => ({
+      ...emp,
+      attendanceRate: ((emp.presentDays / emp.totalDays) * 100).toFixed(0) + "%",
+    }));
+
+    res.json({
+      success: true,
+      view,
+      range: { start: startStr, end: endStr },
+      data: summary,
+    });
+  } catch (error) {
+    console.error("Error fetching attendance summary:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
