@@ -775,7 +775,7 @@ router.get("/summary", async (req, res) => {
         AND l.status = 'Approved'
         AND d BETWEEN l.start_date AND l.end_date
       GROUP BY e.id, e.full_name, e.department, d, l.id, a.status
-      ORDER BY e.name, d;
+      ORDER BY e.full_name, d;
     `;
 
     const result = await pool.query(query, [startStr, endStr]);
