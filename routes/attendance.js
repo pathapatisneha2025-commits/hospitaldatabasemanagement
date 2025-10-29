@@ -732,7 +732,7 @@ router.delete("/deletelogs/:employee_id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-router.get("/attendance/summary", async (req, res) => {
+router.get("/summary", async (req, res) => {
   try {
     const { view = "weekly" } = req.query;
     const today = new Date();
