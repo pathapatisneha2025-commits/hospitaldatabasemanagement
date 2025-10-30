@@ -843,6 +843,48 @@ const query = `
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+router.get("/late-count/:employeeId/:year/:month", async (req, res) => {
+  try {
+    const { employeeId, year, month } = req.params;
 
+    if (!employeeId || !year || !month) {
+      return res.status(400).json({ success: false, message: "Missing required parameters." });
+    }
+
+    // ✅ Your SQL query for late entries
+    const lateResult = await pool.query(
+      `SELECT 
+          DATE(a.timestamp) AS day,
+          FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       WHERE a.employee_id = $1
+         AND EXTRACT(YEAR FROM a.timestamp) = $2
+         AND EXTRACT(MONTH FROM a.timestamp) = $3
+         AND a.status ILIKE 'On Duty'
+       GROUP BY DATE(a.timestamp), e.schedule_in
+       HAVING MIN(a.timestamp)::time > e.schedule_in;`,
+      [employeeId, year, month]
+    );
+
+    // ✅ Count number of late days
+    const lateCount = lateResult.rows.length;
+
+    return res.json({
+      success: true,
+      employeeId,
+      year,
+      month,
+      lateCount,
+      lateDetails: lateResult.rows, // optional: contains day + blocks
+    });
+  } catch (error) {
+    console.error("Error fetching late count:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching late count",
+    });
+  }
+});
 
 module.exports = router;
