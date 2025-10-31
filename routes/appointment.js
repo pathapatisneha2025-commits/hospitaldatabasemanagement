@@ -327,33 +327,36 @@ router.delete('/delete/:id', async (req, res) => {
 });
 // -------------------- UPDATE STATUS --------------------
 router.put("/update-status", async (req, res) => {
-  const { id, status } = req.body;
+  const { tokenid, daily_id, status } = req.body;
 
-  if (!id) {
-    return res.status(400).json({ error: "Appointment ID is required" });
-  }
   if (!status) {
     return res.status(400).json({ error: "Status is required" });
   }
 
-  try {
-    // 🔍 Try to update in 'appointments' table first (book-appointment)
-    let result = await db.query(
-      `UPDATE appointments SET status = $1 WHERE tokenid = $2 RETURNING *;`,
-      [status, id]
-    );
+  if (!tokenid && !daily_id) {
+    return res.status(400).json({ error: "Either tokenid or daily_id is required" });
+  }
 
-    // 🩺 If not found, try in 'doctorbooking' table
-    if (result.rows.length === 0) {
+  try {
+    let result;
+
+    if (tokenid) {
+      // 🔹 Update in 'appointments' table using tokenid
+      result = await db.query(
+        `UPDATE appointments SET status = $1 WHERE tokenid = $2 RETURNING *;`,
+        [status, tokenid]
+      );
+    } else if (daily_id) {
+      // 🔹 Update in 'doctorbooking' table using daily_id
       result = await db.query(
         `UPDATE doctorbooking SET status = $1 WHERE daily_id = $2 RETURNING *;`,
-        [status, id]
+        [status, daily_id]
       );
     }
 
-    // ❌ If still nothing found
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Appointment not found in any table" });
+    // ❌ If no record found
+    if (!result || result.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
     }
 
     // ✅ Success
