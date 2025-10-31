@@ -15,7 +15,7 @@ router.post("/add", async (req, res) => {
 
     // Check if doctor already has a record
     const existing = await db.query(
-      "SELECT * FROM doctor_visit_limits WHERE LOWER(doctor_email) = LOWER($1)",
+      "SELECT * FROM doctor_visits WHERE LOWER(doctor_email) = LOWER($1)",
       [doctor_email]
     );
 
@@ -27,7 +27,7 @@ router.post("/add", async (req, res) => {
 
     // Insert new static visit limit
     const result = await db.query(
-      "INSERT INTO doctor_visit_limits (doctor_email, doctor_name, number_of_visits_per_day) VALUES ($1, $2, $3) RETURNING *",
+      "INSERT INTO doctor_visits (doctor_email, doctor_name, number_of_visits_per_day) VALUES ($1, $2, $3) RETURNING *",
       [doctor_email, doctor_name, number_of_visits_per_day]
     );
 
@@ -50,14 +50,14 @@ router.put("/update/:id", async (req, res) => {
     const { doctor_email, doctor_name, number_of_visits_per_day } = req.body;
 
     // Check if record exists
-    const existing = await db.query("SELECT * FROM doctor_visit_limits WHERE id = $1", [id]);
+    const existing = await db.query("SELECT * FROM doctor_visits WHERE id = $1", [id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ message: "Visit limit record not found" });
     }
 
     // Update fields (only if provided)
     await db.query(
-      `UPDATE doctor_visit_limits
+      `UPDATE doctor_visits
        SET doctor_email = COALESCE($1, doctor_email),
            doctor_name = COALESCE($2, doctor_name),
            number_of_visits_per_day = COALESCE($3, number_of_visits_per_day)
@@ -78,7 +78,7 @@ router.put("/update/:id", async (req, res) => {
 router.get("/all", async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT * FROM doctor_visit_limits ORDER BY doctor_name ASC"
+      "SELECT * FROM doctor_visits ORDER BY doctor_name ASC"
     );
     res.json(result.rows);
   } catch (error) {
@@ -93,7 +93,7 @@ router.get("/all", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query("DELETE FROM doctor_visit_limits WHERE id = $1", [id]);
+    const result = await db.query("DELETE FROM doctor_visits WHERE id = $1", [id]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: "Visit limit record not found" });
