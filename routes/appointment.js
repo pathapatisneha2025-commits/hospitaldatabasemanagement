@@ -326,39 +326,46 @@ router.delete('/delete/:id', async (req, res) => {
     }
 });
 // -------------------- UPDATE STATUS --------------------
-router.put('/update-status', async (req, res) => {
+router.put("/update-status", async (req, res) => {
   const { id, status } = req.body;
 
   if (!id) {
     return res.status(400).json({ error: "Appointment ID is required" });
   }
-
   if (!status) {
     return res.status(400).json({ error: "Status is required" });
   }
 
   try {
-    const updateQuery = `
-      UPDATE appointments
-      SET status = $1
-      WHERE id = $2
-      RETURNING *;
-    `;
+    // 🔍 Try to update in 'appointments' table first (book-appointment)
+    let result = await db.query(
+      `UPDATE appointments SET status = $1 WHERE tokenid = $2 RETURNING *;`,
+      [status, id]
+    );
 
-    const result = await db.query(updateQuery, [status, id]);
-
+    // 🩺 If not found, try in 'doctorbooking' table
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Appointment not found" });
+      result = await db.query(
+        `UPDATE doctorbooking SET status = $1 WHERE daily_id = $2 RETURNING *;`,
+        [status, id]
+      );
     }
 
+    // ❌ If still nothing found
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found in any table" });
+    }
+
+    // ✅ Success
     res.json({
       message: "Appointment status updated successfully",
-      appointment: result.rows[0]
+      appointment: result.rows[0],
     });
   } catch (err) {
-    console.error("Error updating appointment status:", err);
+    console.error("❌ Error updating appointment status:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 module.exports = router;
