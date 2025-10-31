@@ -328,6 +328,7 @@ router.delete('/delete/:id', async (req, res) => {
 // -------------------- UPDATE STATUS --------------------
 router.put("/update-status", async (req, res) => {
   const { tokenid, daily_id, status } = req.body;
+console.log("🧾 Incoming:", { tokenid, daily_id, status });
 
   if (!status) {
     return res.status(400).json({ error: "Status is required" });
