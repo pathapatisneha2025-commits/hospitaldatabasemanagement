@@ -30,9 +30,7 @@ router.post("/add", async (req, res) => {
     // 🗓️ Normalize the date format (to YYYY-MM-DD)
     const formattedDate = date.includes("T") ? date.split("T")[0] : date;
 
-    console.log("🩺 Doctor Email:", doctorEmail);
-    console.log("📅 Original Date:", date);
-    console.log("🧾 Formatted Date:", formattedDate);
+    
 
     // ✅ Verify doctor exists
     const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
@@ -56,7 +54,7 @@ router.post("/add", async (req, res) => {
    // ✅ Fetch doctor's static daily limit (applies every day)
 const visitData = await db.query(
   `SELECT number_of_visits_per_day 
-   FROM doctor_visit_limits 
+   FROM doctor_visits 
    WHERE LOWER(doctor_email) = LOWER($1)
    LIMIT 1`,
   [doctorEmail]

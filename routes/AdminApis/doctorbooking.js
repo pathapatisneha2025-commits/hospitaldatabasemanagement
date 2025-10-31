@@ -43,7 +43,7 @@ router.post("/add", async (req, res) => {
     // ✅ Get doctor's max visits for the day
       const visitData = await pool.query(
       `SELECT number_of_visits_per_day 
-       FROM doctor_visit_limits 
+       FROM doctor_visits
        WHERE LOWER(doctor_email) = LOWER($1)
        LIMIT 1`,
       [doctorEmail]
