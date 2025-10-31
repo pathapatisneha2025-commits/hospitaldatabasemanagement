@@ -3,96 +3,105 @@ const router = express.Router();
 const db = require("../../db"); // PostgreSQL or MySQL connection instance
 
 // --------------------------------------
-//  Add Doctor Visit Record
+//  Add Doctor Visit Limit (set once per doctor)
 // --------------------------------------
 router.post("/add", async (req, res) => {
   try {
-    const { doctor_email, doctor_name, number_of_visits_per_day, visit_date } = req.body;
+    const { doctor_email, doctor_name, number_of_visits_per_day } = req.body;
 
     if (!doctor_email || !doctor_name || number_of_visits_per_day === undefined) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const dateToUse = visit_date || new Date().toISOString().split("T")[0];
+    // Check if doctor already has a record
+    const existing = await db.query(
+      "SELECT * FROM doctor_visit_limits WHERE LOWER(doctor_email) = LOWER($1)",
+      [doctor_email]
+    );
 
-    // Insert new record and return the inserted row
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        message: "Visit limit already set for this doctor. Use update API to modify it.",
+      });
+    }
+
+    // Insert new static visit limit
     const result = await db.query(
-      "INSERT INTO doctor_visits (doctor_email, doctor_name, number_of_visits_per_day, visit_date) VALUES ($1, $2, $3, $4) RETURNING *",
-      [doctor_email, doctor_name, number_of_visits_per_day, dateToUse]
+      "INSERT INTO doctor_visit_limits (doctor_email, doctor_name, number_of_visits_per_day) VALUES ($1, $2, $3) RETURNING *",
+      [doctor_email, doctor_name, number_of_visits_per_day]
     );
 
     res.json({
-      message: "Visit record added successfully",
-      data: result.rows[0] // the inserted record
+      message: "Doctor visit limit added successfully",
+      data: result.rows[0],
     });
   } catch (error) {
-    console.error("Error adding visit record:", error);
+    console.error("❌ Error adding visit record:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // --------------------------------------
-//  Update Doctor Visit Record by ID
+//  Update Doctor Visit Limit by ID
 // --------------------------------------
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { doctor_email, doctor_name, number_of_visits_per_day, visit_date } = req.body;
+    const { doctor_email, doctor_name, number_of_visits_per_day } = req.body;
 
     // Check if record exists
-    const existing = await db.query("SELECT * FROM doctor_visits WHERE id = $1", [id]);
+    const existing = await db.query("SELECT * FROM doctor_visit_limits WHERE id = $1", [id]);
     if (existing.rows.length === 0) {
-      return res.status(404).json({ message: "Visit record not found" });
+      return res.status(404).json({ message: "Visit limit record not found" });
     }
 
     // Update fields (only if provided)
     await db.query(
-      `UPDATE doctor_visits
+      `UPDATE doctor_visit_limits
        SET doctor_email = COALESCE($1, doctor_email),
            doctor_name = COALESCE($2, doctor_name),
-           number_of_visits_per_day = COALESCE($3, number_of_visits_per_day),
-           visit_date = COALESCE($4, visit_date)
-       WHERE id = $5`,
-      [doctor_email, doctor_name, number_of_visits_per_day, visit_date, id]
+           number_of_visits_per_day = COALESCE($3, number_of_visits_per_day)
+       WHERE id = $4`,
+      [doctor_email, doctor_name, number_of_visits_per_day, id]
     );
 
-    res.json({ message: "Visit record updated successfully" });
+    res.json({ message: "Doctor visit limit updated successfully" });
   } catch (error) {
-    console.error("Error updating visit record:", error);
+    console.error("❌ Error updating visit record:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // --------------------------------------
-//  Get All Doctor Visit Records
+//  Get All Doctor Visit Limits
 // --------------------------------------
 router.get("/all", async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT * FROM doctor_visits ORDER BY visit_date DESC"
+      "SELECT * FROM doctor_visit_limits ORDER BY doctor_name ASC"
     );
     res.json(result.rows);
   } catch (error) {
-    console.error("Error fetching visit records:", error);
+    console.error("❌ Error fetching visit records:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // --------------------------------------
-//  Delete Visit Record
+//  Delete Visit Limit Record
 // --------------------------------------
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query("DELETE FROM doctor_visits WHERE id = $1", [id]);
+    const result = await db.query("DELETE FROM doctor_visit_limits WHERE id = $1", [id]);
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Visit record not found" });
+      return res.status(404).json({ message: "Visit limit record not found" });
     }
 
-    res.json({ message: "Visit record deleted successfully" });
+    res.json({ message: "Doctor visit limit deleted successfully" });
   } catch (error) {
-    console.error("Error deleting visit record:", error);
+    console.error("❌ Error deleting visit record:", error);
     res.status(500).json({ message: "Server error" });
   }
 });

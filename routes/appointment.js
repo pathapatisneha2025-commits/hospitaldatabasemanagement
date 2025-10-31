@@ -53,29 +53,28 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // ✅ Fetch doctor's daily limit (case-insensitive, date-safe)
-    const visitData = await db.query(
-      `SELECT number_of_visits_per_day 
-       FROM doctor_visits 
-       WHERE LOWER(doctor_email) = LOWER($1)
-       AND visit_date::date = TO_DATE($2, 'YYYY-MM-DD')
-       ORDER BY id DESC
-       LIMIT 1`,
-      [doctorEmail, formattedDate]
-    );
+   // ✅ Fetch doctor's static daily limit (applies every day)
+const visitData = await db.query(
+  `SELECT number_of_visits_per_day 
+   FROM doctor_visit_limits 
+   WHERE LOWER(doctor_email) = LOWER($1)
+   LIMIT 1`,
+  [doctorEmail]
+);
 
-    console.log("📊 Visit Data Found:", visitData.rows);
+console.log("📊 Visit Limit Found:", visitData.rows);
 
-    if (visitData.rows.length === 0) {
-      return res.status(400).json({
-        error: `No daily visit limit set for Dr. ${doctorName} on ${formattedDate}`,
-      });
-    }
+if (visitData.rows.length === 0) {
+  return res.status(400).json({
+    error: `No visit limit set for Dr. ${doctorName}`,
+  });
+}
 
-    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
-      visitData.rows[0].number_of_visits_per_day,
-      10
-    );
+const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
+  visitData.rows[0].number_of_visits_per_day,
+  10
+);
+
 
    const lastToken = await db.query(
   `
@@ -104,8 +103,9 @@ if (lastToken.rows[0].last_token) {
 
     // ✅ Enforce daily limit
     if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
-      return res.status(400).json({
-        error: `Dr. ${doctorName} has reached the daily appointment limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} for ${formattedDate}`,
+      return res.status(200).json({
+        alert: true,
+        message: `Dr. ${doctorName} has reached the daily appointment limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} for ${formattedDate}.`,
       });
     }
 

@@ -41,13 +41,12 @@ router.post("/add", async (req, res) => {
     }
 
     // ✅ Get doctor's max visits for the day
-    const visitData = await pool.query(
+      const visitData = await pool.query(
       `SELECT number_of_visits_per_day 
-       FROM doctor_visits 
+       FROM doctor_visit_limits 
        WHERE LOWER(doctor_email) = LOWER($1)
-       AND visit_date::date = TO_DATE($2, 'YYYY-MM-DD')
        LIMIT 1`,
-      [doctorEmail, appointmentDate]
+      [doctorEmail]
     );
 
     if (visitData.rows.length === 0) {
@@ -85,12 +84,15 @@ router.post("/add", async (req, res) => {
       nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
     }
 
-    // ✅ Enforce daily limit
-    if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
-      return res.status(400).json({
-        error: `Dr. ${doctorName} has reached the daily limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} appointments for ${appointmentDate}`,
-      });
-    }
+  
+   // ✅ Enforce daily limit
+if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
+  return res.status(200).json({
+    alert: true,
+    message: `Dr. ${doctorName} has reached the daily limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} appointments for ${appointmentDate}`,
+  });
+}
+
 
     // ✅ Insert new doctor booking (added gender & blood group)
     const result = await pool.query(
