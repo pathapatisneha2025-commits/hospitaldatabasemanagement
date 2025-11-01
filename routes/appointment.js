@@ -103,7 +103,7 @@ if (lastToken.rows[0].last_token) {
     if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
       return res.status(200).json({
         alert: true,
-        message: `Dr. ${doctorName} has reached the daily appointment limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} for ${formattedDate}.`,
+        message: `No bookings available for Dr. ${doctorName} today.`,
       });
     }
 

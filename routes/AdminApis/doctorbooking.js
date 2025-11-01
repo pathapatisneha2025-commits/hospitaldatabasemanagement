@@ -89,7 +89,7 @@ router.post("/add", async (req, res) => {
 if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
   return res.status(200).json({
     alert: true,
-    message: `Dr. ${doctorName} has reached the daily limit of ${MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY} appointments for ${appointmentDate}`,
+        message: `No bookings available for Dr. ${doctorName} today.`,
   });
 }
 
