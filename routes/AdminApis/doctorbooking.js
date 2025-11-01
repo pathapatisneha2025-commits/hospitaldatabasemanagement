@@ -297,16 +297,17 @@ router.put("/update/:id", async (req, res) => {
 /* =========================================================
     6️⃣ DELETE APPOINTMENT
 ========================================================= */
-router.delete("/delete/:id", async (req, res) => {
+router.delete("/delete/:daily_id", async (req, res) => {
   try {
-    const { id } = req.params;
+    const { daily_id } = req.params;
     const result = await pool.query(
-      "DELETE FROM doctorbooking WHERE id = $1 RETURNING *",
-      [id]
+      "DELETE FROM doctorbooking WHERE daily_id = $1 RETURNING *",
+      [daily_id]
     );
 
-    if (result.rows.length === 0)
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
 
     res.json({ message: "Appointment deleted successfully" });
   } catch (err) {
@@ -314,6 +315,7 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 /* =========================================================
     7️⃣ UPDATE STATUS
