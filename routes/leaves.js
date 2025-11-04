@@ -240,7 +240,7 @@ router.post("/salary-deduction", async (req, res) => {
       totalHoursWorked: totalHoursWorked.toFixed(2),
       finalPay: finalPay.toFixed(2),
       leaveStatus,
-      remarks, // 🆕 added rule explanation
+     
     });
 
   } catch (error) {
