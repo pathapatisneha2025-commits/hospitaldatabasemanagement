@@ -141,36 +141,38 @@ router.post("/salary-deduction", async (req, res) => {
       ? parseInt(workResult.rows[0].working_days, 10)
       : totalDaysInMonth;
 
-    // 5️⃣ Paid leaves = total days - working days
-    const paidLeaves = totalDaysInMonth - workingDays;
+    // 5️⃣ Paid leaves = total days - working days (never negative)
+const paidLeaves = Math.max(totalDaysInMonth - workingDays, 0);
 
-    // 6️⃣ Convert leave duration to equivalent days
-    let equivalentLeaveDays = 0;
-    const workingHoursPerDay = 10;
-    if (leaveDuration.toLowerCase() === "hourly") {
-      const hours = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
-      equivalentLeaveDays = hours / workingHoursPerDay;
-    } else if (["firsthalf", "secondhalf"].includes(leaveDuration.toLowerCase())) {
-      equivalentLeaveDays = 0.5;
-    } else {
-      equivalentLeaveDays =
-        (new Date(endDate).setHours(0, 0, 0, 0) -
-          new Date(startDate).setHours(0, 0, 0, 0)) /
-          (1000 * 60 * 60 * 24) +
-        1;
-    }
+// 6️⃣ Convert leave duration to equivalent days
+let equivalentLeaveDays = 0;
+const workingHoursPerDay = 10;
+if (leaveDuration?.toLowerCase() === "hourly") {
+  const hours = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60);
+  equivalentLeaveDays = hours / workingHoursPerDay;
+} else if (["firsthalf", "secondhalf"].includes(leaveDuration?.toLowerCase())) {
+  equivalentLeaveDays = 0.5;
+} else if (leaveDuration) {
+  equivalentLeaveDays =
+    (new Date(endDate).setHours(0, 0, 0, 0) -
+      new Date(startDate).setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24) + 1;
+}
 
-    // 7️⃣ Used leaves this month
-    const leaveResult = await pool.query(
-      `SELECT COALESCE(SUM(leavestaken),0.0) AS used_leaves
-       FROM leaves
-       WHERE employee_id = $1
-         AND start_date >= date_trunc('month', CURRENT_DATE)
-         AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
-      [employeeId]
-    );
-    const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
-    const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
+// 7️⃣ Used leaves this month
+const leaveResult = await pool.query(
+  `SELECT COALESCE(SUM(leavestaken),0.0) AS used_leaves
+   FROM leaves
+   WHERE employee_id = $1
+     AND start_date >= date_trunc('month', CURRENT_DATE)
+     AND start_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')`,
+  [employeeId]
+);
+const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
+
+// ✅ Prevent negative values
+let totalUsedLeaves = usedLeaves + equivalentLeaveDays;
+if (totalUsedLeaves < 0 || isNaN(totalUsedLeaves)) totalUsedLeaves = 0;
+
 
     // 8️⃣ Remaining paid leaves
     const remainingPaidLeaves = Math.max(paidLeaves - totalUsedLeaves, 0);
