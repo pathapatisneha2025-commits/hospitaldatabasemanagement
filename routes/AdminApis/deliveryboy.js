@@ -162,14 +162,15 @@ router.post("/assign-delivery", async (req, res) => {
     }
 
     // ✅ Assign delivery boy to the order
-    await client.query(
-      `
-      UPDATE orders
-      SET deliveryboy_id = $1, assigned_at = NOW()
-      WHERE id = $2
-      `,
-      [employee_id, orderId]
-    );
+  await client.query(
+  `
+  UPDATE orders
+  SET deliveryboy_id = $1, assigned_at = NOW()
+  WHERE id = $2
+  `,
+  [employee_id, orderId]
+);
+
 
     await client.query("COMMIT");
 
