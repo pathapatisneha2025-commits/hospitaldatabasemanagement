@@ -142,7 +142,7 @@ router.post("/assign-delivery", async (req, res) => {
 
     // ✅ Check if delivery boy exists
     const empCheck = await client.query(
-      "SELECT id, full_name, role FROM employee WHERE id = $1",
+      "SELECT id, full_name, role FROM employees WHERE id = $1",
       [employee_id]
     );
 
