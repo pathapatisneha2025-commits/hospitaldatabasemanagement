@@ -113,64 +113,81 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Failed to login" });
   }
 });
+// ✅ Assign Delivery Boy to an Order
 router.post("/assign-delivery", async (req, res) => {
-  const { orderId, deliveryBoyId } = req.body;
+  const { orderId, employee_id } = req.body;
 
-  if (!orderId || !deliveryBoyId) {
-    return res.status(400).json({ error: "Order ID and Delivery Boy ID are required" });
+  // 🔹 Validation
+  if (!orderId || !employee_id) {
+    return res
+      .status(400)
+      .json({ error: "Order ID and Employee ID are required." });
   }
 
   const client = await pool.connect();
+
   try {
     await client.query("BEGIN");
 
-    // 1️⃣ Check if order exists and not already assigned
-    const orderRes = await client.query(
-      "SELECT id, status, deliveryboy_id FROM orders WHERE id = $1",
+    // ✅ Check if order exists
+    const orderCheck = await client.query(
+      "SELECT id FROM orders WHERE id = $1",
       [orderId]
     );
-    if (orderRes.rowCount === 0) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-    if (orderRes.rows[0].delivery_boy_id) {
-      return res.status(400).json({ error: "Delivery boy already assigned to this order" });
+
+    if (orderCheck.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Order not found." });
     }
 
-    // 2️⃣ Check if delivery boy exists and is available
-    const deliveryBoyRes = await client.query(
-      "SELECT id, status FROM delivery_boys WHERE id = $1",
-      [deliveryBoyId]
-    );
-    if (deliveryBoyRes.rowCount === 0) {
-      return res.status(404).json({ error: "Delivery boy not found" });
-    }
-    if (deliveryBoyRes.rows[0].status !== "available") {
-      return res.status(400).json({ error: "Delivery boy is not available" });
-    }
-
-    // 3️⃣ Assign delivery boy to order
-    await client.query(
-      "UPDATE orders SET deliveryboy_id = $1, status = 'out_for_delivery' WHERE id = $2",
-      [deliveryBoyId, orderId]
+    // ✅ Check if delivery boy exists
+    const empCheck = await client.query(
+      "SELECT id, full_name, role FROM employee WHERE id = $1",
+      [employee_id]
     );
 
-    // 4️⃣ Update delivery boy status to busy
+    if (empCheck.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Employee not found." });
+    }
+
+    const employee = empCheck.rows[0];
+
+    // ✅ Validate role
+    if (employee.role.toLowerCase() !== "hd delivery") {
+      await client.query("ROLLBACK");
+      return res
+        .status(400)
+        .json({ error: "This employee is not a delivery person." });
+    }
+
+    // ✅ Assign delivery boy to the order
     await client.query(
-      "UPDATE delivery_boys SET status = 'busy' WHERE id = $1",
-      [deliveryBoyId]
+      `
+      UPDATE orders
+      SET deliveryboy_id = $1, assigned_at = NOW()
+      WHERE id = $2
+      `,
+      [employee_id, orderId]
     );
 
     await client.query("COMMIT");
 
-    res.status(200).json({ message: "Delivery boy assigned successfully", orderId, deliveryBoyId });
-  } catch (err) {
+    res.json({
+      success: true,
+      message: `Delivery assigned to ${employee.full_name}`,
+    });
+  } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Assign Delivery Boy Error:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error assigning delivery:", error);
+    res.status(500).json({ error: "Failed to assign delivery boy." });
   } finally {
     client.release();
   }
 });
+
+module.exports = router;
+
 // -------------------- GET ALL DELIVERY BOYS --------------------
 router.get("/all", async (req, res) => {
   try {
