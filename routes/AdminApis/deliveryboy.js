@@ -223,6 +223,22 @@ router.get("/:deliveryboyId", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.post("/update-delivery-status", async (req, res) => {
+  const { orderId, status } = req.body;
+  try {
+    const order = await Order.findOne({ id: orderId }); // or _id: orderId if MongoDB ObjectId
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    order.status = status.toLowerCase(); // ensure consistency
+    await order.save();
+
+    res.json({ success: true, order });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
 router.post("/verify-delivery-otp", async (req, res) => {
   const { orderId, idToken } = req.body;
 
