@@ -4,6 +4,101 @@ const PDFDocument = require("pdfkit");
 const axios = require("axios");
 const router = express.Router();
 
+router.get("/all", async (req, res) => {
+  try {
+    const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const today = new Date(now);
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+
+    const expectedHours = 270;
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+
+    let totalWorkingDays = 0;
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== 0) totalWorkingDays++; // exclude Sundays
+    }
+
+    const employeesRes = await pool.query(`SELECT * FROM employees`);
+    const employees = employeesRes.rows;
+    const payslipData = [];
+
+    for (const employee of employees) {
+      const employeeId = employee.id;
+      const baseSalary = Number(employee.monthly_salary) || 0;
+
+      const deductionResult = await pool.query(
+        `SELECT COALESCE(salary_deduction, 0) AS deductions
+         FROM leaves
+         WHERE employee_id = $1
+           AND (
+             (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
+             OR
+             (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
+           )
+         ORDER BY id DESC
+         LIMIT 1`,
+        [employeeId, year, month]
+      );
+      const deductions = Number(deductionResult.rows[0]?.deductions || 0);
+
+      const monthRes = await pool.query(
+        `SELECT MAX(monthly_hours) AS max_monthly_hours
+         FROM attendance
+         WHERE employee_id = $1
+           AND EXTRACT(YEAR FROM timestamp) = $2
+           AND EXTRACT(MONTH FROM timestamp) = $3`,
+        [employeeId, year, month]
+      );
+      const monthlyHoursText = monthRes.rows[0]?.max_monthly_hours || "0 hrs 0 mins";
+      const match = monthlyHoursText.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
+      const monthlyHours = match
+        ? parseInt(match[1], 10) + (parseInt(match[2] || 0, 10) / 60)
+        : 0;
+
+      const overtimeHours = Math.max(0, monthlyHours - expectedHours);
+      const proportionalIncentive =
+        monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
+
+      const deductionConfig = await pool.query(
+        `SELECT unauthorized_penalty FROM employee_leavededuction WHERE employee_id = $1 LIMIT 1`,
+        [employeeId]
+      );
+      const unauthorizedPenaltyPerLeave = deductionConfig.rows[0]?.unauthorized_penalty || 0;
+
+      const latePenaltyConfig = await pool.query(
+        `SELECT penalty_amount FROM latepenalties WHERE employee_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [employeeId]
+      );
+      const perLatePenalty = parseFloat(latePenaltyConfig.rows[0]?.penalty_amount) || 0;
+
+      const netPay = Math.max(
+        0,
+        baseSalary + proportionalIncentive - deductions - unauthorizedPenaltyPerLeave - perLatePenalty
+      );
+
+      payslipData.push({
+        employeeId: employeeId,
+        employee: employee.full_name,
+        designation: employee.role,
+        basicsalary: baseSalary,
+        deductions,
+        net_pay: netPay,
+        month,
+        year,
+        date: `${month}/${year}`,
+        status: "pending",
+        pdfUrl: `https://hospitaldatabasemanagement.onrender.com/payslips/${employeeId}.pdf`,
+      });
+    }
+
+    res.json(payslipData);
+  } catch (err) {
+    console.error("Error generating payslip data:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
 router.get("/all/pdf", async (req, res) => {
