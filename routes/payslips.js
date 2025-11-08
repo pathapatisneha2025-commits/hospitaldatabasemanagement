@@ -419,48 +419,57 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
 
     // 4️⃣ Unauthorized leave penalty
-    let unauthorizedLeaves = 0;
-    let unauthorizedPenaltyTotal = 0;
+ // 4️⃣ Unauthorized leave penalty
+let unauthorizedLeaves = 0;
+let unauthorizedPenaltyTotal = 0;
 
-    const cancelledLeaves = await pool.query(
-      `SELECT start_date, end_date, leave_type
-       FROM leaves
+const cancelledLeaves = await pool.query(
+  `SELECT start_date, end_date, leave_type
+   FROM leaves
+   WHERE employee_id = $1
+     AND status ILIKE 'cancelled'
+     AND (
+        (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
+        OR
+        (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
+     )`,
+  [employeeId, year, month]
+);
+
+// ✅ New condition-based deduction logic
+let deductionPerDay = 0;
+let unauthorizedPenaltyPerLeave = 0;
+
+if (baseSalary >= 4500 && baseSalary <= 7500) {
+  deductionPerDay = 700;
+  unauthorizedPenaltyPerLeave = 35;
+} else if (baseSalary >= 7501 && baseSalary <= 9500) {
+  deductionPerDay = 1400;
+  unauthorizedPenaltyPerLeave = 70;
+} else if (baseSalary >= 9501) {
+  deductionPerDay = 2800;
+  unauthorizedPenaltyPerLeave = 105;
+}
+
+for (const leave of cancelledLeaves.rows) {
+  const type = leave.leave_type?.toLowerCase();
+  if (["firsthalf", "secondhalf"].includes(type)) {
+    unauthorizedLeaves += 0.5;
+  } else {
+    const attResult = await pool.query(
+      `SELECT COUNT(*) AS off_duty_days
+       FROM attendance
        WHERE employee_id = $1
-         AND status ILIKE 'cancelled'
-         AND (
-            (EXTRACT(YEAR FROM start_date) = $2 AND EXTRACT(MONTH FROM start_date) = $3)
-            OR
-            (EXTRACT(YEAR FROM end_date) = $2 AND EXTRACT(MONTH FROM end_date) = $3)
-         )`,
-      [employeeId, year, month]
+         AND status ILIKE 'Absent'
+         AND timestamp::date BETWEEN $2::date AND $3::date`,
+      [employeeId, leave.start_date, leave.end_date]
     );
+    unauthorizedLeaves += parseInt(attResult.rows[0]?.off_duty_days || 0, 10);
+  }
+}
 
-    const deductionResult = await pool.query(
-      `SELECT deduction_per_day, unauthorized_penalty
-       FROM employee_leavededuction
-       WHERE employee_id = $1
-       LIMIT 1`,
-      [employeeId]
-    );
-    const unauthorizedPenaltyPerLeave = deductionResult.rows[0]?.unauthorized_penalty || 0;
+unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
-    for (const leave of cancelledLeaves.rows) {
-      const type = leave.leave_type?.toLowerCase();
-      if (["firsthalf", "secondhalf"].includes(type)) {
-        unauthorizedLeaves += 0.5;
-      } else {
-        const attResult = await pool.query(
-          `SELECT COUNT(*) AS off_duty_days
-           FROM attendance
-           WHERE employee_id = $1
-             AND status ILIKE 'Absent'
-             AND timestamp::date BETWEEN $2::date AND $3::date`,
-          [employeeId, leave.start_date, leave.end_date]
-        );
-        unauthorizedLeaves += parseInt(attResult.rows[0]?.off_duty_days || 0, 10);
-      }
-    }
-    unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
     // 5️⃣ Late penalty (first 3 days free)
     const lateResult = await pool.query(
