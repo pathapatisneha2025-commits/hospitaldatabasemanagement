@@ -224,20 +224,37 @@ router.get("/:deliveryboyId", async (req, res) => {
   }
 });
 router.post("/update-delivery-status", async (req, res) => {
-  const { orderId, status } = req.body;
+  const { id, status } = req.body; // using `id` (not orderId)
+
+  if (!id || !status) {
+    return res.status(400).json({ error: "Order ID (id) and status are required" });
+  }
+
   try {
-    const order = await Order.findOne({ id: orderId }); // or _id: orderId if MongoDB ObjectId
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    // ✅ Check if order exists
+    const result = await pool.query("SELECT * FROM orders WHERE id = $1", [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
 
-    order.status = status.toLowerCase(); // ensure consistency
-    await order.save();
+    // ✅ Update order status + handle cancel timestamp
+    await pool.query(
+      `
+      UPDATE orders 
+      SET status = $1,
+          cancelled_at = CASE WHEN $1 = 'Cancelled' THEN NOW() ELSE NULL END
+      WHERE id = $2
+      `,
+      [status, id]
+    );
 
-    res.json({ success: true, order });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update status" });
+    res.json({ message: `Order ${id} status updated to ${status}` });
+  } catch (error) {
+    console.error("Error updating delivery status:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 router.post("/verify-delivery-otp", async (req, res) => {
   const { orderId, idToken } = req.body;
