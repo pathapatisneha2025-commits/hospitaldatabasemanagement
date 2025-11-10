@@ -237,14 +237,9 @@ router.post("/update-delivery-status", async (req, res) => {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    // ✅ Update order status + handle cancel timestamp
+    // ✅ Update order status only (no cancelled_at logic)
     await pool.query(
-      `
-      UPDATE orders 
-      SET status = $1,
-          cancelled_at = CASE WHEN $1 = 'Cancelled' THEN NOW() ELSE NULL END
-      WHERE id = $2
-      `,
+      `UPDATE orders SET status = $1 WHERE id = $2`,
       [status, id]
     );
 
@@ -254,6 +249,7 @@ router.post("/update-delivery-status", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 
 router.post("/verify-delivery-otp", async (req, res) => {
