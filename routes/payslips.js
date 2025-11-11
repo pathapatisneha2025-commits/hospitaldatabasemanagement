@@ -592,7 +592,6 @@ const latePenalty = latePenaltyDays * perLatePenalty;
        .text(`Unauthorized Leaves: ${unauthorizedLeaves}`)
        .text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`)
        .text(`Late Days: ${latedays}`)
-       .text(`Late Blocks (after 3 free days): ${totalBlocks}`)
        .text(`Late Penalty: ${latePenalty}`)
        .text(`Break Blocks (early outs after 3 free): ${totalBreakBlocks}`)
        .text(`Break Penalty: ${breakPenalty}`)
