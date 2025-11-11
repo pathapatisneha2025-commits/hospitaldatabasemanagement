@@ -504,46 +504,48 @@ const perLatePenalty = parseFloat(latePenaltyResult.rows[0]?.penalty_amount) || 
 const latePenalty = latePenaltyDays * perLatePenalty;
 
 
-    // 6️⃣ Break penalty (first 3 occurrences free)
-    const breakResult = await pool.query(
-      `SELECT b.timestamp::time AS actual_breakout, e.break_out
-       FROM break_logs b
-       JOIN employees e ON b.employee_id = e.id
-       WHERE b.employee_id = $1
-         AND b.break_type = 'Break Out'
-         AND EXTRACT(YEAR FROM b.timestamp) = $2
-         AND EXTRACT(MONTH FROM b.timestamp) = $3
-       ORDER BY b.timestamp ASC`,
-      [employeeId, year, month]
-    );
+   // 6️⃣ Break penalty (first 3 late breaks are free — apply penalty directly, no 5-min blocks)
+const breakResult = await pool.query(
+  `SELECT b.timestamp::time AS actual_breakout, e.break_out
+   FROM break_logs b
+   JOIN employees e ON b.employee_id = e.id
+   WHERE b.employee_id = $1
+     AND b.break_type = 'Break Out'
+     AND EXTRACT(YEAR FROM b.timestamp) = $2
+     AND EXTRACT(MONTH FROM b.timestamp) = $3
+   ORDER BY b.timestamp ASC`,
+  [employeeId, year, month]
+);
 
-    let totalBreakBlocks = 0;
-    breakResult.rows.sort((a, b) => new Date(`1970-01-01T${a.actual_breakout}`) - new Date(`1970-01-01T${b.actual_breakout}`));
+let lateBreakCount = 0;
 
-    breakResult.rows.forEach((row, idx) => {
-      if (idx >= 3) { // only count after first 3 occurrences
-        const scheduled = row.break_out;
-        const actual = row.actual_breakout;
+// Sort by time for consistent order
+breakResult.rows.sort((a, b) => 
+  new Date(`1970-01-01T${a.actual_breakout}`) - new Date(`1970-01-01T${b.actual_breakout}`)
+);
 
-        if (actual > scheduled) {
-          const diffMinutes = Math.floor(
-            (new Date(`1970-01-01T${actual}`) - new Date(`1970-01-01T${scheduled}`)) / 60000
-          );
-          totalBreakBlocks += Math.floor(diffMinutes / 5);
-        }
-      }
-    });
+// Count late breaks after first 3
+breakResult.rows.forEach((row, idx) => {
+ 
+    if (row.actual_breakout > row.break_out) {
+      lateBreakCount++;
+    }
+  }
+);
 
-    const breakPenaltyResult = await pool.query(
-      `SELECT break_penalty
-       FROM breakpenalty 
-       WHERE employee_id = $1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [employeeId]
-    );
-    const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.break_penalty) || 0;
-    const breakPenalty = totalBreakBlocks * perBreakPenalty;
+// Get per-break penalty rate
+const breakPenaltyResult = await pool.query(
+  `SELECT break_penalty
+   FROM breakpenalty 
+   WHERE employee_id = $1
+   ORDER BY created_at DESC
+   LIMIT 1`,
+  [employeeId]
+);
+
+const perBreakPenalty = parseFloat(breakPenaltyResult.rows[0]?.break_penalty) || 0;
+const breakPenalty = lateBreakCount * perBreakPenalty;
+
 
     // 7️⃣ Net Pay
     const netPay = Math.max(
