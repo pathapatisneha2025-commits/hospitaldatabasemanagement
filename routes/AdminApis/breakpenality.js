@@ -1,20 +1,45 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../../db"); // import the db module
+const db = require("../../db"); // Make sure this exports your pool/query methods
 
 // CREATE Break Penalty
 router.post("/add", async (req, res) => {
   try {
-    const { employee_id, employee_name, break_penalty } = req.body;
-    const result = await db.query(
-      `INSERT INTO breakpenalty (employee_id, employee_name, break_penalty)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [employee_id, employee_name, break_penalty]
+    const { employee_email, employee_name, break_penalty } = req.body;
+
+    if (!employee_email || !employee_name || !break_penalty) {
+      return res.status(400).json({
+        error: "Missing required fields (employee_email, employee_name, break_penalty)",
+      });
+    }
+
+    // 🔍 Fetch only employee_id using email
+    const employeeResult = await db.query(
+      `SELECT id AS employee_id FROM employees WHERE email = $1`,
+      [employee_email]
     );
-    res.status(201).json(result.rows[0]);
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found for provided email" });
+    }
+
+    const { employee_id } = employeeResult.rows[0];
+
+    // 💾 Insert into breakpenalty
+    const insertResult = await db.query(
+      `INSERT INTO breakpenalty (employee_id, employee_name, employee_email, break_penalty)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [employee_id, employee_name, employee_email, break_penalty]
+    );
+
+    res.status(201).json({
+      message: "Break penalty added successfully",
+      data: insertResult.rows[0],
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Server error" });
+    console.error("Error adding break penalty:", err);
+    res.status(500).json({ error: "Failed to add break penalty" });
   }
 });
 
