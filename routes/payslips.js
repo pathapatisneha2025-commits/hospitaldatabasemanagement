@@ -487,7 +487,7 @@ const lateResult = await pool.query(
 const lateRows = lateResult.rows || [];
 lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
 
-const freeLateDays = 3;
+const freeLateDays = 0;
 const lateDaysCount = lateRows.length;
 const latePenaltyDays = Math.max(0, lateDaysCount - freeLateDays);
 
