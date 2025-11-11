@@ -526,12 +526,12 @@ breakResult.rows.sort((a, b) =>
 
 // Count late breaks after first 3
 breakResult.rows.forEach((row, idx) => {
- 
+  if (idx >= 3) { // first 3 are free
     if (row.actual_breakout > row.break_out) {
       lateBreakCount++;
     }
   }
-);
+});
 
 // Get per-break penalty rate
 const breakPenaltyResult = await pool.query(
