@@ -734,14 +734,22 @@ router.delete("/deletelogs/:employee_id", async (req, res) => {
 });
 router.get("/summary", async (req, res) => {
   try {
-    const { view = "weekly" } = req.query;
+    const { view = "weekly", month } = req.query; // add month param
     const today = new Date();
     let start, end;
 
     // 📅 Determine date range
     if (view === "monthly") {
-      start = new Date(today.getFullYear(), today.getMonth(), 1);
-      end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      if (month) {
+        // If month param provided (1-12)
+        const monthInt = parseInt(month, 10) - 1; // JS months 0-11
+        start = new Date(today.getFullYear(), monthInt, 1);
+        end = new Date(today.getFullYear(), monthInt + 1, 0); // last day of month
+      } else {
+        // Default to current month
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      }
     } else {
       // Weekly (Monday–Sunday)
       const day = today.getDay();
@@ -755,42 +763,40 @@ router.get("/summary", async (req, res) => {
     const startStr = start.toISOString().split("T")[0];
     const endStr = end.toISOString().split("T")[0];
 
-    // 🧩 Main SQL Query (includes both On Duty + Off Duty)
-   // 🧩 Main SQL Query (combines On Duty + Off Duty into one row per day)
-const query = `
-  SELECT 
-    e.id AS employee_id,
-    e.full_name AS employee_name,
-    e.department,
-    d::date AS date,
-    MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
-    MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') AS check_out,
-    CASE
-      WHEN l.id IS NOT NULL THEN 'On Leave'
-      WHEN MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') IS NOT NULL
-           OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
-      THEN 'Present'
-      ELSE 'Absent'
-    END AS status
-  FROM employees e
-  CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
-  LEFT JOIN attendance a 
-    ON e.id = a.employee_id 
-    AND DATE(a.timestamp) = d
-  LEFT JOIN leaves l 
-    ON e.id = l.employee_id
-    AND l.status = 'Approved'
-    AND d BETWEEN l.start_date AND l.end_date
-  GROUP BY e.id, e.full_name, e.department, d, l.id
-  ORDER BY e.full_name, d;
-`;
-
+    // 🧩 Main SQL Query (combines On Duty + Off Duty into one row per day)
+    const query = `
+      SELECT 
+        e.id AS employee_id,
+        e.full_name AS employee_name,
+        e.department,
+        d::date AS date,
+        MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
+        MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') AS check_out,
+        CASE
+          WHEN l.id IS NOT NULL THEN 'On Leave'
+          WHEN MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') IS NOT NULL
+               OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
+          THEN 'Present'
+          ELSE 'Absent'
+        END AS status
+      FROM employees e
+      CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
+      LEFT JOIN attendance a 
+        ON e.id = a.employee_id 
+        AND DATE(a.timestamp) = d
+      LEFT JOIN leaves l 
+        ON e.id = l.employee_id
+        AND l.status = 'Approved'
+        AND d BETWEEN l.start_date AND l.end_date
+      GROUP BY e.id, e.full_name, e.department, d, l.id
+      ORDER BY e.full_name, d;
+    `;
 
     const result = await pool.query(query, [startStr, endStr]);
 
     // 🧮 Group and process data
     const employeeMap = {};
-    result.rows.forEach(row => {
+    result.rows.forEach((row) => {
       if (!employeeMap[row.employee_id]) {
         employeeMap[row.employee_id] = {
           employee_id: row.employee_id,
@@ -805,7 +811,6 @@ const query = `
       const formatTime = (t) =>
         t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
 
-      // 🕒 Calculate working hours (if both times available)
       let totalHours = "-";
       if (row.check_in && row.check_out) {
         const diffMs = new Date(row.check_out) - new Date(row.check_in);
@@ -826,8 +831,7 @@ const query = `
       employeeMap[row.employee_id].totalDays++;
     });
 
-    // 📊 Attendance summary
-    const summary = Object.values(employeeMap).map(emp => ({
+    const summary = Object.values(employeeMap).map((emp) => ({
       ...emp,
       attendanceRate: ((emp.presentDays / emp.totalDays) * 100).toFixed(0) + "%",
     }));
@@ -835,6 +839,7 @@ const query = `
     res.json({
       success: true,
       view,
+      month: month || (today.getMonth() + 1),
       range: { start: startStr, end: endStr },
       data: summary,
     });
@@ -843,6 +848,7 @@ const query = `
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 router.get("/late-count/:employeeId/:year/:month", async (req, res) => {
   try {
     const { employeeId, year, month } = req.params;

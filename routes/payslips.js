@@ -471,40 +471,38 @@ for (const leave of cancelledLeaves.rows) {
 unauthorizedPenaltyTotal = unauthorizedLeaves * unauthorizedPenaltyPerLeave;
 
 
-    // 5️⃣ Late penalty (first 3 days free)
-    const lateResult = await pool.query(
-      `SELECT DATE(a.timestamp) AS day,
-              FLOOR(EXTRACT(EPOCH FROM (MIN(a.timestamp)::time - e.schedule_in)) / 300) AS blocks
-       FROM attendance a
-       JOIN employees e ON a.employee_id = e.id
-       WHERE a.employee_id = $1
-         AND EXTRACT(YEAR FROM a.timestamp) = $2
-         AND EXTRACT(MONTH FROM a.timestamp) = $3
-         AND a.status ILIKE 'On Duty'
-       GROUP BY DATE(a.timestamp), e.schedule_in
-       HAVING MIN(a.timestamp)::time > e.schedule_in;`,
-      [employeeId, year, month]
-    );
+    // 5️⃣ Late penalty (after 3 free late days)
+const lateResult = await pool.query(
+  `SELECT DATE(a.timestamp) AS day
+   FROM attendance a
+   WHERE a.employee_id = $1
+     AND EXTRACT(YEAR FROM a.timestamp) = $2
+     AND EXTRACT(MONTH FROM a.timestamp) = $3
+     AND a.status ILIKE 'On Duty'
+   GROUP BY DATE(a.timestamp)
+   HAVING MIN(a.timestamp::time) > (SELECT schedule_in FROM employees WHERE id = $1);`,
+  [employeeId, year, month]
+);
 
-    const lateRows = lateResult.rows || [];
-    lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
+const lateRows = lateResult.rows || [];
+lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
 
-    let totalBlocks = 0;
-    lateRows.forEach((row, idx) => {
-      if (idx >= 3) totalBlocks += parseInt(row.blocks, 10) || 0;
-    });
-    const latedays = lateRows.length;
+const freeLateDays = 3;
+const lateDaysCount = lateRows.length;
+const latePenaltyDays = Math.max(0, lateDaysCount - freeLateDays);
 
-    const latePenaltyResult = await pool.query(
-      `SELECT penalty_amount 
-       FROM latepenalties 
-       WHERE employee_id = $1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [employeeId]
-    );
-    const perLatePenalty = parseFloat(latePenaltyResult.rows[0]?.penalty_amount) || 0;
-    const latePenalty = totalBlocks * perLatePenalty;
+// Fetch latest per-day late penalty
+const latePenaltyResult = await pool.query(
+  `SELECT penalty_amount 
+   FROM latepenalties 
+   WHERE employee_id = $1
+   ORDER BY created_at DESC
+   LIMIT 1`,
+  [employeeId]
+);
+const perLatePenalty = parseFloat(latePenaltyResult.rows[0]?.penalty_amount) || 0;
+const latePenalty = latePenaltyDays * perLatePenalty;
+
 
     // 6️⃣ Break penalty (first 3 occurrences free)
     const breakResult = await pool.query(
