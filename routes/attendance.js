@@ -540,6 +540,7 @@ router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
 
+    // 🧩 Get all logout records (Off Duty)
     const allRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -555,6 +556,7 @@ router.get("/logout/:employeeId", async (req, res) => {
       });
     }
 
+    // 📊 Calculate daily, weekly, monthly totals
     const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
       pool.query(
         `SELECT session_hours FROM attendance
@@ -580,35 +582,42 @@ router.get("/logout/:employeeId", async (req, res) => {
       ),
     ]);
 
-    // 🔧 Safe conversion functions
+    // 🧮 Safe conversion helpers
     const toMinutes = (str) => {
       if (!str) return 0;
       if (typeof str !== "string") str = String(str);
-      const match = str.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
+      const match = str.match(/(\d+)\s*h(?:rs?)?\s*(\d+)?\s*m(?:ins?)?/i);
       return (parseInt(match?.[1] || 0) * 60) + (parseInt(match?.[2] || 0));
     };
 
-    const toHM = (mins) => `${Math.floor(mins / 60)} hrs ${mins % 60} mins`;
+    const toHM = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    const sumMinutes = (rows) => rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
 
-    const sumMinutes = (rows) =>
-      rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
+    const daily_hours = toHM(sumMinutes(dailyRes.rows));
+    const weekly_hours = toHM(sumMinutes(weeklyRes.rows));
+    const monthly_hours = toHM(sumMinutes(monthlyRes.rows));
 
-    const totals = {
-      daily_hours: toHM(sumMinutes(dailyRes.rows)),
-      weekly_hours: toHM(sumMinutes(weeklyRes.rows)),
-      monthly_hours: toHM(sumMinutes(monthlyRes.rows)),
-    };
-
+    // ✅ Structure matches your React Native Dashboard UI
     return res.json({
       success: true,
       message: "Fetched logout records successfully",
-      data: { attendance: allRes.rows, totals },
+      data: {
+        attendance: {
+          all: allRes.rows,
+        },
+        totals: {
+          daily_hours,
+          weekly_hours,
+          monthly_hours,
+        },
+      },
     });
   } catch (error) {
     console.error("Get logout by ID error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
