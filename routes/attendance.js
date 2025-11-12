@@ -557,30 +557,36 @@ router.get("/logout/:employeeId", async (req, res) => {
     }
 
     // 📊 Calculate daily, weekly, monthly totals
-    const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-      pool.query(
-        `SELECT session_hours FROM attendance
-         WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE((timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE(NOW() AT TIME ZONE 'Asia/Kolkata')`,
-        [employeeId]
-      ),
-      pool.query(
-        `SELECT session_hours FROM attendance
-         WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE_PART('week', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('week', NOW() AT TIME ZONE 'Asia/Kolkata')
-         AND DATE_PART('year', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('year', NOW() AT TIME ZONE 'Asia/Kolkata')`,
-        [employeeId]
-      ),
-      pool.query(
-        `SELECT session_hours FROM attendance
-         WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE_TRUNC('month', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata')`,
-        [employeeId]
-      ),
-    ]);
+   const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+  // ✅ Daily (fixed timezone comparison)
+  pool.query(
+    `SELECT session_hours FROM attendance
+     WHERE status = 'Off Duty'
+     AND employee_id = $1
+     AND (timestamp AT TIME ZONE 'Asia/Kolkata')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+    [employeeId]
+  ),
+
+  // ✅ Weekly
+  pool.query(
+    `SELECT session_hours FROM attendance
+     WHERE status = 'Off Duty'
+     AND employee_id = $1
+     AND DATE_PART('week', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('week', NOW() AT TIME ZONE 'Asia/Kolkata')
+     AND DATE_PART('year', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('year', NOW() AT TIME ZONE 'Asia/Kolkata')`,
+    [employeeId]
+  ),
+
+  // ✅ Monthly
+  pool.query(
+    `SELECT session_hours FROM attendance
+     WHERE status = 'Off Duty'
+     AND employee_id = $1
+     AND DATE_TRUNC('month', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata')`,
+    [employeeId]
+  ),
+]);
+
 
     // 🧮 Safe conversion helpers
     const toMinutes = (val) => {
