@@ -542,53 +542,58 @@ router.get("/logout/:employeeId", async (req, res) => {
       });
     }
 
-    // 2️⃣ Fetch daily records (today)
-    const dailyRes = await pool.query(
-      `SELECT session_hours
-       FROM attendance
-       WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE(timestamp) = CURRENT_DATE`,
-      [employeeId]
-    );
+    // 2️⃣ Fetch daily, weekly, monthly records
+    const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+      pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE status = 'Off Duty'
+           AND employee_id = $1
+           AND DATE(timestamp) = CURRENT_DATE`,
+        [employeeId]
+      ),
+      pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE status = 'Off Duty'
+           AND employee_id = $1
+           AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', CURRENT_DATE)`,
+        [employeeId]
+      ),
+      pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE status = 'Off Duty'
+           AND employee_id = $1
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+        [employeeId]
+      ),
+    ]);
 
-    // 3️⃣ Fetch weekly records (current week)
-    const weeklyRes = await pool.query(
-      `SELECT session_hours
-       FROM attendance
-       WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', CURRENT_DATE)`,
-      [employeeId]
-    );
+    // 🔹 Convert session_hours → total minutes
+    const toMinutes = (timeVal) => {
+      if (!timeVal) return 0;
 
-    // 4️⃣ Fetch monthly records (current month)
-    const monthlyRes = await pool.query(
-      `SELECT session_hours
-       FROM attendance
-       WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
-      [employeeId]
-    );
+      if (typeof timeVal === "string") {
+        // Handle "2h 30m" format
+        const match = timeVal.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
+        if (!match) return 0;
+        const hours = parseInt(match[1] || 0);
+        const mins = parseInt(match[2] || 0);
+        return hours * 60 + mins;
+      } else if (typeof timeVal === "number") {
+        // Handle numeric hours (e.g., 2.5)
+        return Math.floor(timeVal * 60);
+      }
 
-    // 🔹 Convert "2h 30m" → total minutes
-    const toMinutes = (timeStr) => {
-      if (!timeStr) return 0;
-      const match = timeStr.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
-      const hours = parseInt(match?.[1] || 0);
-      const mins = parseInt(match?.[2] || 0);
-      return hours * 60 + mins;
+      return 0;
     };
 
-    // 🔹 Convert total minutes → "Xh Ym"
+    // 🔹 Convert minutes → "Xh Ym"
     const toHM = (totalMinutes) => {
       const h = Math.floor(totalMinutes / 60);
       const m = totalMinutes % 60;
       return `${h}h ${m}m`;
     };
 
-    // 5️⃣ Compute totals
+    // 3️⃣ Compute totals
     const totalDailyMinutes = dailyRes.rows.reduce(
       (sum, r) => sum + toMinutes(r.session_hours),
       0
@@ -608,7 +613,7 @@ router.get("/logout/:employeeId", async (req, res) => {
       monthly_hours: toHM(totalMonthlyMinutes),
     };
 
-    // ✅ Full structured response for your dashboard
+    // 4️⃣ Return structured response
     return res.json({
       success: true,
       message:
@@ -621,7 +626,7 @@ router.get("/logout/:employeeId", async (req, res) => {
           weekly: weeklyRes.rows,
           monthly: monthlyRes.rows,
         },
-        totals, // ✅ For your UI: daily, weekly, monthly hours
+        totals, // ✅ For frontend UI
       },
     });
   } catch (error) {
