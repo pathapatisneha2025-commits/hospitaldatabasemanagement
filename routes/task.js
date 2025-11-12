@@ -188,14 +188,21 @@ router.put("/update/:id", async (req, res) => {
     const { id } = req.params;
     const { title, description, assignto, priority, due_date, due_time } = req.body;
 
-    // Ensure assignto is always an array
-    const assignees = Array.isArray(assignto) ? assignto : [assignto];
+    // ✅ Normalize to array
+    let assignees = [];
+    if (Array.isArray(assignto)) {
+      assignees = assignto;
+    } else if (typeof assignto === "string" && assignto.trim() !== "") {
+      // Handle comma-separated string
+      assignees = assignto.split(",").map((s) => s.trim());
+    }
 
+    // ✅ Update query
     const updatedTask = await pool.query(
       `UPDATE tasks 
        SET title = $1, 
            description = $2, 
-           assignto = $3, 
+           assignto = $3::text[], 
            priority = $4, 
            due_date = $5,
            due_time = $6,
@@ -215,7 +222,7 @@ router.put("/update/:id", async (req, res) => {
 
     res.status(200).json({
       message: "Task updated successfully",
-      task: updatedTask.rows[0]
+      task: updatedTask.rows[0],
     });
   } catch (err) {
     console.error("Update error:", err);
