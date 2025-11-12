@@ -320,20 +320,14 @@ router.post("/logout", async (req, res) => {
   try {
     const { employeeId, subadminId, capturedUrl, locationVerified, faceVerified } = req.body;
 
+    // 🔸 Validate required fields
     if ((!employeeId && !subadminId) || !capturedUrl) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    if (!locationVerified || !faceVerified) {
-      return res.status(403).json({
-        success: false,
-        message: "Logout failed: Location or Face verification failed",
-      });
-    }
-
     const status = "Off Duty";
 
-    // ✅ Helper: Convert seconds → hours + minutes (ignore seconds)
+    // ✅ Helper: Convert seconds → hours + minutes
     const formatHours = (seconds) => {
       const hrs = Math.floor(seconds / 3600);
       const mins = Math.floor((seconds % 3600) / 60);
@@ -350,10 +344,16 @@ router.post("/logout", async (req, res) => {
         [employeeId]
       );
 
+      // ⚡ If no On Duty found, still mark Off Duty
       if (onDuty.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO attendance (employee_id, timestamp, image_url, status)
+           VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3)`,
+          [employeeId, capturedUrl, status]
+        );
         return res.json({
           success: true,
-          message: "Logout marked (no On Duty found for employee).",
+          message: "Off Duty marked (no On Duty found).",
           data: { employee_id: employeeId, status },
         });
       }
@@ -368,7 +368,7 @@ router.post("/logout", async (req, res) => {
       const sessionSeconds = Math.floor(parseFloat(sessionRes.rows[0].seconds));
       const sessionHours = formatHours(sessionSeconds);
 
-      // 3️⃣ Calculate remaining and overtime
+      // 3️⃣ Calculate remaining & overtime
       const totalDaySeconds = 10 * 3600;
       const remainingSeconds = Math.max(totalDaySeconds - sessionSeconds, 0);
       const remainingHours = formatHours(remainingSeconds);
@@ -387,15 +387,15 @@ router.post("/logout", async (req, res) => {
       }
       const overtime = formatHours(overtimeSeconds);
 
-      // 4️⃣ Insert Off Duty record with session_hours in seconds
+      // 4️⃣ Always insert Off Duty — even if verification failed
       await pool.query(
         `INSERT INTO attendance 
-          (employee_id, timestamp, image_url, status, session_hours)
-         VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, make_interval(secs => $4))`,
-        [employeeId, capturedUrl, status, sessionSeconds]
+          (employee_id, timestamp, image_url, status, session_hours, location_verified, face_verified)
+         VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, make_interval(secs => $4), $5, $6)`,
+        [employeeId, capturedUrl, status, sessionSeconds, locationVerified, faceVerified]
       );
 
-      // 5️⃣ Calculate daily, weekly, monthly totals
+      // 5️⃣ Calculate totals
       const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
         pool.query(
           `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS seconds
@@ -420,23 +420,23 @@ router.post("/logout", async (req, res) => {
         ),
       ]);
 
-      const dailySeconds = Math.floor(parseFloat(dailyRes.rows[0].seconds));
-      const weeklySeconds = Math.floor(parseFloat(weeklyRes.rows[0].seconds));
-      const monthlySeconds = Math.floor(parseFloat(monthlyRes.rows[0].seconds));
-
-      // ✅ Return in only hours + minutes format
       return res.json({
         success: true,
-        message: "Employee logout marked successfully",
+        message:
+          !locationVerified && !faceVerified
+            ? "Off Duty marked (without verification)"
+            : "Employee logout marked successfully",
         data: {
           employee_id: employeeId,
           status,
+          locationVerified,
+          faceVerified,
           sessionHours: formatHours(sessionSeconds),
           remainingHours,
           overtime,
-          daily_hours: formatHours(dailySeconds),
-          weekly_hours: formatHours(weeklySeconds),
-          monthly_hours: formatHours(monthlySeconds),
+          daily_hours: formatHours(parseFloat(dailyRes.rows[0].seconds)),
+          weekly_hours: formatHours(parseFloat(weeklyRes.rows[0].seconds)),
+          monthly_hours: formatHours(parseFloat(monthlyRes.rows[0].seconds)),
         },
       });
     }
@@ -460,12 +460,12 @@ router.post("/logout", async (req, res) => {
         },
       });
     }
-
   } catch (error) {
     console.error("Logout error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
