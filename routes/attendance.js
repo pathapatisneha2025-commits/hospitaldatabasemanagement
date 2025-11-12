@@ -100,7 +100,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 
 // ✅ Location verification
-const OFFICE_LAT =17.677817;
+const OFFICE_LAT = 17.677817;
 const OFFICE_LNG = 83.198669;
 const RADIUS_IN_METERS = 2000;
 
