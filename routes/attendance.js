@@ -521,7 +521,6 @@ router.get("/logout/all", async (req, res) => {
 
 
 
-// ✅ Logout by Employee ID with daily and monthly summaries
 router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -536,41 +535,92 @@ router.get("/logout/:employeeId", async (req, res) => {
     );
 
     if (allRes.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No logout records found for this employee" });
+      return res.status(404).json({
+        success: false,
+        message: "No logout records found for this employee",
+      });
     }
 
     // 2️⃣ Fetch daily records for this employee (today)
     const dailyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+      `SELECT session_hours
        FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
-         AND DATE(timestamp) = CURRENT_DATE
-       ORDER BY timestamp`,
+       WHERE status = 'Off Duty' 
+         AND employee_id = $1
+         AND DATE(timestamp) = CURRENT_DATE`,
       [employeeId]
     );
 
-    // 3️⃣ Fetch monthly records for this employee (current month)
+    // 3️⃣ Fetch weekly records (current week)
+    const weeklyRes = await pool.query(
+      `SELECT session_hours
+       FROM attendance
+       WHERE status = 'Off Duty' 
+         AND employee_id = $1
+         AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', CURRENT_DATE)`,
+      [employeeId]
+    );
+
+    // 4️⃣ Fetch monthly records (current month)
     const monthlyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+      `SELECT session_hours
        FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
-         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
-       ORDER BY timestamp`,
+       WHERE status = 'Off Duty' 
+         AND employee_id = $1
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
       [employeeId]
     );
 
+    // Helper function to convert "2h 30m" -> total minutes
+    const toMinutes = (timeStr) => {
+      if (!timeStr) return 0;
+      const match = timeStr.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
+      const hours = parseInt(match?.[1] || 0);
+      const mins = parseInt(match?.[2] || 0);
+      return hours * 60 + mins;
+    };
+
+    // Helper to convert minutes -> "Xh Ym"
+    const toHM = (totalMinutes) => {
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${h}h ${m}m`;
+    };
+
+    // 5️⃣ Compute totals
+    const totalDailyMinutes = dailyRes.rows.reduce(
+      (sum, r) => sum + toMinutes(r.session_hours),
+      0
+    );
+    const totalWeeklyMinutes = weeklyRes.rows.reduce(
+      (sum, r) => sum + toMinutes(r.session_hours),
+      0
+    );
+    const totalMonthlyMinutes = monthlyRes.rows.reduce(
+      (sum, r) => sum + toMinutes(r.session_hours),
+      0
+    );
+
+    const totals = {
+      daily_hours: toHM(totalDailyMinutes),
+      weekly_hours: toHM(totalWeeklyMinutes),
+      monthly_hours: toHM(totalMonthlyMinutes),
+    };
+
+    // 6️⃣ Return structured data for dashboard
     return res.json({
       success: true,
-      message: "Fetched logout records with daily and monthly summary for this employee",
+      message:
+        "Fetched logout records with daily, weekly, and monthly summaries for this employee",
       data: {
         status: "Off Duty",
         attendance: {
           all: allRes.rows,
           daily: dailyRes.rows,
+          weekly: weeklyRes.rows,
           monthly: monthlyRes.rows,
         },
+        totals, // ✅ added for your UI
       },
     });
   } catch (error) {
@@ -578,6 +628,7 @@ router.get("/logout/:employeeId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 router.delete("/logout/delete/:id", async (req, res) => {
