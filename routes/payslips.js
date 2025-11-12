@@ -595,7 +595,6 @@ const breakPenalty = lateBreakCount * perBreakPenalty;
        .text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`)
        .text(`Late Days: ${latedays}`)
        .text(`Late Penalty: ${latePenalty}`)
-       .text(`Break Blocks (early outs after 3 free): ${totalBreakBlocks}`)
        .text(`Break Penalty: ${breakPenalty}`)
        .moveDown()
        .text(`Bank: ${employee.bank_name || "N/A"}`)
