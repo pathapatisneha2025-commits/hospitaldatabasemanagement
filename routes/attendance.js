@@ -519,10 +519,16 @@ router.get("/logout/all", async (req, res) => {
 
 
 
-// ✅ Logout by Employee ID with daily and monthly summaries
 router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
+
+    // Helper function: convert seconds → hours + minutes
+    const formatHours = (seconds) => {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return `${hrs} hrs ${mins} mins`;
+    };
 
     // 1️⃣ Fetch all "Off Duty" records for this employee
     const allRes = await pool.query(
@@ -534,12 +540,13 @@ router.get("/logout/:employeeId", async (req, res) => {
     );
 
     if (allRes.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No logout records found for this employee" });
+      return res.status(404).json({
+        success: false,
+        message: "No logout records found for this employee",
+      });
     }
 
-    // 2️⃣ Fetch daily records for this employee (today)
+    // 2️⃣ Fetch daily "Off Duty" records
     const dailyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -549,7 +556,18 @@ router.get("/logout/:employeeId", async (req, res) => {
       [employeeId]
     );
 
-    // 3️⃣ Fetch monthly records for this employee (current month)
+    // 3️⃣ Fetch weekly records
+    const weeklyRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+         AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+         AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    // 4️⃣ Fetch monthly records
     const monthlyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -559,14 +577,58 @@ router.get("/logout/:employeeId", async (req, res) => {
       [employeeId]
     );
 
+    // 5️⃣ Calculate total worked hours (daily / weekly / monthly)
+    const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND status = 'Off Duty'
+           AND DATE(timestamp) = CURRENT_DATE`,
+        [employeeId]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND status = 'Off Duty'
+           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
+        [employeeId]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND status = 'Off Duty'
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+        [employeeId]
+      ),
+    ]);
+
+    const dailySeconds = Math.floor(parseFloat(dailyTotal.rows[0].total_seconds));
+    const weeklySeconds = Math.floor(parseFloat(weeklyTotal.rows[0].total_seconds));
+    const monthlySeconds = Math.floor(parseFloat(monthlyTotal.rows[0].total_seconds));
+
+    const daily_hours = formatHours(dailySeconds);
+    const weekly_hours = formatHours(weeklySeconds);
+    const monthly_hours = formatHours(monthlySeconds);
+
+    // ✅ Final response
     return res.json({
       success: true,
-      message: "Fetched logout records with daily and monthly summary for this employee",
+      message: "Fetched logout records with daily, weekly, and monthly summaries",
       data: {
         status: "Off Duty",
+        totals: {
+          daily_hours,
+          weekly_hours,
+          monthly_hours,
+        },
         attendance: {
           all: allRes.rows,
           daily: dailyRes.rows,
+          weekly: weeklyRes.rows,
           monthly: monthlyRes.rows,
         },
       },
