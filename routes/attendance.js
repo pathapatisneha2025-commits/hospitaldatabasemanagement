@@ -583,15 +583,26 @@ router.get("/logout/:employeeId", async (req, res) => {
     ]);
 
     // 🧮 Safe conversion helpers
-    const toMinutes = (str) => {
-      if (!str) return 0;
-      if (typeof str !== "string") str = String(str);
-      const match = str.match(/(\d+)\s*h(?:rs?)?\s*(\d+)?\s*m(?:ins?)?/i);
-      return (parseInt(match?.[1] || 0) * 60) + (parseInt(match?.[2] || 0));
+    const toMinutes = (val) => {
+      if (!val) return 0;
+
+      // ✅ Case 1: stored as object (e.g. { minutes: 29 })
+      if (typeof val === "object" && val.minutes != null) {
+        return parseInt(val.minutes) || 0;
+      }
+
+      // ✅ Case 2: stored as string (e.g. "2h 30m")
+      if (typeof val === "string") {
+        const match = val.match(/(\d+)\s*h(?:rs?)?\s*(\d+)?\s*m?(?:ins?)?/i);
+        return (parseInt(match?.[1] || 0) * 60) + (parseInt(match?.[2] || 0));
+      }
+
+      return 0;
     };
 
     const toHM = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
-    const sumMinutes = (rows) => rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
+    const sumMinutes = (rows) =>
+      rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
 
     const daily_hours = toHM(sumMinutes(dailyRes.rows));
     const weekly_hours = toHM(sumMinutes(weeklyRes.rows));
@@ -617,6 +628,7 @@ router.get("/logout/:employeeId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
