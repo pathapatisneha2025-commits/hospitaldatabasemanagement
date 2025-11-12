@@ -580,17 +580,23 @@ router.get("/logout/:employeeId", async (req, res) => {
       ),
     ]);
 
+    // 🔧 Safe conversion functions
     const toMinutes = (str) => {
       if (!str) return 0;
-      const match = str.match(/(\d+)h\s*(\d+)?m?/);
+      if (typeof str !== "string") str = String(str);
+      const match = str.match(/(\d+)\s*hrs?\s*(\d+)?\s*mins?/i);
       return (parseInt(match?.[1] || 0) * 60) + (parseInt(match?.[2] || 0));
     };
-    const toHM = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+    const toHM = (mins) => `${Math.floor(mins / 60)} hrs ${mins % 60} mins`;
+
+    const sumMinutes = (rows) =>
+      rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
 
     const totals = {
-      daily_hours: toHM(dailyRes.rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0)),
-      weekly_hours: toHM(weeklyRes.rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0)),
-      monthly_hours: toHM(monthlyRes.rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0)),
+      daily_hours: toHM(sumMinutes(dailyRes.rows)),
+      weekly_hours: toHM(sumMinutes(weeklyRes.rows)),
+      monthly_hours: toHM(sumMinutes(monthlyRes.rows)),
     };
 
     return res.json({
@@ -603,6 +609,7 @@ router.get("/logout/:employeeId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
