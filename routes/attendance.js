@@ -540,7 +540,14 @@ router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
 
-    // 🧩 Get all logout records (Off Duty)
+    // Helper function: convert seconds → hours + minutes
+    const formatHours = (seconds) => {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return `${hrs} hrs ${mins} mins`;
+    };
+
+    // 1️⃣ Fetch all "Off Duty" records for this employee
     const allRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -556,90 +563,99 @@ router.get("/logout/:employeeId", async (req, res) => {
       });
     }
 
-    // 📊 Calculate daily, weekly, monthly totals
-    const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-      // ✅ Daily (timezone-safe)
-     pool.query(
-        `SELECT session_hours FROM attendance
-         WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND timestamp >= NOW() - INTERVAL '24 hours'`,
+    // 2️⃣ Fetch daily "Off Duty" records
+    const dailyRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+         AND DATE(timestamp) = CURRENT_DATE
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    // 3️⃣ Fetch weekly records
+    const weeklyRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+         AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+         AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    // 4️⃣ Fetch monthly records
+    const monthlyRes = await pool.query(
+      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+       FROM attendance
+       WHERE status = 'Off Duty' AND employee_id = $1
+         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+       ORDER BY timestamp`,
+      [employeeId]
+    );
+
+    // 5️⃣ Calculate total worked hours (daily / weekly / monthly)
+    const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND status = 'Off Duty'
+           AND DATE(timestamp) = CURRENT_DATE`,
         [employeeId]
       ),
-
-      // ✅ Weekly
       pool.query(
-        `SELECT session_hours FROM attendance
-         WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE_PART('week', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('week', NOW() AT TIME ZONE 'Asia/Kolkata')
-         AND DATE_PART('year', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('year', NOW() AT TIME ZONE 'Asia/Kolkata')`,
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND status = 'Off Duty'
+           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
         [employeeId]
       ),
-
-      // ✅ Monthly
       pool.query(
-        `SELECT session_hours FROM attendance
-         WHERE status = 'Off Duty'
-         AND employee_id = $1
-         AND DATE_TRUNC('month', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata')`,
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND status = 'Off Duty'
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
         [employeeId]
       ),
     ]);
 
-    // 🧮 Conversion helpers
-    const toMinutes = (val) => {
-      if (!val) return 0;
+    const dailySeconds = Math.floor(parseFloat(dailyTotal.rows[0].total_seconds));
+    const weeklySeconds = Math.floor(parseFloat(weeklyTotal.rows[0].total_seconds));
+    const monthlySeconds = Math.floor(parseFloat(monthlyTotal.rows[0].total_seconds));
 
-      // ✅ Case 1: stored as JSON (e.g. { hours: 1, minutes: 45 })
-      if (typeof val === "object") {
-        const hrs = parseInt(val.hours) || 0;
-        const mins = parseInt(val.minutes) || 0;
-        return hrs * 60 + mins;
-      }
+    const daily_hours = formatHours(dailySeconds);
+    const weekly_hours = formatHours(weeklySeconds);
+    const monthly_hours = formatHours(monthlySeconds);
 
-      // ✅ Case 2: stored as string (e.g. "2h 30m")
-      if (typeof val === "string") {
-        const match = val.match(/(\d+)\s*h(?:rs?)?\s*(\d+)?\s*m?(?:ins?)?/i);
-        return (parseInt(match?.[1] || 0) * 60) + (parseInt(match?.[2] || 0));
-      }
-
-      return 0;
-    };
-
-    const toHM = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
-
-    const sumMinutes = (rows) =>
-      rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
-
-    // 🧩 Totals
-    const daily_hours = toHM(sumMinutes(dailyRes.rows));
-    const weekly_hours = toHM(sumMinutes(weeklyRes.rows));
-    const monthly_hours = toHM(sumMinutes(monthlyRes.rows));
-
-    // ✅ Final Response
+    // ✅ Final response
     return res.json({
       success: true,
-      message: "Fetched logout records successfully",
+      message: "Fetched logout records with daily, weekly, and monthly summaries",
       data: {
-        attendance: {
-          all: allRes.rows,
-        },
+        status: "Off Duty",
         totals: {
           daily_hours,
           weekly_hours,
           monthly_hours,
         },
+        attendance: {
+          all: allRes.rows,
+          daily: dailyRes.rows,
+          weekly: weeklyRes.rows,
+          monthly: monthlyRes.rows,
+        },
       },
     });
   } catch (error) {
     console.error("Get logout by ID error:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
