@@ -559,11 +559,11 @@ router.get("/logout/:employeeId", async (req, res) => {
     // 📊 Calculate daily, weekly, monthly totals
     const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
       // ✅ Daily (timezone-safe)
-      pool.query(
+     pool.query(
         `SELECT session_hours FROM attendance
          WHERE status = 'Off Duty'
          AND employee_id = $1
-         AND (timestamp AT TIME ZONE 'Asia/Kolkata')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+         AND timestamp >= NOW() - INTERVAL '24 hours'`,
         [employeeId]
       ),
 
