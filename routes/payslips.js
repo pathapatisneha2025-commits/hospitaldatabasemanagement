@@ -487,7 +487,7 @@ const lateResult = await pool.query(
 const lateRows = lateResult.rows || [];
 lateRows.sort((a, b) => new Date(a.day) - new Date(b.day));
 
-const freeLateDays = 0;
+const freeLateDays = 3;
 const latedays = lateRows.length;
 const latePenaltyDays = Math.max(0, latedays - freeLateDays);
 
@@ -526,12 +526,12 @@ breakResult.rows.sort((a, b) =>
 
 // Count late breaks after first 3
 breakResult.rows.forEach((row, idx) => {
-  if (idx >= 3) { // first 3 are free
+  // first 3 are free
     if (row.actual_breakout > row.break_out) {
       lateBreakCount++;
     }
   }
-});
+);
 
 // Get per-break penalty rate
 const breakPenaltyResult = await pool.query(
