@@ -100,8 +100,8 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 
 // ✅ Location verification
-const OFFICE_LAT =17.677857;
-const OFFICE_LNG =  83.198689;
+const OFFICE_LAT = 17.677857;
+const OFFICE_LNG = 83.198689;
 const RADIUS_IN_METERS = 2000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -476,6 +476,7 @@ router.post("/logout", async (req, res) => {
 
 
 
+
 router.get("/logout/all", async (req, res) => {
   try {
     // 1️⃣ Fetch all "Off Duty" records
@@ -541,11 +542,11 @@ router.get("/logout/:employeeId", async (req, res) => {
       });
     }
 
-    // 2️⃣ Fetch daily records for this employee (today)
+    // 2️⃣ Fetch daily records (today)
     const dailyRes = await pool.query(
       `SELECT session_hours
        FROM attendance
-       WHERE status = 'Off Duty' 
+       WHERE status = 'Off Duty'
          AND employee_id = $1
          AND DATE(timestamp) = CURRENT_DATE`,
       [employeeId]
@@ -555,7 +556,7 @@ router.get("/logout/:employeeId", async (req, res) => {
     const weeklyRes = await pool.query(
       `SELECT session_hours
        FROM attendance
-       WHERE status = 'Off Duty' 
+       WHERE status = 'Off Duty'
          AND employee_id = $1
          AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', CURRENT_DATE)`,
       [employeeId]
@@ -565,13 +566,13 @@ router.get("/logout/:employeeId", async (req, res) => {
     const monthlyRes = await pool.query(
       `SELECT session_hours
        FROM attendance
-       WHERE status = 'Off Duty' 
+       WHERE status = 'Off Duty'
          AND employee_id = $1
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
       [employeeId]
     );
 
-    // Helper function to convert "2h 30m" -> total minutes
+    // 🔹 Convert "2h 30m" → total minutes
     const toMinutes = (timeStr) => {
       if (!timeStr) return 0;
       const match = timeStr.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
@@ -580,7 +581,7 @@ router.get("/logout/:employeeId", async (req, res) => {
       return hours * 60 + mins;
     };
 
-    // Helper to convert minutes -> "Xh Ym"
+    // 🔹 Convert total minutes → "Xh Ym"
     const toHM = (totalMinutes) => {
       const h = Math.floor(totalMinutes / 60);
       const m = totalMinutes % 60;
@@ -607,7 +608,7 @@ router.get("/logout/:employeeId", async (req, res) => {
       monthly_hours: toHM(totalMonthlyMinutes),
     };
 
-    // 6️⃣ Return structured data for dashboard
+    // ✅ Full structured response for your dashboard
     return res.json({
       success: true,
       message:
@@ -620,7 +621,7 @@ router.get("/logout/:employeeId", async (req, res) => {
           weekly: weeklyRes.rows,
           monthly: monthlyRes.rows,
         },
-        totals, // ✅ added for your UI
+        totals, // ✅ For your UI: daily, weekly, monthly hours
       },
     });
   } catch (error) {
