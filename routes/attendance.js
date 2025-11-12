@@ -540,7 +540,6 @@ router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
 
-    // 1️⃣ Fetch all "Off Duty" records for this employee
     const allRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -556,92 +555,48 @@ router.get("/logout/:employeeId", async (req, res) => {
       });
     }
 
-    // 2️⃣ Fetch daily, weekly, monthly records
     const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
       pool.query(
         `SELECT session_hours FROM attendance
          WHERE status = 'Off Duty'
-           AND employee_id = $1
-           AND DATE(timestamp) = CURRENT_DATE`,
+         AND employee_id = $1
+         AND DATE((timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE(NOW() AT TIME ZONE 'Asia/Kolkata')`,
         [employeeId]
       ),
       pool.query(
         `SELECT session_hours FROM attendance
          WHERE status = 'Off Duty'
-           AND employee_id = $1
-           AND DATE_TRUNC('week', timestamp) = DATE_TRUNC('week', CURRENT_DATE)`,
+         AND employee_id = $1
+         AND DATE_PART('week', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('week', NOW() AT TIME ZONE 'Asia/Kolkata')
+         AND DATE_PART('year', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('year', NOW() AT TIME ZONE 'Asia/Kolkata')`,
         [employeeId]
       ),
       pool.query(
         `SELECT session_hours FROM attendance
          WHERE status = 'Off Duty'
-           AND employee_id = $1
-           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+         AND employee_id = $1
+         AND DATE_TRUNC('month', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata')`,
         [employeeId]
       ),
     ]);
 
-    // 🔹 Convert session_hours → total minutes
-    const toMinutes = (timeVal) => {
-      if (!timeVal) return 0;
-
-      if (typeof timeVal === "string") {
-        // Handle "2h 30m" format
-        const match = timeVal.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
-        if (!match) return 0;
-        const hours = parseInt(match[1] || 0);
-        const mins = parseInt(match[2] || 0);
-        return hours * 60 + mins;
-      } else if (typeof timeVal === "number") {
-        // Handle numeric hours (e.g., 2.5)
-        return Math.floor(timeVal * 60);
-      }
-
-      return 0;
+    const toMinutes = (str) => {
+      if (!str) return 0;
+      const match = str.match(/(\d+)h\s*(\d+)?m?/);
+      return (parseInt(match?.[1] || 0) * 60) + (parseInt(match?.[2] || 0));
     };
-
-    // 🔹 Convert minutes → "Xh Ym"
-    const toHM = (totalMinutes) => {
-      const h = Math.floor(totalMinutes / 60);
-      const m = totalMinutes % 60;
-      return `${h}h ${m}m`;
-    };
-
-    // 3️⃣ Compute totals
-    const totalDailyMinutes = dailyRes.rows.reduce(
-      (sum, r) => sum + toMinutes(r.session_hours),
-      0
-    );
-    const totalWeeklyMinutes = weeklyRes.rows.reduce(
-      (sum, r) => sum + toMinutes(r.session_hours),
-      0
-    );
-    const totalMonthlyMinutes = monthlyRes.rows.reduce(
-      (sum, r) => sum + toMinutes(r.session_hours),
-      0
-    );
+    const toHM = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
 
     const totals = {
-      daily_hours: toHM(totalDailyMinutes),
-      weekly_hours: toHM(totalWeeklyMinutes),
-      monthly_hours: toHM(totalMonthlyMinutes),
+      daily_hours: toHM(dailyRes.rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0)),
+      weekly_hours: toHM(weeklyRes.rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0)),
+      monthly_hours: toHM(monthlyRes.rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0)),
     };
 
-    // 4️⃣ Return structured response
     return res.json({
       success: true,
-      message:
-        "Fetched logout records with daily, weekly, and monthly summaries for this employee",
-      data: {
-        status: "Off Duty",
-        attendance: {
-          all: allRes.rows,
-          daily: dailyRes.rows,
-          weekly: weeklyRes.rows,
-          monthly: monthlyRes.rows,
-        },
-        totals, // ✅ For frontend UI
-      },
+      message: "Fetched logout records successfully",
+      data: { attendance: allRes.rows, totals },
     });
   } catch (error) {
     console.error("Get logout by ID error:", error.message);
