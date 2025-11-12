@@ -557,44 +557,45 @@ router.get("/logout/:employeeId", async (req, res) => {
     }
 
     // 📊 Calculate daily, weekly, monthly totals
-   const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-  // ✅ Daily (fixed timezone comparison)
-  pool.query(
-    `SELECT session_hours FROM attendance
-     WHERE status = 'Off Duty'
-     AND employee_id = $1
-     AND (timestamp AT TIME ZONE 'Asia/Kolkata')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
-    [employeeId]
-  ),
+    const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+      // ✅ Daily (timezone-safe)
+      pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE status = 'Off Duty'
+         AND employee_id = $1
+         AND (timestamp AT TIME ZONE 'Asia/Kolkata')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+        [employeeId]
+      ),
 
-  // ✅ Weekly
-  pool.query(
-    `SELECT session_hours FROM attendance
-     WHERE status = 'Off Duty'
-     AND employee_id = $1
-     AND DATE_PART('week', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('week', NOW() AT TIME ZONE 'Asia/Kolkata')
-     AND DATE_PART('year', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('year', NOW() AT TIME ZONE 'Asia/Kolkata')`,
-    [employeeId]
-  ),
+      // ✅ Weekly
+      pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE status = 'Off Duty'
+         AND employee_id = $1
+         AND DATE_PART('week', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('week', NOW() AT TIME ZONE 'Asia/Kolkata')
+         AND DATE_PART('year', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_PART('year', NOW() AT TIME ZONE 'Asia/Kolkata')`,
+        [employeeId]
+      ),
 
-  // ✅ Monthly
-  pool.query(
-    `SELECT session_hours FROM attendance
-     WHERE status = 'Off Duty'
-     AND employee_id = $1
-     AND DATE_TRUNC('month', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata')`,
-    [employeeId]
-  ),
-]);
+      // ✅ Monthly
+      pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE status = 'Off Duty'
+         AND employee_id = $1
+         AND DATE_TRUNC('month', (timestamp AT TIME ZONE 'Asia/Kolkata')) = DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata')`,
+        [employeeId]
+      ),
+    ]);
 
-
-    // 🧮 Safe conversion helpers
+    // 🧮 Conversion helpers
     const toMinutes = (val) => {
       if (!val) return 0;
 
-      // ✅ Case 1: stored as object (e.g. { minutes: 29 })
-      if (typeof val === "object" && val.minutes != null) {
-        return parseInt(val.minutes) || 0;
+      // ✅ Case 1: stored as JSON (e.g. { hours: 1, minutes: 45 })
+      if (typeof val === "object") {
+        const hrs = parseInt(val.hours) || 0;
+        const mins = parseInt(val.minutes) || 0;
+        return hrs * 60 + mins;
       }
 
       // ✅ Case 2: stored as string (e.g. "2h 30m")
@@ -607,14 +608,16 @@ router.get("/logout/:employeeId", async (req, res) => {
     };
 
     const toHM = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
     const sumMinutes = (rows) =>
       rows.reduce((sum, r) => sum + toMinutes(r.session_hours), 0);
 
+    // 🧩 Totals
     const daily_hours = toHM(sumMinutes(dailyRes.rows));
     const weekly_hours = toHM(sumMinutes(weeklyRes.rows));
     const monthly_hours = toHM(sumMinutes(monthlyRes.rows));
 
-    // ✅ Structure matches your React Native Dashboard UI
+    // ✅ Final Response
     return res.json({
       success: true,
       message: "Fetched logout records successfully",
@@ -631,9 +634,13 @@ router.get("/logout/:employeeId", async (req, res) => {
     });
   } catch (error) {
     console.error("Get logout by ID error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
+
 
 
 
