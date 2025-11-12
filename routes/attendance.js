@@ -100,8 +100,8 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 
 // ✅ Location verification
-const OFFICE_LAT = 17.677857;
-const OFFICE_LNG = 83.198689;
+const OFFICE_LAT =21.930424;
+const OFFICE_LNG = 86.726709;
 const RADIUS_IN_METERS = 2000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -320,23 +320,29 @@ router.post("/logout", async (req, res) => {
   try {
     const { employeeId, subadminId, capturedUrl, locationVerified, faceVerified } = req.body;
 
-    // 🔸 Validate required fields
+    // ✅ Require either employeeId or subadminId
     if ((!employeeId && !subadminId) || !capturedUrl) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
+    // ✅ Require both verifications
+    if (!locationVerified || !faceVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Logout failed: Location or Face verification failed",
+      });
+    }
+
     const status = "Off Duty";
 
-    // ✅ Helper: Convert seconds → hours + minutes
     const formatHours = (seconds) => {
       const hrs = Math.floor(seconds / 3600);
       const mins = Math.floor((seconds % 3600) / 60);
       return `${hrs} hrs ${mins} mins`;
     };
 
-    // 🧩 EMPLOYEE LOGOUT
+    // 🧩 EMPLOYEE LOGOUT — Full Calculation
     if (employeeId) {
-      // 1️⃣ Find the last "On Duty" record
       const onDuty = await pool.query(
         `SELECT id, timestamp FROM attendance
          WHERE employee_id = $1 AND status = 'On Duty'
@@ -344,104 +350,101 @@ router.post("/logout", async (req, res) => {
         [employeeId]
       );
 
-      // ⚡ If no On Duty found, still mark Off Duty
       if (onDuty.rows.length === 0) {
-        await pool.query(
-          `INSERT INTO attendance (employee_id, timestamp, image_url, status)
-           VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3)`,
-          [employeeId, capturedUrl, status]
-        );
         return res.json({
           success: true,
-          message: "Off Duty marked (no On Duty found).",
+          message: "Logout marked (no On Duty found for employee).",
           data: { employee_id: employeeId, status },
         });
       }
 
       const onDutyTime = onDuty.rows[0].timestamp;
 
-      // 2️⃣ Calculate worked session duration
+      // ⏱️ Calculate session worked time
       const sessionRes = await pool.query(
         `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
         [onDutyTime]
       );
-      const sessionSeconds = Math.floor(parseFloat(sessionRes.rows[0].seconds));
+      const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
       const sessionHours = formatHours(sessionSeconds);
 
-      // 3️⃣ Calculate remaining & overtime
+      // 🕒 Remaining hours (10-hour workday)
       const totalDaySeconds = 10 * 3600;
       const remainingSeconds = Math.max(totalDaySeconds - sessionSeconds, 0);
       const remainingHours = formatHours(remainingSeconds);
 
-      let overtimeSeconds = 0;
+      // 🕓 Overtime
+      let overtime = "0 hrs 0 mins";
       const empRes = await pool.query(`SELECT schedule_out FROM employees WHERE id = $1`, [employeeId]);
       if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
+        const scheduleOut = empRes.rows[0].schedule_out;
         const overtimeRes = await pool.query(
           `SELECT GREATEST(
               EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Kolkata') 
               - (CURRENT_DATE + $1::time AT TIME ZONE 'Asia/Kolkata'))), 0
             ) AS overtime_seconds`,
-          [empRes.rows[0].schedule_out]
+          [scheduleOut]
         );
-        overtimeSeconds = Math.floor(parseFloat(overtimeRes.rows[0].overtime_seconds));
+        const overtimeSeconds = parseInt(overtimeRes.rows[0].overtime_seconds, 10);
+        if (overtimeSeconds > 0) overtime = formatHours(overtimeSeconds);
       }
-      const overtime = formatHours(overtimeSeconds);
 
-      // 4️⃣ Always insert Off Duty — even if verification failed
-      await pool.query(
-        `INSERT INTO attendance 
-          (employee_id, timestamp, image_url, status, session_hours, location_verified, face_verified)
-         VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, make_interval(secs => $4), $5, $6)`,
-        [employeeId, capturedUrl, status, sessionSeconds, locationVerified, faceVerified]
+      // 📅 Daily/Weekly/Monthly totals
+      const dailyRes = await pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS daily_seconds
+         FROM attendance
+         WHERE employee_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
+        [employeeId]
       );
 
-      // 5️⃣ Calculate totals
-      const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-        pool.query(
-          `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS seconds
-           FROM attendance
-           WHERE employee_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
-          [employeeId]
-        ),
-        pool.query(
-          `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS seconds
-           FROM attendance
-           WHERE employee_id = $1
-             AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
-             AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
-          [employeeId]
-        ),
-        pool.query(
-          `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS seconds
-           FROM attendance
-           WHERE employee_id = $1
-             AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
-          [employeeId]
-        ),
-      ]);
+      const weeklyRes = await pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS weekly_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
+        [employeeId]
+      );
+
+      const monthlyRes = await pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS monthly_seconds
+         FROM attendance
+         WHERE employee_id = $1
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+        [employeeId]
+      );
+
+      const dailyHoursStr = formatHours(dailyRes.rows[0].daily_seconds);
+      const weeklyHoursStr = formatHours(weeklyRes.rows[0].weekly_seconds);
+      const monthlyHoursStr = formatHours(monthlyRes.rows[0].monthly_seconds);
+
+      // ✅ Insert Off Duty record for employee
+      const insertResult = await pool.query(
+        `INSERT INTO attendance 
+          (employee_id, timestamp, image_url, status, session_hours, overtime, remaining_hours, daily_hours, weekly_hours, monthly_hours)
+         VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, timestamp`,
+        [employeeId, capturedUrl, status, sessionHours, overtime, remainingHours, dailyHoursStr, weeklyHoursStr, monthlyHoursStr]
+      );
 
       return res.json({
         success: true,
-        message:
-          !locationVerified && !faceVerified
-            ? "Off Duty marked (without verification)"
-            : "Employee logout marked successfully",
+        message: "Employee logout marked successfully",
         data: {
           employee_id: employeeId,
           status,
-          locationVerified,
-          faceVerified,
-          sessionHours: formatHours(sessionSeconds),
+          timestamp: insertResult.rows[0].timestamp,
+          sessionHours,
           remainingHours,
           overtime,
-          daily_hours: formatHours(parseFloat(dailyRes.rows[0].seconds)),
-          weekly_hours: formatHours(parseFloat(weeklyRes.rows[0].seconds)),
-          monthly_hours: formatHours(parseFloat(monthlyRes.rows[0].seconds)),
+          daily_hours: dailyHoursStr,
+          weekly_hours: weeklyHoursStr,
+          monthly_hours: monthlyHoursStr,
         },
       });
     }
 
-    // 🧩 SUBADMIN LOGOUT
+    // 🧩 SUBADMIN LOGOUT — Simple record only
     if (subadminId) {
       const insertResult = await pool.query(
         `INSERT INTO attendance (subadmin_id, timestamp, image_url, status)
@@ -460,12 +463,12 @@ router.post("/logout", async (req, res) => {
         },
       });
     }
+
   } catch (error) {
     console.error("Logout error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 
@@ -519,16 +522,10 @@ router.get("/logout/all", async (req, res) => {
 
 
 
+// ✅ Logout by Employee ID with daily and monthly summaries
 router.get("/logout/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
-
-    // Helper function: convert seconds → hours + minutes
-    const formatHours = (seconds) => {
-      const hrs = Math.floor(seconds / 3600);
-      const mins = Math.floor((seconds % 3600) / 60);
-      return `${hrs} hrs ${mins} mins`;
-    };
 
     // 1️⃣ Fetch all "Off Duty" records for this employee
     const allRes = await pool.query(
@@ -540,13 +537,12 @@ router.get("/logout/:employeeId", async (req, res) => {
     );
 
     if (allRes.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No logout records found for this employee",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "No logout records found for this employee" });
     }
 
-    // 2️⃣ Fetch daily "Off Duty" records
+    // 2️⃣ Fetch daily records for this employee (today)
     const dailyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -556,18 +552,7 @@ router.get("/logout/:employeeId", async (req, res) => {
       [employeeId]
     );
 
-    // 3️⃣ Fetch weekly records
-    const weeklyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
-         AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
-         AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)
-       ORDER BY timestamp`,
-      [employeeId]
-    );
-
-    // 4️⃣ Fetch monthly records
+    // 3️⃣ Fetch monthly records for this employee (current month)
     const monthlyRes = await pool.query(
       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
@@ -577,58 +562,14 @@ router.get("/logout/:employeeId", async (req, res) => {
       [employeeId]
     );
 
-    // 5️⃣ Calculate total worked hours (daily / weekly / monthly)
-    const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
-      pool.query(
-        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND DATE(timestamp) = CURRENT_DATE`,
-        [employeeId]
-      ),
-      pool.query(
-        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
-           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
-        [employeeId]
-      ),
-      pool.query(
-        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
-        [employeeId]
-      ),
-    ]);
-
-    const dailySeconds = Math.floor(parseFloat(dailyTotal.rows[0].total_seconds));
-    const weeklySeconds = Math.floor(parseFloat(weeklyTotal.rows[0].total_seconds));
-    const monthlySeconds = Math.floor(parseFloat(monthlyTotal.rows[0].total_seconds));
-
-    const daily_hours = formatHours(dailySeconds);
-    const weekly_hours = formatHours(weeklySeconds);
-    const monthly_hours = formatHours(monthlySeconds);
-
-    // ✅ Final response
     return res.json({
       success: true,
-      message: "Fetched logout records with daily, weekly, and monthly summaries",
+      message: "Fetched logout records with daily and monthly summary for this employee",
       data: {
         status: "Off Duty",
-        totals: {
-          daily_hours,
-          weekly_hours,
-          monthly_hours,
-        },
         attendance: {
           all: allRes.rows,
           daily: dailyRes.rows,
-          weekly: weeklyRes.rows,
           monthly: monthlyRes.rows,
         },
       },
