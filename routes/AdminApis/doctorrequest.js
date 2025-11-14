@@ -161,22 +161,25 @@ router.put("/update/:id", async (req, res) => {
 =========================== */
 router.put("/status", async (req, res) => {
   try {
-    const { id, status } = req.body;
+    const { id, status, count } = req.body;
 
     if (!["pending", "complete", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
     const updated = await db.query(
-      "UPDATE doctor_requests SET status = $1 WHERE id = $2 RETURNING *",
-      [status, id]
+      "UPDATE doctor_requests SET status = $1, count = $2 WHERE id = $3 RETURNING *",
+      [status, count, id]
     );
 
     if (updated.rows.length === 0) {
       return res.status(404).json({ message: "Request not found" });
     }
 
-    res.json({ message: "Status updated successfully", data: updated.rows[0] });
+    res.json({
+      message: "Status & count updated successfully",
+      data: updated.rows[0],
+    });
   } catch (err) {
     console.error("Error updating status:", err);
     res.status(500).json({ message: "Server error" });
