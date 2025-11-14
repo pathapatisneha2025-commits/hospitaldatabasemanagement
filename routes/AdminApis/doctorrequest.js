@@ -7,27 +7,43 @@ const router = express.Router();
 =========================== */
 router.post("/add", async (req, res) => {
   try {
-    const { name, department, query_reason } = req.body;
+    const { name, department, query_reason, email } = req.body;
 
-    if (!name || !department || !query_reason) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!name || !department || !query_reason || !email) {
+      return res.status(400).json({ message: "All fields are required including email" });
     }
 
-    const result = await db.query(
-      `INSERT INTO doctor_requests (name, department, query_reason, status)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [name, department, query_reason, "pending"]
+    // 1. Fetch employee by email
+    const employeeResult = await db.query(
+      `SELECT id FROM employees WHERE email = $1`,
+      [email]
     );
 
-    res
-      .status(201)
-      .json({ message: "Doctor request submitted", data: result.rows[0] });
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ message: "Employee not found for this email" });
+    }
+
+    const employeeId = employeeResult.rows[0].id;
+
+    // 2. Insert doctor request with employee_id
+    const result = await db.query(
+      `INSERT INTO doctor_requests (employee_id, name, department, query_reason, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [employeeId, name, department, query_reason, "pending"]
+    );
+
+    res.status(201).json({
+      message: "Doctor request submitted",
+      data: result.rows[0],
+    });
+
   } catch (err) {
     console.error("Error creating request:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 /* ===========================
    GET ALL REQUESTS
@@ -43,6 +59,29 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
+/* ===========================
+   🔥 GET ALL REQUESTS BY EMPLOYEE ID
+=========================== */
+router.get("/employee/:employee_id", async (req, res) => {
+  try {
+    const { employee_id } = req.params;
+
+    const result = await db.query(
+      `SELECT * FROM doctor_requests 
+       WHERE employee_id = $1
+       ORDER BY created_at DESC`,
+      [employee_id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching requests by employee_id:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 /* ===========================
    GET REQUEST BY ID
@@ -66,6 +105,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+
 /* ===========================
    UPDATE REQUEST DETAILS
 =========================== */
@@ -87,7 +127,12 @@ router.put("/update/:id", async (req, res) => {
        SET name = $1, department = $2, query_reason = $3
        WHERE id = $4
        RETURNING *`,
-      [name || existing.rows[0].name, department || existing.rows[0].department, query_reason || existing.rows[0].query_reason, id]
+      [
+        name || existing.rows[0].name,
+        department || existing.rows[0].department,
+        query_reason || existing.rows[0].query_reason,
+        id
+      ]
     );
 
     res.json({ message: "Request updated successfully", data: updated.rows[0] });
@@ -97,13 +142,13 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
+
 /* ===========================
    UPDATE STATUS (Admin Only)
 =========================== */
 router.put("/status", async (req, res) => {
   try {
-    
-    const {id, status } = req.body;
+    const { id, status } = req.body;
 
     if (!["pending", "complete", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
@@ -124,6 +169,7 @@ router.put("/status", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 /* ===========================
    DELETE REQUEST
