@@ -12,7 +12,7 @@ router.post("/add", async (req, res) => {
     }
 
     // 1️⃣ Check employee exists in employees table
-    const empResult = await db.query(
+    const empResult = await pool.query(
       "SELECT id FROM employees WHERE email = $1",
       [emp_email]
     );
