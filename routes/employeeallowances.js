@@ -24,7 +24,7 @@ router.post("/add", async (req, res) => {
     const employee_id = empResult.rows[0].id;
 
     // 2️⃣ Insert into employee_allowances
-    const result = await db.query(
+    const result = await pool.query(
       `INSERT INTO employee_allowances (employee_id, emp_name, emp_email, allowance_amount)
        VALUES ($1, $2, $3, $4) RETURNING *`,
       [employee_id, emp_name, emp_email, allowance_amount]
@@ -45,7 +45,7 @@ router.post("/add", async (req, res) => {
 // ➤ Get All Allowance Records
 router.get("/all", async (req, res) => {
   try {
-    const result = await db.query("SELECT * FROM employee_allowances ORDER BY id DESC");
+    const result = await pool.query("SELECT * FROM employee_allowances ORDER BY id DESC");
     res.json(result.rows);
   } catch (err) {
     console.log("❌ Fetch error:", err);
@@ -59,7 +59,7 @@ router.put("/update/:id", async (req, res) => {
     const { id } = req.params;
     const { emp_name, emp_email, allowance_amount } = req.body;
 
-    const existing = await db.query(
+    const existing = await pool.query(
       "SELECT * FROM employee_allowances WHERE id = $1",
       [id]
     );
@@ -68,7 +68,7 @@ router.put("/update/:id", async (req, res) => {
       return res.status(404).json({ message: "Record not found" });
     }
 
-    const updated = await db.query(
+    const updated = await pool.query(
       `UPDATE employee_allowances 
        SET emp_name = $1, emp_email = $2, allowance_amount = $3 
        WHERE id = $4 RETURNING *`,
@@ -88,7 +88,7 @@ router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await db.query(
+    const result = await pool.query(
       "DELETE FROM employee_allowances WHERE id = $1 RETURNING *",
       [id]
     );
