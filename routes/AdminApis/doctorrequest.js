@@ -112,30 +112,43 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, department, query_reason } = req.body;
+    const { name, email, department, query_reason } = req.body;
 
+    // Check existing request
     const existing = await db.query(
       "SELECT * FROM doctor_requests WHERE id = $1",
       [id]
     );
+
     if (existing.rows.length === 0) {
       return res.status(404).json({ message: "Request not found" });
     }
 
+    const old = existing.rows[0];
+
+    // Update with fallback to existing values
     const updated = await db.query(
       `UPDATE doctor_requests
-       SET name = $1, department = $2, query_reason = $3
-       WHERE id = $4
+       SET name = $1,
+           email = $2,
+           department = $3,
+           query_reason = $4
+       WHERE id = $5
        RETURNING *`,
       [
-        name || existing.rows[0].name,
-        department || existing.rows[0].department,
-        query_reason || existing.rows[0].query_reason,
-        id
+        name || old.name,
+        email || old.email,
+        department || old.department,
+        query_reason || old.query_reason,
+        id,
       ]
     );
 
-    res.json({ message: "Request updated successfully", data: updated.rows[0] });
+    res.json({
+      success: true,
+      message: "Request updated successfully",
+      data: updated.rows[0],
+    });
   } catch (err) {
     console.error("Error updating request:", err);
     res.status(500).json({ message: "Server error" });
