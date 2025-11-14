@@ -52,6 +52,27 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+// ➤ Get Allowance Records by Employee ID
+router.get("/employee/:employee_id", async (req, res) => {
+  try {
+    const { employee_id } = req.params;
+
+    const result = await pool.query(
+      "SELECT * FROM employee_allowances WHERE employee_id = $1 ORDER BY id DESC",
+      [employee_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No allowance records found for this employee" });
+    }
+
+    res.json(result.rows);
+  } catch (err) {
+    console.log("❌ Fetch by employee_id error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 // ➤ Update Allowance
 router.put("/update/:id", async (req, res) => {
