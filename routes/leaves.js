@@ -122,13 +122,9 @@ router.post("/salary-deduction", async (req, res) => {
       [employeeId]
     );
 
-    let workingDays = 0;
-    if (workResult.rows.length > 0) {
-      workingDays = parseInt(workResult.rows[0].working_days, 10);
-    } else {
-      // Default fallback if no record found
-      workingDays = totalDaysInMonth;
-    }
+    let workingDays = workResult.rows.length > 0
+      ? parseInt(workResult.rows[0].working_days, 10)
+      : totalDaysInMonth;
 
     // 4️⃣ Calculate paid leaves = total days - working days
     const paidLeaves = totalDaysInMonth - workingDays;
@@ -158,7 +154,7 @@ router.post("/salary-deduction", async (req, res) => {
     const usedLeaves = parseFloat(leaveResult.rows[0].used_leaves);
     const totalUsedLeaves = usedLeaves + equivalentLeaveDays;
 
-    // 7️⃣ Remaining paid leaves (based on working days logic)
+    // 7️⃣ Remaining paid leaves
     const remainingPaidLeaves = Math.max(paidLeaves - totalUsedLeaves, 0);
 
     // 8️⃣ Fetch leave status
@@ -170,18 +166,21 @@ router.post("/salary-deduction", async (req, res) => {
       ? leaveStatusResult.rows[0].status
       : "pending";
 
-    // 9️⃣ Set deduction and unauthorized penalty based on salary range
-    let deductionPerDay = 0, unauthorizedPenalty = 0;
+    // 9️⃣ Fetch deduction and penalty from salary_deductions table
+    const deductionResult = await pool.query(
+      `SELECT deduction_per_day, unauthorized_penalty
+       FROM salary_deductions
+       WHERE $1 >= min_salary AND ($1 <= max_salary OR max_salary IS NULL)
+       LIMIT 1`,
+      [monthlySalary]
+    );
 
-    if (monthlySalary >= 4500 && monthlySalary <= 7500) {
-      deductionPerDay = 700;
-      unauthorizedPenalty = 35;
-    } else if (monthlySalary >= 7501 && monthlySalary <= 9500) {
-      deductionPerDay = 1400;
-      unauthorizedPenalty = 70;
-    } else if (monthlySalary >= 9501) {
-      deductionPerDay = 2800;
-      unauthorizedPenalty = 105;
+    let deductionPerDay = 0;
+    let unauthorizedPenalty = 0;
+
+    if (deductionResult.rows.length > 0) {
+      deductionPerDay = parseFloat(deductionResult.rows[0].deduction_per_day);
+      unauthorizedPenalty = parseFloat(deductionResult.rows[0].unauthorized_penalty);
     }
 
     // 🔟 Calculate unpaid days and salary deduction
@@ -197,7 +196,7 @@ router.post("/salary-deduction", async (req, res) => {
 
     const totalPenalty = salaryDeduction + unauthorizedPenaltyTotal;
 
-    // 12️⃣ Final response
+    // 12️⃣ Response
     res.json({
       employeeId,
       employeeName,
@@ -224,6 +223,7 @@ router.post("/salary-deduction", async (req, res) => {
     res.status(500).json({ message: "Error calculating salary deduction" });
   }
 });
+
 
 
 
