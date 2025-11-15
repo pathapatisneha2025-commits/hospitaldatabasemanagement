@@ -6,31 +6,31 @@ const pool = require("../db"); // your DB connection
 // ADD FEES
 // ------------------------------
 router.post("/add", async (req, res) => {
-  const { employee_name, email, fees } = req.body;
+  const { doctor_name, email, fees } = req.body;
 
-  if (!employee_name || !email || !fees) {
+  if (!doctor_name || !email || !fees) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
-    // Get employee id using email
-    const empRes = await pool.query(
-      `SELECT id FROM employees WHERE email = $1`,
+    // Get doctor id using email
+    const doctorRes = await pool.query(
+      `SELECT id FROM doctors WHERE email = $1`,
       [email]
     );
 
-    if (empRes.rows.length === 0) {
-      return res.status(404).json({ error: "Employee not found with this email" });
+    if (doctorRes.rows.length === 0) {
+      return res.status(404).json({ error: "Doctor not found with this email" });
     }
 
-    const employee_id = empRes.rows[0].id;
+    const doctor_id = doctorRes.rows[0].id;
 
     // Insert data
     const insertRes = await pool.query(
-      `INSERT INTO doctor_consultant_fees (employee_id, employee_name, employee_email, fees)
+      `INSERT INTO doctor_consultant_fees (doctor_id, doctor_name, doctor_email, fees)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [employee_id, employee_name, email, fees]
+      [doctor_id, doctor_name, email, fees]
     );
 
     res.status(201).json({
@@ -60,9 +60,10 @@ router.get("/all", async (req, res) => {
 // ------------------------------
 router.get("/:id", async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM doctor_consultant_fees WHERE id = $1`, [
-      req.params.id,
-    ]);
+    const result = await pool.query(
+      `SELECT * FROM doctor_consultant_fees WHERE id = $1`,
+      [req.params.id]
+    );
 
     if (result.rows.length === 0)
       return res.status(404).json({ error: "Record not found" });
@@ -72,25 +73,26 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 // ------------------------------
-// GET CONSULTANT FEE BY EMPLOYEE ID
+// GET CONSULTANT FEE BY DOCTOR ID
 // ------------------------------
-router.get("/employee/:employee_id", async (req, res) => {
-  const { employee_id } = req.params;
+router.get("/doctor/:doctor_id", async (req, res) => {
+  const { doctor_id } = req.params;
 
   try {
     const result = await pool.query(
-      `SELECT * FROM doctor_consultant_fees WHERE employee_id = $1 ORDER BY id DESC`,
-      [employee_id]
+      `SELECT * FROM doctor_consultant_fees WHERE doctor_id = $1 ORDER BY id DESC`,
+      [doctor_id]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "No consultant fee records found for this employee" });
+      return res.status(404).json({ error: "No consultant fee records found for this doctor" });
     }
 
     res.json(result.rows);
   } catch (error) {
-    console.error("Error fetching consultant fee by employee ID:", error);
+    console.error("Error fetching consultant fee by doctor ID:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -99,22 +101,22 @@ router.get("/employee/:employee_id", async (req, res) => {
 // UPDATE
 // ------------------------------
 router.put("/update/:id", async (req, res) => {
-  const { employee_name, email, fees } = req.body;
+  const { doctor_name, email, fees } = req.body;
 
   try {
-    const empRes = await pool.query(`SELECT id FROM employees WHERE email = $1`, [email]);
+    const doctorRes = await pool.query(`SELECT id FROM doctors WHERE email = $1`, [email]);
 
-    if (empRes.rows.length === 0)
-      return res.status(404).json({ error: "No employee found with this email" });
+    if (doctorRes.rows.length === 0)
+      return res.status(404).json({ error: "No doctor found with this email" });
 
-    const employee_id = empRes.rows[0].id;
+    const doctor_id = doctorRes.rows[0].id;
 
     const updateRes = await pool.query(
       `UPDATE doctor_consultant_fees 
-       SET employee_id=$1, employee_name=$2, employee_email=$3, fees=$4
+       SET doctor_id=$1, doctor_name=$2, doctor_email=$3, fees=$4
        WHERE id = $5
        RETURNING *`,
-      [employee_id, employee_name, email, fees, req.params.id]
+      [doctor_id, doctor_name, email, fees, req.params.id]
     );
 
     res.json({
