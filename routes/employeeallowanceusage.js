@@ -17,27 +17,7 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// ==========================
-// ✅ GET allowance usage by ID
-// ==========================
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const usage = await pool.query(
-      "SELECT * FROM employee_allowance_usage WHERE id = $1",
-      [id]
-    );
 
-    if (usage.rows.length === 0) {
-      return res.status(404).json({ message: "Usage record not found" });
-    }
-
-    res.json(usage.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
 
 // ==========================
 // ✅ POST new allowance usage
@@ -80,6 +60,49 @@ router.post("/add", async (req, res) => {
   }
 });
 
+router.get("/export", async (req, res) => {
+  try {
+    const rows = await pool.query("SELECT * FROM employee_allowance_usage ORDER BY id DESC");
+
+    let csv = "S.No,Name,Department,Description,Amount,Date\n";
+
+    rows.rows.forEach((r, idx) => {
+      const d = new Date(r.created_at);
+      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+      csv += `${idx + 1},"${r.emp_name}","${r.department}","${r.description}",${r.amount},"${date}"\n`;
+    });
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=AllowanceUsage.csv");
+
+    return res.send("\uFEFF" + csv); // add BOM for Excel UTF-8
+  } catch (err) {
+    console.log(err);
+    res.status(500).send("Failed to export CSV");
+  }
+});
+// ==========================
+// ✅ GET allowance usage by ID
+// ==========================
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usage = await pool.query(
+      "SELECT * FROM employee_allowance_usage WHERE id = $1",
+      [id]
+    );
+
+    if (usage.rows.length === 0) {
+      return res.status(404).json({ message: "Usage record not found" });
+    }
+
+    res.json(usage.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // ==========================
 // ✅ PUT update allowance usage by ID
@@ -134,28 +157,6 @@ router.delete("/delete/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
-  }
-});
-router.get("/export", async (req, res) => {
-  try {
-    const rows = await pool.query("SELECT * FROM employee_allowance_usage ORDER BY id DESC");
-
-    let csv = "S.No,Name,Department,Description,Amount,Date\n";
-
-    rows.rows.forEach((r, idx) => {
-      const d = new Date(r.created_at);
-      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-
-      csv += `${idx + 1},"${r.emp_name}","${r.department}","${r.description}",${r.amount},"${date}"\n`;
-    });
-
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", "attachment; filename=AllowanceUsage.csv");
-
-    return res.send("\uFEFF" + csv); // add BOM for Excel UTF-8
-  } catch (err) {
-    console.log(err);
-    res.status(500).send("Failed to export CSV");
   }
 });
 
