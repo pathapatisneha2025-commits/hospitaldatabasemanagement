@@ -62,19 +62,30 @@ router.post("/add", async (req, res) => {
 
 router.get("/export", async (req, res) => {
   try {
-    const rows = await pool.query("SELECT * FROM employee_allowance_usage ORDER BY id DESC");
+    const rows = await pool.query(
+      "SELECT * FROM employee_allowance_usage ORDER BY id DESC"
+    );
 
     let csv = "S.No,Name,Department,Description,Amount,Date\n";
 
     rows.rows.forEach((r, idx) => {
       const d = new Date(r.created_at);
-      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
-      csv += `${idx + 1},"${r.emp_name}","${r.department}","${r.description}",${r.amount},"${date}"\n`;
+      const excelDate = `="${d.getFullYear()}-${String(
+        d.getMonth() + 1
+      ).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}"`;
+
+      // Escape double-quotes in description
+      const safeDescription = (r.description || "").replace(/"/g, '""');
+
+      csv += `${idx + 1},"${r.emp_name}","${r.department}","${safeDescription}",${r.amount},${excelDate}\n`;
     });
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", "attachment; filename=AllowanceUsage.csv");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=AllowanceUsage.csv"
+    );
 
     return res.send("\uFEFF" + csv); // add BOM for Excel UTF-8
   } catch (err) {
@@ -82,6 +93,7 @@ router.get("/export", async (req, res) => {
     res.status(500).send("Failed to export CSV");
   }
 });
+
 // ==========================
 // ✅ GET allowance usage by ID
 // ==========================
