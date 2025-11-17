@@ -33,7 +33,7 @@ router.post("/add", async (req, res) => {
     
 
     // ✅ Verify doctor exists
-    const doctorCheckQuery = `SELECT id FROM doctor_fees WHERE id = $1`;
+    const doctorCheckQuery = `SELECT doctor_id FROM  doctor_consultant_fees WHERE doctor_id = $1`;
     const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
     if (doctorCheck.rows.length === 0) {
       return res.status(404).json({ error: "Doctor ID not found in doctor_fees" });
