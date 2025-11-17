@@ -373,7 +373,7 @@ router.get("/by-employee/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1️⃣ Get leave records ordered by start_date
+    // 1️⃣ Fetch employee leaves
     const leaveQuery = `
       SELECT l.*
       FROM leaves l
@@ -387,23 +387,39 @@ router.get("/by-employee/:id", async (req, res) => {
       return res.status(404).json({ message: "No leave records found for this employee." });
     }
 
-    // 2️⃣ Get allowed leaves from policy
-    const policyQuery = `
-      SELECT number_of_leaves AS allowed_leaves
-      FROM leave_policies
-      WHERE employee_id = $1;
-    `;
-    const policyResult = await pool.query(policyQuery, [id]);
-    const allowedLeaves = policyResult.rows.length > 0 ? policyResult.rows[0].allowed_leaves : 0;
+    // 2️⃣ Fetch working days for this employee
+    const workResult = await pool.query(
+      `SELECT working_days 
+       FROM employee_working_days 
+       WHERE employee_id = $1 
+       LIMIT 1`,
+      [id]
+    );
 
-    // 3️⃣ Calculate cumulative unpaid days per leave
+    if (workResult.rows.length === 0) {
+      return res.status(400).json({ message: "Working days not set for this employee." });
+    }
+
+    const workingDays = workResult.rows[0].working_days;
+
+    // 3️⃣ Calculate total days in current month
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // JS months start from 0
+
+    const currentMonthDays = new Date(year, month, 0).getDate();
+
+    // 4️⃣ Allowed leaves = total days in month - working days
+    const allowedLeaves = currentMonthDays - workingDays;
+
+    // 5️⃣ Calculate cumulative unpaid days
     let cumulativeUsed = 0;
     const leavesWithUnpaid = leaveResult.rows.map((leave) => {
       const leaveTaken = parseFloat(leave.leavestaken);
 
       cumulativeUsed += leaveTaken;
 
-      // Unpaid days = cumulative used - allowed leaves (cumulative)
+      // Unpaid = cumulative - allowed
       let unpaid_days = cumulativeUsed - allowedLeaves;
       unpaid_days = unpaid_days < 0 ? 0 : unpaid_days;
       unpaid_days = parseFloat(unpaid_days.toFixed(2));
@@ -411,15 +427,20 @@ router.get("/by-employee/:id", async (req, res) => {
       return { ...leave, unpaid_days };
     });
 
-    // 4️⃣ Total monthly used leaves
-    const usedLeavesMonth = leaveResult.rows.reduce((sum, l) => sum + parseFloat(l.leavestaken), 0);
+    // 6️⃣ Total leaves taken this month
+    const usedLeavesMonth = leaveResult.rows.reduce(
+      (sum, l) => sum + parseFloat(l.leavestaken),
+      0
+    );
 
-    // 5️⃣ Total unpaid leaves (overall)
+    // 7️⃣ Total unpaid leaves
     const totalUnpaid = Math.max(usedLeavesMonth - allowedLeaves, 0);
 
     res.status(200).json({
       message: "Leave records fetched successfully.",
       allowedLeaves,
+      workingDays,
+      currentMonthDays,
       usedLeavesMonth,
       unpaidLeaves: totalUnpaid,
       leaves: leavesWithUnpaid
@@ -429,6 +450,7 @@ router.get("/by-employee/:id", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 
 
