@@ -20,22 +20,33 @@ router.get("/all", async (req, res) => {
 // ==========================
 // ✅ POST new allowance usage
 // ==========================
-router.post("/add", async (req, res) => {
+router.post("/add", async (req, res) => { 
   try {
-    const { emp_name, emp_email, department, description, amount, amount_used } = req.body;
+    const usages = req.body; // now expecting an array
 
-    if (!emp_name || !emp_email || !description || !amount_used) {
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!Array.isArray(usages) || usages.length === 0) {
+      return res.status(400).json({ message: "No usage data provided" });
     }
 
-    const newUsage = await pool.query(
-      `INSERT INTO employee_allowance_usage 
-        (emp_name, emp_email, department, description, amount, amount_used)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [emp_name, emp_email, department || null, description, amount, amount_used]
-    );
+    const insertedRows = [];
+    for (const u of usages) {
+      const { emp_name, emp_email, department, description, amount, amount_used } = u;
 
-    res.json(newUsage.rows[0]);
+      if (!emp_name || !emp_email || !description || !amount_used) {
+        return res.status(400).json({ message: "Required fields missing in one of the rows" });
+      }
+
+      const newUsage = await pool.query(
+        `INSERT INTO employee_allowance_usage 
+          (emp_name, emp_email, department, description, amount, amount_used)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [emp_name, emp_email, department || null, description, amount, amount_used]
+      );
+
+      insertedRows.push(newUsage.rows[0]);
+    }
+
+    res.json(insertedRows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
