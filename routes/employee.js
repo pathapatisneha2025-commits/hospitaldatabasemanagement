@@ -38,7 +38,11 @@ router.get("/export", async (req, res) => {
     if (!employees || employees.length === 0) {
       return res.status(404).json({ success: false, message: "No employees found" });
     }
-
+ // Excel-friendly date
+  const doj = emp.date_of_joining ? new Date(emp.date_of_joining) : null;
+  const excelDate = doj
+    ? `="${doj.getFullYear()}-${String(doj.getMonth() + 1).padStart(2, "0")}-${String(doj.getDate()).padStart(2, "0")}"`
+    : "";
     // ⭐ Flatten nested addresses if stored as JSONB
     const formatted = employees.map(emp => ({
       id: emp.id,
@@ -72,7 +76,7 @@ router.get("/export", async (req, res) => {
       schedule_out: emp.schedule_out,
       break_in: emp.break_in,
       break_out: emp.break_out,
-      date_of_joining: emp.date_of_joining ? emp.date_of_joining.toISOString().slice(0, 10) : "",
+      date_of_joining: excelDate,
       status: emp.status,
     }));
 
