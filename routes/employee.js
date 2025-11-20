@@ -76,7 +76,7 @@ router.get("/export", async (req, res) => {
       schedule_out: emp.schedule_out,
       break_in: emp.break_in,
       break_out: emp.break_out,
-      date_of_joining: excelDate,
+      date_of_joining: emp.excelDate,
       status: emp.status,
     }));
 
