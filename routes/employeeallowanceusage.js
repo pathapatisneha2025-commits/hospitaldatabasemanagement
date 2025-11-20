@@ -47,7 +47,7 @@ router.post("/add", async (req, res) => {
       `INSERT INTO employee_allowance_usage 
         (emp_name, emp_email, department, description, amount, amount_used)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [emp_name, emp_email, department || null, descriptionStr, totalUsed, totalUsed]
+      [emp_name, emp_email, department || null, descriptionStr, totalUsed, amountUsedStr] // <-- fix
     );
 
     res.json(newUsage.rows[0]);
