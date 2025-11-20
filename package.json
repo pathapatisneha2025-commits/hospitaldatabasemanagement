@@ -23,6 +23,7 @@
     "express": "^5.1.0",
     "face-api.js": "^0.22.2",
     "firebase-admin": "^13.5.0",
+    "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "luxon": "^3.7.2",
     "multer": "^2.0.2",
