@@ -50,6 +50,7 @@ const Empallowances = require("./routes/employeeallowances");
 const Empallowancesusage = require("./routes/employeeallowanceusage"); 
 const DoctorConsultanceFees = require("./routes/doctorconsultancefees"); 
 const SalaryDeductions = require("./routes/salarydeductions"); 
+const EmployeeDeductions = require("./routes/employeedeductions"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
@@ -112,6 +113,7 @@ app.use("/employeeallowances",Empallowances);
 app.use("/allowanceuseage",Empallowancesusage); 
 app.use("/doctorconsultancefee",DoctorConsultanceFees); 
 app.use("/salarydeduction",SalaryDeductions); 
+app.use("/employeededuction",EmployeeDeductions); 
 
 
 app.use("/cron", cronRoutes);
