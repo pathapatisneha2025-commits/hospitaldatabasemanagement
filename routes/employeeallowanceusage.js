@@ -17,21 +17,17 @@ router.get("/all", async (req, res) => {
   }
 });
 
-
-
 // ==========================
 // ✅ POST new allowance usage
 // ==========================
 router.post("/add", async (req, res) => {
   try {
-    const { emp_name, emp_email, department, description, amount } = req.body;
+    const { emp_name, emp_email, department, description, amount, amount_used } = req.body;
 
-    // Validate required fields
-    if (!emp_name || !emp_email || !department || !description) {
+    if (!emp_name || !emp_email || !department || !description || amount_used == null) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    // If amount is not provided in body, fetch from employee_allowances
     let finalAmount = amount;
     if (!finalAmount) {
       const emp = await pool.query(
@@ -48,9 +44,9 @@ router.post("/add", async (req, res) => {
 
     const newUsage = await pool.query(
       `INSERT INTO employee_allowance_usage 
-        (emp_name, emp_email, department, description, amount)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [emp_name, emp_email, department, description, finalAmount]
+        (emp_name, emp_email, department, description, amount, amount_used)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [emp_name, emp_email, department, description, finalAmount, amount_used]
     );
 
     res.json(newUsage.rows[0]);
@@ -60,25 +56,23 @@ router.post("/add", async (req, res) => {
   }
 });
 
+// ==========================
+// ✅ GET allowance usage export CSV
+// ==========================
 router.get("/export", async (req, res) => {
   try {
     const rows = await pool.query(
       "SELECT * FROM employee_allowance_usage ORDER BY id DESC"
     );
 
-    let csv = "S.No,Name,Department,Description,Amount,Date\n";
+    let csv = "S.No,Name,Department,Description,Amount,AmountUsed,Date\n";
 
     rows.rows.forEach((r, idx) => {
       const d = new Date(r.created_at);
-
-      const excelDate = `="${d.getFullYear()}-${String(
-        d.getMonth() + 1
-      ).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}"`;
-
-      // Escape double-quotes in description
+      const excelDate = `="${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}"`;
       const safeDescription = (r.description || "").replace(/"/g, '""');
 
-      csv += `${idx + 1},"${r.emp_name}","${r.department}","${safeDescription}",${r.amount},${excelDate}\n`;
+      csv += `${idx + 1},"${r.emp_name}","${r.department}","${safeDescription}",${r.amount},${r.amount_used},${excelDate}\n`;
     });
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -87,7 +81,7 @@ router.get("/export", async (req, res) => {
       "attachment; filename=AllowanceUsage.csv"
     );
 
-    return res.send("\uFEFF" + csv); // add BOM for Excel UTF-8
+    return res.send("\uFEFF" + csv);
   } catch (err) {
     console.log(err);
     res.status(500).send("Failed to export CSV");
@@ -122,19 +116,18 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { emp_name, emp_email, department, description, amount } = req.body;
+    const { emp_name, emp_email, department, description, amount, amount_used } = req.body;
 
-    // Validate required fields
-    if (!emp_name || !emp_email || !department || !description || amount === undefined) {
+    if (!emp_name || !emp_email || !department || !description || amount === undefined || amount_used == null) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
     const updated = await pool.query(
-      `UPDATE employee_allowance_usage 
-       SET emp_name = $1, emp_email = $2, department = $3, description = $4, amount = $5
-       WHERE id = $6
+      `UPDATE employee_allowance_usage
+       SET emp_name = $1, emp_email = $2, department = $3, description = $4, amount = $5, amount_used = $6
+       WHERE id = $7
        RETURNING *`,
-      [emp_name, emp_email, department, description, amount, id]
+      [emp_name, emp_email, department, description, amount, amount_used, id]
     );
 
     if (updated.rows.length === 0) {
@@ -147,7 +140,6 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 // ==========================
 // ✅ DELETE allowance usage by ID
@@ -171,7 +163,5 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
-
 
 module.exports = router;
