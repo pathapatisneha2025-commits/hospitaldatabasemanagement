@@ -20,38 +20,43 @@ router.get("/all", async (req, res) => {
 // ==========================
 // ✅ POST new allowance usage
 // ==========================
-router.post("/add", async (req, res) => { 
+router.post("/add", async (req, res) => {
   try {
-    const usages = req.body; // now expecting an array
+    const { emp_name, emp_email, department, description, amount_used } = req.body;
 
-    if (!Array.isArray(usages) || usages.length === 0) {
-      return res.status(400).json({ message: "No usage data provided" });
+    if (!emp_name || !emp_email || !description || !amount_used) {
+      return res.status(400).json({ message: "Required fields missing" });
     }
 
-    const insertedRows = [];
-    for (const u of usages) {
-      const { emp_name, emp_email, department, description, amount, amount_used } = u;
+    // Convert description array to comma-separated string
+    const descriptionStr = Array.isArray(description) ? description.join(", ") : description;
 
-      if (!emp_name || !emp_email || !description || !amount_used) {
-        return res.status(400).json({ message: "Required fields missing in one of the rows" });
-      }
+    // Convert amount_used array to numbers and sum them
+    let totalUsed = 0;
+    let amountUsedStr = "";
 
-      const newUsage = await pool.query(
-        `INSERT INTO employee_allowance_usage 
-          (emp_name, emp_email, department, description, amount, amount_used)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [emp_name, emp_email, department || null, description, amount, amount_used]
-      );
-
-      insertedRows.push(newUsage.rows[0]);
+    if (Array.isArray(amount_used)) {
+      totalUsed = amount_used.reduce((sum, val) => sum + parseFloat(val || 0), 0);
+      amountUsedStr = amount_used.map(val => parseFloat(val || 0)).join(", ");
+    } else {
+      totalUsed = parseFloat(amount_used);
+      amountUsedStr = String(amount_used);
     }
 
-    res.json(insertedRows);
+    const newUsage = await pool.query(
+      `INSERT INTO employee_allowance_usage 
+        (emp_name, emp_email, department, description, amount, amount_used)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [emp_name, emp_email, department || null, descriptionStr, totalUsed, totalUsed]
+    );
+
+    res.json(newUsage.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 // ==========================
