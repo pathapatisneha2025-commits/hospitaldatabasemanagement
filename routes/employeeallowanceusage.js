@@ -31,23 +31,28 @@ router.post("/add", async (req, res) => {
     // Convert description array to comma-separated string
     const descriptionStr = Array.isArray(description) ? description.join(", ") : description;
 
-    // Convert amount_used array to numbers and sum them
-    let totalUsed = 0;
-    let amountUsedStr = "";
+    // Ensure amount_used is processed as an array of numbers
+    let amountUsedArray = [];
 
     if (Array.isArray(amount_used)) {
-      totalUsed = amount_used.reduce((sum, val) => sum + parseFloat(val || 0), 0);
-      amountUsedStr = amount_used.map(val => parseFloat(val || 0)).join(", ");
+      amountUsedArray = amount_used.map(a => parseFloat(a) || 0);
+    } else if (typeof amount_used === "string") {
+      amountUsedArray = amount_used.split(",").map(a => parseFloat(a.trim()) || 0);
     } else {
-      totalUsed = parseFloat(amount_used);
-      amountUsedStr = String(amount_used);
+      amountUsedArray = [parseFloat(amount_used) || 0];
     }
 
+    // Sum total used
+    const totalUsed = amountUsedArray.reduce((sum, val) => sum + val, 0);
+    // Store as comma-separated string
+    const amountUsedStr = amountUsedArray.join(", ");
+
+    // Insert into database
     const newUsage = await pool.query(
       `INSERT INTO employee_allowance_usage 
         (emp_name, emp_email, department, description, amount, amount_used)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [emp_name, emp_email, department || null, descriptionStr, totalUsed, amountUsedStr] // <-- fix
+      [emp_name, emp_email, department || null, descriptionStr, totalUsed, amountUsedStr]
     );
 
     res.json(newUsage.rows[0]);
@@ -56,6 +61,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
