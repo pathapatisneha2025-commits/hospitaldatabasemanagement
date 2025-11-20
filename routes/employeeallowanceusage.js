@@ -24,29 +24,15 @@ router.post("/add", async (req, res) => {
   try {
     const { emp_name, emp_email, department, description, amount, amount_used } = req.body;
 
-    if (!emp_name || !emp_email || !department || !description || amount_used == null) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
-    let finalAmount = amount;
-    if (!finalAmount) {
-      const emp = await pool.query(
-        "SELECT allowance_amount FROM employee_allowances WHERE emp_email = $1",
-        [emp_email]
-      );
-
-      if (emp.rows.length === 0) {
-        return res.status(404).json({ message: "Employee allowance not found" });
-      }
-
-      finalAmount = emp.rows[0].allowance_amount;
+    if (!emp_name || !emp_email || !description || !amount_used) {
+      return res.status(400).json({ message: "Required fields missing" });
     }
 
     const newUsage = await pool.query(
       `INSERT INTO employee_allowance_usage 
         (emp_name, emp_email, department, description, amount, amount_used)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [emp_name, emp_email, department, description, finalAmount, amount_used]
+      [emp_name, emp_email, department || null, description, amount, amount_used]
     );
 
     res.json(newUsage.rows[0]);
@@ -55,6 +41,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ==========================
 // ✅ GET allowance usage export CSV
