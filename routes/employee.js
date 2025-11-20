@@ -10,7 +10,8 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 // const JWT_SECRET = process.env.JWT_SECRET;
 // const authenticateJWT = require('../middleware/auth');
-
+const { Parser } = require("json2csv");
+const ExcelJS = require("exceljs");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
 // Create uploads directory if it doesn't exist
@@ -487,6 +488,68 @@ router.delete('/delete/:id', async (req, res) => {
   }
 });
 
+// ⭐ EXPORT EMPLOYEES AS CSV
+router.get("/export", async (req, res) => {
+  try {
+    const employees = await Employee.find({});
+
+    if (!employees || employees.length === 0) {
+      return res.status(404).json({ success: false, message: "No employees found" });
+    }
+
+    // ⭐ Flatten nested addresses into string
+    const formatted = employees.map((emp) => ({
+      id: emp.id,
+      full_name: emp.full_name,
+      email: emp.email,
+      mobile: emp.mobile,
+      family_number: emp.family_number,
+      department: emp.department,
+      role: emp.role,
+      blood_group: emp.blood_group,
+      age: emp.age,
+      experience: emp.experience,
+      monthly_salary: emp.monthly_salary,
+      employment_type: emp.employment_type,
+      category: emp.category,
+      reporting_manager: emp.reporting_manager,
+      aadhar: emp.aadhar,
+      pan: emp.pan,
+      esi_number: emp.esi_number,
+      bank_name: emp.bank_name,
+      account_number: emp.account_number,
+      ifsc: emp.ifsc,
+      branch_name: emp.branch_name,
+
+      temporary_addresses: emp.temporary_addresses
+        ?.map((a) => `${a.street}, ${a.city}, ${a.state} - ${a.pincode}`)
+        .join(" | "),
+
+      permanent_addresses: emp.permanent_addresses
+        ?.map((b) => `${b.street}, ${b.city}, ${b.state} - ${b.pincode}`)
+        .join(" | "),
+
+      schedule_in: emp.schedule_in,
+      schedule_out: emp.schedule_out,
+      break_in: emp.break_in,
+      break_out: emp.break_out,
+      date_of_joining: emp.date_of_joining?.toISOString().slice(0, 10),
+      status: emp.status,
+    }));
+
+    // ⭐ Convert to CSV
+    const json2csvParser = new Parser();
+    const csv = json2csvParser.parse(formatted);
+
+    res.header("Content-Type", "text/csv");
+    res.attachment("employees.csv");
+    return res.send(csv);
+
+  } catch (error) {
+    console.error("CSV export error", error);
+    return res.status(500).json({ success: false, error: "Failed to export employees" });
+  }
+});
 
 
 module.exports = router;
