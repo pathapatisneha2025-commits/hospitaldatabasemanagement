@@ -38,47 +38,50 @@ router.get("/export", async (req, res) => {
     if (!employees || employees.length === 0) {
       return res.status(404).json({ success: false, message: "No employees found" });
     }
- // Excel-friendly date
+ const formatted = employees.map(emp => {
+  // Excel-friendly date inside map
   const doj = emp.date_of_joining ? new Date(emp.date_of_joining) : null;
   const excelDate = doj
     ? `="${doj.getFullYear()}-${String(doj.getMonth() + 1).padStart(2, "0")}-${String(doj.getDate()).padStart(2, "0")}"`
     : "";
-    // ⭐ Flatten nested addresses if stored as JSONB
-    const formatted = employees.map(emp => ({
-      id: emp.id,
-      full_name: emp.full_name,
-      email: emp.email,
-      mobile: emp.mobile,
-      family_number: emp.family_number,
-      department: emp.department,
-      role: emp.role,
-      blood_group: emp.blood_group,
-      age: emp.age,
-      experience: emp.experience,
-      monthly_salary: emp.monthly_salary,
-      employment_type: emp.employment_type,
-      category: emp.category,
-      reporting_manager: emp.reporting_manager,
-      aadhar: emp.aadhar,
-      pan: emp.pan,
-      esi_number: emp.esi_number,
-      bank_name: emp.bank_name,
-      account_number: emp.account_number,
-      ifsc: emp.ifsc,
-      branch_name: emp.branch_name,
-      temporary_addresses: emp.temporary_addresses 
-        ? emp.temporary_addresses.map(a => `${a.street}, ${a.city}, ${a.state} - ${a.pincode}`).join(" | ") 
-        : "",
-      permanent_addresses: emp.permanent_addresses
-        ? emp.permanent_addresses.map(b => `${b.street}, ${b.city}, ${b.state} - ${b.pincode}`).join(" | ") 
-        : "",
-      schedule_in: emp.schedule_in,
-      schedule_out: emp.schedule_out,
-      break_in: emp.break_in,
-      break_out: emp.break_out,
-      date_of_joining: emp.excelDate,
-      status: emp.status,
-    }));
+
+  return {
+    id: emp.id,
+    full_name: emp.full_name,
+    email: emp.email,
+    mobile: emp.mobile,
+    family_number: emp.family_number,
+    department: emp.department,
+    role: emp.role,
+    blood_group: emp.blood_group,
+    age: emp.age,
+    experience: emp.experience,
+    monthly_salary: emp.monthly_salary,
+    employment_type: emp.employment_type,
+    category: emp.category,
+    reporting_manager: emp.reporting_manager,
+    aadhar: emp.aadhar,
+    pan: emp.pan,
+    esi_number: emp.esi_number,
+    bank_name: emp.bank_name,
+    account_number: emp.account_number,
+    ifsc: emp.ifsc,
+    branch_name: emp.branch_name,
+    temporary_addresses: emp.temporary_addresses
+      ? emp.temporary_addresses.map(a => `${a.street}, ${a.city}, ${a.state} - ${a.pincode}`).join(" | ")
+      : "",
+    permanent_addresses: emp.permanent_addresses
+      ? emp.permanent_addresses.map(b => `${b.street}, ${b.city}, ${b.state} - ${b.pincode}`).join(" | ")
+      : "",
+    schedule_in: emp.schedule_in,
+    schedule_out: emp.schedule_out,
+    break_in: emp.break_in,
+    break_out: emp.break_out,
+    date_of_joining: excelDate, // ✅ use formatted Excel date
+    status: emp.status,
+  };
+});
+
 
     const json2csvParser = new Parser();
     const csv = json2csvParser.parse(formatted);
