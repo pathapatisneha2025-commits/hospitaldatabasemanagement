@@ -263,14 +263,33 @@ router.post("/update-status", async (req, res) => {
       return res.status(400).json({ error: "Task ID and status are required" });
     }
 
-    const query = `
-      UPDATE tasks
-      SET status = $1
-      WHERE id = $2
-      RETURNING *;
-    `;
+    let query;
+    let values;
 
-    const result = await pool.query(query, [status, id]);
+    // 👉 If task is completed, set completed_time = NOW()
+    if (status.toLowerCase() === "completed") {
+      query = `
+        UPDATE tasks
+        SET status = $1,
+            completed_time = NOW()
+        WHERE id = $2
+        RETURNING *;
+      `;
+      values = [status, id];
+    } 
+    else {
+      // 👉 For other statuses, reset completed_time
+      query = `
+        UPDATE tasks
+        SET status = $1,
+            completed_time = NULL
+        WHERE id = $2
+        RETURNING *;
+      `;
+      values = [status, id];
+    }
+
+    const result = await pool.query(query, values);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Task not found" });
@@ -280,11 +299,13 @@ router.post("/update-status", async (req, res) => {
       message: `Task status updated to ${status}.`,
       task: result.rows[0],
     });
+
   } catch (error) {
     console.error("Error updating task status:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 
 
