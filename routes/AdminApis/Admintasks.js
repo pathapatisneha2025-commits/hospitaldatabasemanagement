@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const pool = require("../../db"); // PostgreSQL connection pool
+const pool = require("../../db"); 
 
 // -------------------- ADD TASK --------------------
 router.post("/add", async (req, res) => {
@@ -9,11 +9,12 @@ router.post("/add", async (req, res) => {
       title,
       startDate,
       endDate,
-      assignedTo, // array of emails
+      assignedTo, 
       priority,
       attachment,
       description,
-      recurringType = "Not Recurring"
+      recurringType = "Not Recurring",
+      status = "Pending"   // ✅ Default status added
     } = req.body;
 
     if (!title || !startDate || !endDate) {
@@ -23,7 +24,7 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // 1️⃣ Get employee IDs from emails
+    // 1️⃣ Fetch employee IDs from emails
     let employeeIds = [];
     if (assignedTo && assignedTo.length > 0) {
       const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
@@ -40,11 +41,11 @@ router.post("/add", async (req, res) => {
       }
     }
 
-    // 2️⃣ Insert the task with both emails and employee IDs
+    // 2️⃣ Insert task with status
     const query = `
       INSERT INTO Admintasks
-      (Title, StartDate, DueDate, AssignedTo, EmployeeIDs, Priority, Attachment, Description, RecurringType)
-      VALUES ($1, $2, $3, $4::text[], $5::int[], $6, $7, $8, $9)
+      (Title, StartDate, DueDate, AssignedTo, EmployeeIDs, Priority, Attachment, Description, RecurringType, Status)
+      VALUES ($1, $2, $3, $4::text[], $5::int[], $6, $7, $8, $9, $10)
       RETURNING *;
     `;
 
@@ -57,12 +58,13 @@ router.post("/add", async (req, res) => {
       priority || null,
       attachment || null,
       description || null,
-      recurringType
+      recurringType,
+      status                   // ✅ inserted
     ];
 
     const result = await pool.query(query, values);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Task created successfully",
       data: result.rows[0]
@@ -97,7 +99,8 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// -------------------- GET SINGLE TASK --------------------
+
+// -------------------- GET A SINGLE TASK --------------------
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,6 +127,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+
 // -------------------- UPDATE TASK --------------------
 router.put("/update/:id", async (req, res) => {
   try {
@@ -132,20 +136,21 @@ router.put("/update/:id", async (req, res) => {
       title,
       startDate,
       endDate,
-      assignedTo, // array of emails
+      assignedTo, 
       priority,
       attachment,
       description,
-      recurringType
+      recurringType,
+      status = "Pending"   // ✅ added status update
     } = req.body;
 
-    // 1️⃣ Get employee IDs from emails
+    // 1️⃣ Fetch employee IDs
     let employeeIds = [];
     if (assignedTo && assignedTo.length > 0) {
       const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
-      const employeeQuery = `SELECT employee_id, email FROM Employees WHERE email IN (${placeholders})`;
+      const employeeQuery = `SELECT id, email FROM Employees WHERE email IN (${placeholders})`;
       const employeeResult = await pool.query(employeeQuery, assignedTo);
-      employeeIds = employeeResult.rows.map(row => row.employee_id);
+      employeeIds = employeeResult.rows.map(row => row.id);
 
       if (employeeIds.length === 0) {
         return res.status(400).json({
@@ -155,7 +160,7 @@ router.put("/update/:id", async (req, res) => {
       }
     }
 
-    // 2️⃣ Update the task with both emails and employee IDs
+    // 2️⃣ Update query including status
     const query = `
       UPDATE Admintasks
       SET 
@@ -167,8 +172,9 @@ router.put("/update/:id", async (req, res) => {
         Priority = $6,
         Attachment = $7,
         Description = $8,
-        RecurringType = $9
-      WHERE id = $10
+        RecurringType = $9,
+        Status = $10
+      WHERE id = $11
       RETURNING *;
     `;
 
@@ -182,6 +188,7 @@ router.put("/update/:id", async (req, res) => {
       attachment || null,
       description || null,
       recurringType || "Not Recurring",
+      status,      // ✅ updated
       id
     ];
 
@@ -210,18 +217,19 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
+
 // -------------------- GET TASKS BY EMPLOYEE ID --------------------
 router.get("/employee/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
 
-    // Query tasks where EmployeeIDs array contains the given employeeId
     const query = `
       SELECT *
       FROM Admintasks
       WHERE $1 = ANY(EmployeeIDs)
       ORDER BY id DESC
     `;
+
     const result = await pool.query(query, [employeeId]);
 
     if (result.rows.length === 0) {
@@ -235,8 +243,9 @@ router.get("/employee/:employeeId", async (req, res) => {
       success: true,
       data: result.rows
     });
+
   } catch (error) {
-    console.error("Error fetching tasks by employee ID:", error.message);
+    console.error("Error fetching tasks by employee:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -245,11 +254,15 @@ router.get("/employee/:employeeId", async (req, res) => {
   }
 });
 
+
 // -------------------- DELETE TASK --------------------
 router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query("DELETE FROM Admintasks WHERE id = $1 RETURNING *", [id]);
+    const result = await pool.query(
+      "DELETE FROM Admintasks WHERE id = $1 RETURNING *",
+      [id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -263,6 +276,7 @@ router.delete("/delete/:id", async (req, res) => {
       message: "Task deleted successfully",
       data: result.rows[0]
     });
+
   } catch (error) {
     console.error("Error deleting task:", error.message);
     res.status(500).json({
