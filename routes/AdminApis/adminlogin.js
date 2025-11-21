@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db"); // Database connection
 const bcrypt = require("bcrypt");
+const path = require("path");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../../cloudinary"); // ✅ your custom cloudinary config file
 const multer = require("multer");
