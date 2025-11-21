@@ -64,10 +64,10 @@ router.post("/register", upload.single("image"), async (req, res) => {
     // Insert admin into DB
     const result = await pool.query(
       `INSERT INTO admin 
-        (name, email, password, joining_date, phone, status, created_at, image)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', $7)
+        (name, email, password, joining_date, phone, created_at, image)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', $6)
        RETURNING *`,
-      [name, email, hashedPassword, formattedDate, phone, "pending", imageUrl]
+      [name, email, hashedPassword, formattedDate, phone, imageUrl]
     );
 
     res.status(201).json({
