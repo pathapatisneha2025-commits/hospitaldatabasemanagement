@@ -30,42 +30,58 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const employeeId = req.body.employeeId ? parseInt(req.body.employeeId, 10) : null;
     const subadminId = req.body.subadminId ? parseInt(req.body.subadminId, 10) : null;
+    const adminId = req.body.adminId ? parseInt(req.body.adminId, 10) : null;
     const file = req.file;
 
-    // ✅ Require image and at least one ID
+    // Require image
     if (!file) {
       return res.status(400).json({ success: false, message: "Image required" });
     }
 
-    if (!employeeId && !subadminId) {
-      return res.status(400).json({ success: false, message: "Either Employee ID or Subadmin ID required" });
+    // Require at least ONE ID
+    if (!employeeId && !subadminId && !adminId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID, Subadmin ID, or Admin ID required"
+      });
     }
 
     const capturedUrl = file.path;
 
-    // ✅ Fetch registered face image based on ID type
+    // ---------------- FETCH REGISTERED IMAGE ----------------
     let registeredUrl;
+    let tableName = "";
+    let userId = null;
+
     if (employeeId) {
-      const result = await pool.query("SELECT image FROM employees WHERE id = $1", [employeeId]);
-      if (result.rowCount === 0) {
-        return res.status(404).json({ success: false, message: "Employee not found" });
-      }
-      registeredUrl = result.rows[0].image;
-    } else {
-      const result = await pool.query("SELECT image FROM subadmin WHERE id = $1", [subadminId]);
-      if (result.rowCount === 0) {
-        return res.status(404).json({ success: false, message: "Subadmin not found" });
-      }
-      registeredUrl = result.rows[0].image;
+      tableName = "employees";
+      userId = employeeId;
+    } else if (subadminId) {
+      tableName = "subadmin";
+      userId = subadminId;
+    } else if (adminId) {
+      tableName = "admin";
+      userId = adminId;
     }
 
-    // ✅ Download both images
+    const result = await pool.query(`SELECT image FROM ${tableName} WHERE id = $1`, [userId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `${tableName} not found`
+      });
+    }
+
+    registeredUrl = result.rows[0].image;
+
+    // ---------------- DOWNLOAD BOTH IMAGES ----------------
     const [registeredImg, capturedImg] = await Promise.all([
       axios.get(registeredUrl, { responseType: "arraybuffer" }),
       axios.get(capturedUrl, { responseType: "arraybuffer" })
     ]);
 
-    // ✅ Compare faces using AWS Rekognition
+    // ---------------- AWS REKOGNITION ----------------
     const params = {
       SourceImage: { Bytes: Buffer.from(registeredImg.data) },
       TargetImage: { Bytes: Buffer.from(capturedImg.data) },
@@ -89,6 +105,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
       capturedUrl,
       employeeId: employeeId || null,
       subadminId: subadminId || null,
+      adminId: adminId || null,
     });
 
   } catch (error) {
@@ -96,6 +113,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
@@ -119,35 +137,37 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
 }
 
 router.post("/verify-location", (req, res) => {
-  const { employeeId, subadminId, latitude, longitude } = req.body;
+  const { employeeId, subadminId, adminId, latitude, longitude } = req.body;
 
-  // ✅ Require either employeeId or subadminId
-  if ((!employeeId && !subadminId) || !latitude || !longitude) {
-    return res.status(400).json({ success: false, message: "Missing coordinates or ID" });
-  }
-
-  // ✅ Calculate distance
-  const distance = getDistanceFromLatLonInMeters(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-
-  // ✅ Verify within radius
-  if (distance <= RADIUS_IN_METERS) {
-    return res.json({
-      success: true,
-      locationVerified: true,
-      employeeId: employeeId || null,
-      subadminId: subadminId || null,
-      distance,
-    });
-  } else {
-    return res.json({
-      success: true,
-      locationVerified: false,
-      employeeId: employeeId || null,
-      subadminId: subadminId || null,
-      distance,
+  // Require at least ONE ID
+  if ((!employeeId && !subadminId && !adminId) || !latitude || !longitude) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing coordinates or ID",
     });
   }
+
+  // Calculate distance
+  const distance = getDistanceFromLatLonInMeters(
+    latitude,
+    longitude,
+    OFFICE_LAT,
+    OFFICE_LNG
+  );
+
+  // Within allowed radius
+  const isVerified = distance <= RADIUS_IN_METERS;
+
+  return res.json({
+    success: true,
+    locationVerified: isVerified,
+    employeeId: employeeId || null,
+    subadminId: subadminId || null,
+    adminId: adminId || null,
+    distance,
+  });
 });
+
 
 
 // ✅ Mark attendance
