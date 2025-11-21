@@ -58,16 +58,16 @@ router.post("/register", upload.single("image"), async (req, res) => {
     // Get image URL
     const imageUrl = file.path;
 
-    // Format joining date (if provided, else use current date)
+    // Format joining date
     const formattedDate = joining_date || new Date().toISOString().split("T")[0];
 
     // Insert admin into DB
     const result = await pool.query(
       `INSERT INTO admin 
-        (name, email, password, confirm_password, joining_date, phone, status, created_at, image)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'), $8)
+        (name, email, password, joining_date, phone, status, created_at, image)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', $7)
        RETURNING *`,
-      [name, email, hashedPassword, hashedPassword, formattedDate, phone, "pending", imageUrl]
+      [name, email, hashedPassword, formattedDate, phone, "pending", imageUrl]
     );
 
     res.status(201).json({
@@ -80,6 +80,7 @@ router.post("/register", upload.single("image"), async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 /* =========================================================
