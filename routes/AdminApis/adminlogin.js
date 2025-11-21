@@ -2,48 +2,84 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db"); // Database connection
 const bcrypt = require("bcrypt");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../../cloudinary"); // ✅ your custom cloudinary config file
+const multer = require("multer");
 
 /* =========================================================
    1. Register Admin
 ========================================================= */
-router.post("/register", async (req, res) => {
-  const { name, email, password, confirm_password, joining_date, phone } = req.body;
 
-  // Basic validation
-  if (!name || !email || !password || !confirm_password) {
-    return res.status(400).json({ error: "All fields are required" });
-  }
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "admin/profile_images", // ✅ folder in Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name;
+      return Date.now() + "-" + nameWithoutExt;
+    },
+  },
+});
 
-  if (password !== confirm_password) {
-    return res.status(400).json({ error: "Passwords do not match" });
-  }
+const upload = multer({ storage });
 
+/* ======================================================
+   Register Admin (with Cloudinary Image Upload)
+====================================================== */
+router.post("/register", upload.single("image"), async (req, res) => {
   try {
+    const { name, email, password, confirm_password, joining_date, phone } = req.body;
+    const file = req.file;
+
+    // Basic validations
+    if (!name || !email || !password || !confirm_password || !phone) {
+      return res.status(400).json({ success: false, message: "All required fields must be filled" });
+    }
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: "Profile image is required" });
+    }
+
+    if (password !== confirm_password) {
+      return res.status(400).json({ success: false, message: "Passwords do not match" });
+    }
+
+    // Check if email already exists
+    const existing = await pool.query("SELECT * FROM admin WHERE email = $1", [email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, message: "Email already registered" });
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Get current time in IST (Asia/Kolkata)
-    const createdAt = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    // Get image URL
+    const imageUrl = file.path;
 
-    // Insert into database
+    // Format joining date (if provided, else use current date)
+    const formattedDate = joining_date || new Date().toISOString().split("T")[0];
+
+    // Insert admin into DB
     const result = await pool.query(
-      `INSERT INTO admin (name, email, password, joining_date, phone, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO admin 
+        (name, email, password, confirm_password, joining_date, phone, status, created_at, image)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'), $8)
        RETURNING *`,
-      [name, email, hashedPassword, joining_date, phone, createdAt]
+      [name, email, hashedPassword, hashedPassword, formattedDate, phone, "pending", imageUrl]
     );
 
-    // Respond with newly created admin
-    res.status(201).json({ success: true, admin: result.rows[0] });
+    res.status(201).json({
+      success: true,
+      message: "Admin registered successfully",
+      data: result.rows[0],
+    });
   } catch (error) {
-    console.error("Error registering admin:", error);
-    if (error.code === "23505") {
-      res.status(400).json({ error: "Email already exists" });
-    } else {
-      res.status(500).json({ error: "Server error" });
-    }
+    console.error("❌ Admin registration error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 /* =========================================================
    2. Admin Login
