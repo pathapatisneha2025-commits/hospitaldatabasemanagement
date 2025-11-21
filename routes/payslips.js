@@ -393,7 +393,7 @@ router.get("/status/:employeeId", async (req, res) => {
 });
 
 
-router.get("/pdf/:year/:month/:oldemployeeId", async (req, res) => {
+router.get("/oldpdf/:year/:month/:oldemployeeId", async (req, res) => {
   try {
     const { year, month, employeeId } = req.params;
     if (!year || !month || !employeeId) {
