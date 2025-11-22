@@ -279,24 +279,42 @@ router.get("/login/all", async (req, res) => {
 
 
 // ✅ Delete Attendance Login/Logout Pair
+// ✅ Delete Attendance + Breaks by IDs
 router.delete("/delete", async (req, res) => {
   try {
-    const { loginId, logoutId } = req.body;
+    const { loginId, logoutId, breakIds } = req.body; // breakIds = array of break_log IDs
 
-    if (!loginId && !logoutId) {
+    if (!loginId && !logoutId && (!breakIds || breakIds.length === 0)) {
       return res.status(400).json({ success: false, message: "No IDs provided" });
     }
 
     const deletedRows = [];
 
+    // Delete login record
     if (loginId) {
-      const result = await pool.query(`DELETE FROM attendance WHERE id = $1 RETURNING *`, [loginId]);
+      const result = await pool.query(
+        `DELETE FROM attendance WHERE id = $1 RETURNING *`,
+        [loginId]
+      );
       if (result.rowCount > 0) deletedRows.push(result.rows[0]);
     }
 
+    // Delete logout record
     if (logoutId) {
-      const result = await pool.query(`DELETE FROM attendance WHERE id = $1 RETURNING *`, [logoutId]);
+      const result = await pool.query(
+        `DELETE FROM attendance WHERE id = $1 RETURNING *`,
+        [logoutId]
+      );
       if (result.rowCount > 0) deletedRows.push(result.rows[0]);
+    }
+
+    // Delete breaks by IDs
+    if (breakIds && breakIds.length > 0) {
+      const result = await pool.query(
+        `DELETE FROM break_logs WHERE id = ANY($1::int[]) RETURNING *`,
+        [breakIds]
+      );
+      if (result.rowCount > 0) deletedRows.push(...result.rows);
     }
 
     if (deletedRows.length === 0) {
@@ -305,56 +323,66 @@ router.delete("/delete", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Login/Logout record(s) deleted successfully",
+      message: "Attendance + specified break records deleted successfully",
       data: deletedRows,
     });
   } catch (error) {
-    console.error("Delete attendance error:", error.message);
+    console.error("Delete error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
+// ✅ Update Attendance + specific Break status by ID
 router.put("/update", async (req, res) => {
   try {
-    const { loginId, logoutId, status, checkIn, checkOut } = req.body;
+    const { loginId, logoutId, checkIn, checkOut, breakUpdates } = req.body;
+    // breakUpdates = [{ id: breakId, status: "On Break" | "Returned" }, ...]
 
-    if (!loginId && !logoutId)
+    if (!loginId && !logoutId && (!breakUpdates || breakUpdates.length === 0)) {
       return res
         .status(400)
-        .json({ success: false, message: "Missing attendance IDs" });
+        .json({ success: false, message: "Missing attendance or break IDs" });
+    }
 
-    // Update login record if exists
+    // Update login record
     if (loginId) {
       await pool.query(
-        `UPDATE attendance
-         SET timestamp = $1 
-         WHERE id = $2`,
+        `UPDATE attendance SET timestamp = $1 WHERE id = $2`,
         [checkIn, loginId]
       );
     }
 
-    // Update logout record if exists
+    // Update logout record
     if (logoutId) {
       await pool.query(
-        `UPDATE attendance
-         SET timestamp = $1 
-         WHERE id = $2`,
+        `UPDATE attendance SET timestamp = $1 WHERE id = $2`,
         [checkOut, logoutId]
       );
     }
 
+    // Update break status individually by ID
+    if (breakUpdates && breakUpdates.length > 0) {
+      for (const b of breakUpdates) {
+        await pool.query(
+          `UPDATE break_logs SET status = $1 WHERE id = $2`,
+          [b.status, b.id]
+        );
+      }
+    }
+
     return res.json({
       success: true,
-      message: "Attendance record updated successfully",
+      message: "Attendance and break status updated successfully",
     });
   } catch (error) {
     console.error("Update error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update attendance record",
+      message: "Failed to update records",
     });
   }
 });
+
 
 
 // ✅ Logout Route with proper daily, weekly, monthly hours
