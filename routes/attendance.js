@@ -425,7 +425,6 @@ router.post("/logout", async (req, res) => {
       return hrs * 3600 + mins * 60;
     };
 
-    // ---------------- EMPLOYEE LOGOUT ----------------
    // ---------------- EMPLOYEE LOGOUT ----------------
 if (employeeId) {
   const onDuty = await pool.query(
