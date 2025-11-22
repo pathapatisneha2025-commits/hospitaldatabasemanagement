@@ -805,143 +805,120 @@ router.delete("/deletelogs/:employee_id", async (req, res) => {
 });
 router.get("/summary", async (req, res) => {
   try {
-    const { view = "monthly", month } = req.query;
-
+    const { view = "weekly", month } = req.query; // add month param
     const today = new Date();
     let start, end;
 
-    // ---------------------------
-    //  Calculate date range
-    // ---------------------------
-    if (view === "weekly") {
+    // 📅 Determine date range
+    if (view === "monthly") {
+      if (month) {
+        // If month param provided (1-12)
+        const monthInt = parseInt(month, 10) - 1; // JS months 0-11
+        start = new Date(today.getFullYear(), monthInt, 1);
+        end = new Date(today.getFullYear(), monthInt + 1, 0); // last day of month
+      } else {
+        // Default to current month
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      }
+    } else {
+      // Weekly (Monday–Sunday)
       const day = today.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
       start = new Date(today);
-      start.setDate(today.getDate() - day);
+      start.setDate(today.getDate() + diffToMonday);
       end = new Date(start);
       end.setDate(start.getDate() + 6);
-    } else {
-      const selectedMonth = month ? parseInt(month) - 1 : today.getMonth();
-      const year = today.getFullYear();
-      start = new Date(year, selectedMonth, 1);
-      end = new Date(year, selectedMonth + 1, 0);
     }
 
-    // ---------------------------
-    //   SQL Query
-    // ---------------------------
+    const startStr = start.toISOString().split("T")[0];
+    const endStr = end.toISOString().split("T")[0];
+
+    // 🧩 Main SQL Query (combines On Duty + Off Duty into one row per day)
     const query = `
-      WITH RECURSIVE dates AS (
-        SELECT $1::date AS d
-        UNION ALL
-        SELECT d + INTERVAL '1 day'
-        FROM dates
-        WHERE d + INTERVAL '1 day' <= $2::date
-      )
       SELECT 
         e.id AS employee_id,
         e.full_name AS employee_name,
         e.department,
-        d.d::date AS date,
-        
+        d::date AS date,
         MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
         MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') AS check_out,
-
-        l.leaves_duration,
-        l.leave_hours,
-        l.id AS leave_id,
-
         CASE
           WHEN l.id IS NOT NULL THEN 'On Leave'
           WHEN MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') IS NOT NULL
                OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
-            THEN 'Present'
+          THEN 'Present'
           ELSE 'Absent'
-        END AS main_status
-
-      FROM dates d
-      CROSS JOIN employees e
-      LEFT JOIN attendance a
-        ON a.employee_id = e.id
-        AND DATE(a.timestamp) = d.d
-
-      LEFT JOIN leaves l
-        ON l.employee_id = e.id
-        AND l.status = 'approved'
-        AND d.d BETWEEN l.start_date AND l.end_date
-
-      GROUP BY e.id, e.full_name, e.department, d.d, 
-               l.leaves_duration, l.leave_hours, l.id
-
-      ORDER BY e.id, d.d;
+        END AS status
+      FROM employees e
+      CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
+      LEFT JOIN attendance a 
+        ON e.id = a.employee_id 
+        AND DATE(a.timestamp) = d
+      LEFT JOIN leaves l 
+        ON e.id = l.employee_id
+        AND l.status = 'Approved'
+        AND d BETWEEN l.start_date AND l.end_date
+      GROUP BY e.id, e.full_name, e.department, d, l.id
+      ORDER BY e.full_name, d;
     `;
 
-    const values = [start, end];
-    const result = await db.query(query, values);
+    const result = await pool.query(query, [startStr, endStr]);
 
-    // ---------------------------------------
-    // Convert leave duration to readable text
-    // ---------------------------------------
-    function formatLeaveType(duration, hours) {
-      if (!duration) return "On Leave";
-
-      const d = duration.toLowerCase();
-
-      if (d === "fullday" || d === "fullDay") return "Leave (Full Day)";
-      if (d === "firsthalf" || d === "firstHalf") return "Leave (First Half)";
-      if (d === "secondhalf" || d === "secondHalf") return "Leave (Second Half)";
-      if (d === "hourly") return `Leave (${hours} hours)`;
-
-      return "On Leave";
-    }
-
+    // 🧮 Group and process data
     const employeeMap = {};
-
-    for (const row of result.rows) {
+    result.rows.forEach((row) => {
       if (!employeeMap[row.employee_id]) {
         employeeMap[row.employee_id] = {
           employee_id: row.employee_id,
           employee_name: row.employee_name,
           department: row.department,
           days: [],
+          presentDays: 0,
+          totalDays: 0,
         };
       }
 
-      let finalStatus = row.main_status;
+      const formatTime = (t) =>
+        t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
 
-      // Override status if leave exists
-      if (row.main_status === "On Leave") {
-        finalStatus = formatLeaveType(row.leaves_duration, row.leave_hours);
+      let totalHours = "-";
+      if (row.check_in && row.check_out) {
+        const diffMs = new Date(row.check_out) - new Date(row.check_in);
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        totalHours = `${hours}h ${minutes}m`;
       }
 
       employeeMap[row.employee_id].days.push({
         date: row.date,
-        check_in: row.check_in ? formatTime(row.check_in) : "-",
-        check_out: row.check_out ? formatTime(row.check_out) : "-",
-        status: finalStatus,
+        status: row.status,
+        check_in: formatTime(row.check_in),
+        check_out: formatTime(row.check_out),
+        working_hours: totalHours,
       });
-    }
 
-    return res.json({
-      success: true,
-      data: Object.values(employeeMap),
+      if (row.status === "Present") employeeMap[row.employee_id].presentDays++;
+      employeeMap[row.employee_id].totalDays++;
     });
-  } catch (err) {
-    console.error("Summary Error:", err);
-    return res.status(500).json({ success: false, message: "Server error" });
+
+    const summary = Object.values(employeeMap).map((emp) => ({
+      ...emp,
+      attendanceRate: ((emp.presentDays / emp.totalDays) * 100).toFixed(0) + "%",
+    }));
+
+    res.json({
+      success: true,
+      view,
+      month: month || (today.getMonth() + 1),
+      range: { start: startStr, end: endStr },
+      data: summary,
+    });
+  } catch (error) {
+    console.error("Error fetching attendance summary:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
-
-// ----------- Helper ------------
-function formatTime(ts) {
-  if (!ts) return "-";
-  const date = new Date(ts);
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-  return `${hours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-}
 
 router.get("/late-count/:employeeId/:year/:month", async (req, res) => {
   try {
