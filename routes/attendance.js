@@ -805,24 +805,18 @@ router.delete("/deletelogs/:employee_id", async (req, res) => {
 });
 router.get("/summary", async (req, res) => {
   try {
-    const { view = "weekly", month } = req.query; // add month param
+    const { view = "weekly", month } = req.query;
     const today = new Date();
     let start, end;
 
-    // 📅 Determine date range
+    // 🔹 MONTHLY
     if (view === "monthly") {
-      if (month) {
-        // If month param provided (1-12)
-        const monthInt = parseInt(month, 10) - 1; // JS months 0-11
-        start = new Date(today.getFullYear(), monthInt, 1);
-        end = new Date(today.getFullYear(), monthInt + 1, 0); // last day of month
-      } else {
-        // Default to current month
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      }
+      const monthInt = month ? parseInt(month, 10) - 1 : today.getMonth();
+      start = new Date(today.getFullYear(), monthInt, 1);
+      end = new Date(today.getFullYear(), monthInt + 1, 0);
+
+    // 🔹 WEEKLY
     } else {
-      // Weekly (Monday–Sunday)
       const day = today.getDay();
       const diffToMonday = (day === 0 ? -6 : 1) - day;
       start = new Date(today);
@@ -834,39 +828,49 @@ router.get("/summary", async (req, res) => {
     const startStr = start.toISOString().split("T")[0];
     const endStr = end.toISOString().split("T")[0];
 
-    // 🧩 Main SQL Query (combines On Duty + Off Duty into one row per day)
+    // 🔥 UPDATED QUERY WITH leaves_duration & Pending + Approved
     const query = `
       SELECT 
         e.id AS employee_id,
         e.full_name AS employee_name,
         e.department,
         d::date AS date,
+
         MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
         MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') AS check_out,
-        CASE
-          WHEN l.id IS NOT NULL THEN 'On Leave'
+
+        CASE 
+          WHEN l.id IS NOT NULL THEN 
+            COALESCE(l.leaves_duration, 'FullDay')  
           WHEN MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') IS NOT NULL
-               OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
-          THEN 'Present'
+            OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
+            THEN 'Present'
           ELSE 'Absent'
         END AS status
+
       FROM employees e
       CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
+
       LEFT JOIN attendance a 
         ON e.id = a.employee_id 
         AND DATE(a.timestamp) = d
+
       LEFT JOIN leaves l 
         ON e.id = l.employee_id
-        AND l.status = 'Approved'
+        AND l.status IN ('Approved', 'Pending')  -- 🔥 Accept pending leave also
         AND d BETWEEN l.start_date AND l.end_date
-      GROUP BY e.id, e.full_name, e.department, d, l.id
+
+      GROUP BY e.id, e.full_name, e.department, d, l.leaves_duration, l.id
       ORDER BY e.full_name, d;
     `;
 
     const result = await pool.query(query, [startStr, endStr]);
 
-    // 🧮 Group and process data
+    // -------------------------
+    // PROCESS RESULT
+    // -------------------------
     const employeeMap = {};
+
     result.rows.forEach((row) => {
       if (!employeeMap[row.employee_id]) {
         employeeMap[row.employee_id] = {
@@ -892,7 +896,7 @@ router.get("/summary", async (req, res) => {
 
       employeeMap[row.employee_id].days.push({
         date: row.date,
-        status: row.status,
+        status: row.status,  // FullDay / FirstHalf / SecondHalf / Hourly / Present / Absent
         check_in: formatTime(row.check_in),
         check_out: formatTime(row.check_out),
         working_hours: totalHours,
@@ -910,15 +914,18 @@ router.get("/summary", async (req, res) => {
     res.json({
       success: true,
       view,
-      month: month || (today.getMonth() + 1),
+      month: month || today.getMonth() + 1,
       range: { start: startStr, end: endStr },
       data: summary,
     });
+
   } catch (error) {
     console.error("Error fetching attendance summary:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
 
 router.get("/late-count/:employeeId/:year/:month", async (req, res) => {
   try {
