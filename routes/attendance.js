@@ -278,7 +278,6 @@ router.get("/login/all", async (req, res) => {
 
 
 
-// ✅ Delete Attendance Login/Logout Pair
 // ✅ Delete Attendance + Breaks by IDs
 router.delete("/delete", async (req, res) => {
   try {
@@ -427,12 +426,125 @@ router.post("/logout", async (req, res) => {
     };
 
     // ---------------- EMPLOYEE LOGOUT ----------------
-    if (employeeId) {
-      // ... existing employee logout logic
-      // (session calculation, daily/weekly/monthly hours)
-      // Insert Off Duty record with employee_id
-      // same as you already have
+     if (employeeId) {
+      const onDuty = await pool.query(
+        `SELECT id, timestamp FROM attendance
+         WHERE employee_id = $1 AND status = 'On Duty'
+         ORDER BY timestamp DESC LIMIT 1`,
+        [employeeId]
+      );
+
+      if (onDuty.rows.length === 0) {
+        return res.json({
+          success: true,
+          message: "Logout marked (no On Duty found for employee).",
+          data: { employee_id: employeeId, status },
+        });
+      }
+
+      const onDutyTime = onDuty.rows[0].timestamp;
+
+      // Session worked time
+      const sessionRes = await pool.query(
+        `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
+        [onDutyTime]
+      );
+      const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
+      const sessionHours = formatHours(sessionSeconds);
+
+      // Remaining hours (10-hour workday)
+      const totalDaySeconds = 10 * 3600;
+      const remainingSeconds = Math.max(totalDaySeconds - sessionSeconds, 0);
+      const remainingHours = formatHours(remainingSeconds);
+
+      // Overtime
+      let overtime = "0h 0m";
+      const empRes = await pool.query(
+        `SELECT schedule_out FROM employees WHERE id = $1`,
+        [employeeId]
+      );
+      if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
+        const scheduleOut = empRes.rows[0].schedule_out;
+        const overtimeRes = await pool.query(
+          `SELECT GREATEST(
+            EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Kolkata') 
+            - (CURRENT_DATE + $1::time AT TIME ZONE 'Asia/Kolkata'))), 0
+          ) AS overtime_seconds`,
+          [scheduleOut]
+        );
+        const overtimeSeconds = parseInt(overtimeRes.rows[0].overtime_seconds, 10);
+        if (overtimeSeconds > 0) overtime = formatHours(overtimeSeconds);
+      }
+
+      // Previous sessions
+      const prevDaily = await pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE employee_id = $1 AND DATE(timestamp) = CURRENT_DATE`,
+        [employeeId]
+      );
+      const prevWeekly = await pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE employee_id = $1
+           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
+        [employeeId]
+      );
+      const prevMonthly = await pool.query(
+        `SELECT session_hours FROM attendance
+         WHERE employee_id = $1
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+        [employeeId]
+      );
+
+      const dailyTotalSec =
+        sessionSeconds +
+        prevDaily.rows.reduce((sum, r) => sum + parseHoursStrToSeconds(r.session_hours), 0);
+      const weeklyTotalSec =
+        sessionSeconds +
+        prevWeekly.rows.reduce((sum, r) => sum + parseHoursStrToSeconds(r.session_hours), 0);
+      const monthlyTotalSec =
+        sessionSeconds +
+        prevMonthly.rows.reduce((sum, r) => sum + parseHoursStrToSeconds(r.session_hours), 0);
+
+      const dailyHoursStr = formatHours(dailyTotalSec);
+      const weeklyHoursStr = formatHours(weeklyTotalSec);
+      const monthlyHoursStr = formatHours(monthlyTotalSec);
+
+      const insertResult = await pool.query(
+        `INSERT INTO attendance
+          (employee_id, timestamp, image_url, status, session_hours, overtime, remaining_hours, daily_hours, weekly_hours, monthly_hours)
+         VALUES ($1, NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, timestamp`,
+        [
+          employeeId,
+          capturedUrl,
+          status,
+          sessionHours,
+          overtime,
+          remainingHours,
+          dailyHoursStr,
+          weeklyHoursStr,
+          monthlyHoursStr,
+        ]
+      );
+
+      return res.json({
+        success: true,
+        message: "Employee logout marked successfully",
+        data: {
+          employee_id: employeeId,
+          status,
+          timestamp: insertResult.rows[0].timestamp,
+          sessionHours,
+          remainingHours,
+          overtime,
+          daily_hours: dailyHoursStr,
+          weekly_hours: weeklyHoursStr,
+          monthly_hours: monthlyHoursStr,
+        },
+      });
     }
+
 
     // ---------------- SUBADMIN LOGOUT ----------------
     if (subadminId) {
