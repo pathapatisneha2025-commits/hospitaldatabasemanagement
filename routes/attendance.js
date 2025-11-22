@@ -848,6 +848,7 @@ router.get("/summary", async (req, res) => {
 
         l.leaves_duration,
         l.leave_hours,
+        l.id AS leave_id,
 
         CASE
           WHEN l.id IS NOT NULL THEN 'On Leave'
@@ -893,9 +894,6 @@ router.get("/summary", async (req, res) => {
       return "On Leave";
     }
 
-    // ---------------------------------------
-    // Process Output
-    // ---------------------------------------
     const employeeMap = {};
 
     for (const row of result.rows) {
@@ -932,6 +930,7 @@ router.get("/summary", async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // ----------- Helper ------------
 function formatTime(ts) {
