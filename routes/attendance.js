@@ -857,7 +857,7 @@ router.get("/summary", async (req, res) => {
 
       LEFT JOIN leaves l 
         ON e.id = l.employee_id
-        AND l.status IN ('Approved', 'Pending')  -- 🔥 Accept pending leave also
+        AND l.status IN ('Approved')  -- 🔥 Accept pending leave also
         AND d BETWEEN l.start_date AND l.end_date
 
       GROUP BY e.id, e.full_name, e.department, d, l.leaves_duration, l.id
