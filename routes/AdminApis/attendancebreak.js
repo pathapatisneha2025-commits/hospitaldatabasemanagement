@@ -300,21 +300,30 @@ const result = await pool.query(
 // =========================
 router.get("/totalemployeescount", async (req, res) => {
   try {
-    // 🟢 Count attendance (present / absent / late)
-    const attendanceResult = await pool.query(`
-      SELECT 
-        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
-        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
-        COUNT(*) FILTER (
-          WHERE a.status = 'On Duty'
-            AND a.timestamp > (DATE(a.timestamp) + e.schedule_in)
-        ) AS total_late
-      FROM attendance a
-      JOIN employees e ON a.employee_id = e.id
-      WHERE DATE(a.timestamp) = CURRENT_DATE
+    // 1️⃣ Total employees
+    const empResult = await pool.query(`
+      SELECT COUNT(*) AS total_employees
+      FROM employees
+      WHERE status = 'Active'
     `);
 
-    // 🟡 Count employees currently on break
+    // 2️⃣ Present (On Duty today)
+    const presentResult = await pool.query(`
+      SELECT COUNT(DISTINCT employee_id) AS total_present
+      FROM attendance
+      WHERE DATE(timestamp) = CURRENT_DATE
+        AND status = 'On Duty'
+    `);
+
+    // 3️⃣ On Leave today
+    const leaveResult = await pool.query(`
+      SELECT COUNT(DISTINCT employee_id) AS total_on_leave
+      FROM leaves
+      WHERE status = 'Approved'
+        AND CURRENT_DATE BETWEEN start_date AND end_date
+    `);
+
+    // 4️⃣ On Break
     const breakResult = await pool.query(`
       SELECT COUNT(DISTINCT employee_id) AS employees_on_break
       FROM break_logs bl
@@ -331,28 +340,30 @@ router.get("/totalemployeescount", async (req, res) => {
         )
     `);
 
-    // 🔵 Count employees currently on leave
-    const leaveResult = await pool.query(`
-      SELECT COUNT(DISTINCT employee_id) AS total_on_leave
-      FROM leaves
-      WHERE status = 'Approved'
-        AND CURRENT_DATE BETWEEN start_date AND end_date;
-    `);
+    const total_employees = Number(empResult.rows[0].total_employees);
+    const total_present = Number(presentResult.rows[0].total_present);
+    const total_on_leave = Number(leaveResult.rows[0].total_on_leave);
 
-    // 🧩 Combine all results
+    // 5️⃣ NEW LOGIC: ABSENT = (Total − Present − On Leave)
+    const total_absent = total_employees - total_present - total_on_leave;
+
     return res.json({
       success: true,
       summary: {
-        total_present: attendanceResult.rows[0].total_present,
-        total_absent: attendanceResult.rows[0].total_absent,
-        total_late: attendanceResult.rows[0].total_late,
-        employees_on_break: breakResult.rows[0].employees_on_break,
-        total_on_leave: leaveResult.rows[0].total_on_leave
-      },
+        total_employees,
+        total_present,
+        total_absent,
+        total_on_leave,
+        employees_on_break: breakResult.rows[0].employees_on_break
+      }
     });
+
   } catch (error) {
-    console.error("Attendance & leave summary error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Attendance summary error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 });
 
