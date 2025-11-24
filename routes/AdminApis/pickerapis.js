@@ -74,5 +74,33 @@ router.post("/assign-picker", async (req, res) => {
     client.release();
   }
 });
+router.get("/:pickerId", async (req, res) => {
+  const { pickerId } = req.params;
+
+  if (!pickerId) {
+    return res.status(400).json({ success: false, error: "Picker ID is required." });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT * 
+      FROM orders
+      WHERE picker_id = $1
+      ORDER BY created_at DESC
+      `,
+      [pickerId]
+    );
+
+    res.json({
+      success: true,
+      orders: result.rows,
+    });
+  } catch (error) {
+    console.error("Error fetching orders for picker:", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
 
 module.exports = router;
