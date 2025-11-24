@@ -250,6 +250,38 @@ router.post("/update-delivery-status", async (req, res) => {
   }
 });
 
+// Update availability only for HD delivery employees
+router.post("/deliveryboy/update-availability", async (req, res) => {
+  const { id, available } = req.body;
+
+  try {
+    // 1️⃣ Check if the employee exists and has role 'HD delivery'
+    const result = await pool.query(
+      "SELECT role FROM employees WHERE id = $1",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const employee = result.rows[0];
+    if (employee.role !== "HD delivery") {
+      return res.status(403).json({ error: "Only HD delivery employees can update availability" });
+    }
+
+    // 2️⃣ Update availability in delivery_boys table
+    await pool.query(
+      "UPDATE employees SET available = $1 WHERE id = $2",
+      [available, id]
+    );
+
+    res.json({ success: true, available });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update availability" });
+  }
+});
 
 
 router.post("/verify-delivery-otp", async (req, res) => {
