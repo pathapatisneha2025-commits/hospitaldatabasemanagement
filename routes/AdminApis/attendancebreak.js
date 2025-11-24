@@ -345,7 +345,7 @@ router.get("/totalemployeescount", async (req, res) => {
     const total_on_leave = Number(leaveResult.rows[0].total_on_leave);
 
     // 5️⃣ NEW LOGIC: ABSENT = (Total − Present − On Leave)
-    const total_absent = total_employees - total_present - total_on_leave;
+    const total_absent = total_employees - total_present ;
 
     return res.json({
       success: true,
