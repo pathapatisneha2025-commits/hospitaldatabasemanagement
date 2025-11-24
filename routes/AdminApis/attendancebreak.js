@@ -304,7 +304,7 @@ router.get("/totalemployeescount", async (req, res) => {
     const empResult = await pool.query(`
       SELECT COUNT(*) AS total_employees
       FROM employees
-      WHERE status = 'Active'
+      
     `);
 
     // 2️⃣ Present (On Duty today)
