@@ -103,4 +103,26 @@ router.get("/:pickerId", async (req, res) => {
 });
 
 
+router.post("/update-status", async (req, res) => {
+  const { orderId, status } = req.body;
+  if (!orderId || !status)
+    return res.status(400).json({ success: false, error: "OrderId and Status required" });
+
+  try {
+    const result = await pool.query(
+      "UPDATE orders SET status = $1 WHERE id = $2 RETURNING *",
+      [status, orderId]
+    );
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ success: false, error: "Order not found" });
+
+    res.json({ success: true, order: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+
 module.exports = router;
