@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const pool = require("../db../db"); // make sure this is your PostgreSQL pool
+const pool = require("../../db"); // make sure this is your PostgreSQL pool
 
 // POST /assign-picker
 router.post("/assign-picker", async (req, res) => {
