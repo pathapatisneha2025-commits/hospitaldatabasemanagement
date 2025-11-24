@@ -257,7 +257,7 @@ router.post("/deliveryboy/update-availability", async (req, res) => {
   try {
     // 1️⃣ Check if the employee exists and has role 'HD delivery'
     const result = await pool.query(
-      "SELECT role FROM employees WHERE id = $1",
+      "SELECT id, role, available FROM employees WHERE id = $1",
       [id]
     );
 
@@ -270,18 +270,19 @@ router.post("/deliveryboy/update-availability", async (req, res) => {
       return res.status(403).json({ error: "Only HD delivery employees can update availability" });
     }
 
-    // 2️⃣ Update availability in delivery_boys table
-    await pool.query(
-      "UPDATE employees SET available = $1 WHERE id = $2",
+    // 2️⃣ Update availability
+    const updateResult = await pool.query(
+      "UPDATE employees SET available = $1 WHERE id = $2 RETURNING id, role, available",
       [available, id]
     );
 
-    res.json({ success: true, available });
+    res.json({ success: true, employee: updateResult.rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update availability" });
   }
 });
+
 
 
 router.post("/verify-delivery-otp", async (req, res) => {
