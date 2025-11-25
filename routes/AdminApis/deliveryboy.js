@@ -309,7 +309,7 @@ router.get("/available", async (req, res) => {
       "SELECT id, full_name FROM employees WHERE role='Hd delivery' AND available = true"
     );
 
-    res.json({ success: true, deliveryboys: result.rows });
+    res.json({ success: true, employees: result.rows });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: "Server error" });
