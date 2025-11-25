@@ -203,8 +203,43 @@ router.get("/all", async (req, res) => {
   }
 });
 
+// GET available delivery boys
+router.get("/available", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, full_name FROM employees WHERE role='Hd delivery' AND available = true"
+    );
 
-// ✅ Get orders assigned to a specific delivery boy
+    res.json({ success: true, employees: result.rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+// Get availability
+router.get("/availability/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      "SELECT available FROM employees WHERE id = $1 AND role = 'Hd delivery'",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Delivery boy not found" });
+    }
+
+    res.json({ available: result.rows[0].available });
+  } catch (error) {
+    console.error("Error fetching delivery boy availability:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ⚠️ MUST BE LAST
+// Get orders assigned to a specific delivery boy
 router.get("/:deliveryboyId", async (req, res) => {
   try {
     const { deliveryboyId } = req.params;
@@ -223,6 +258,7 @@ router.get("/:deliveryboyId", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 router.post("/update-delivery-status", async (req, res) => {
   const { id, status } = req.body; // using `id` (not orderId)
 
@@ -283,38 +319,8 @@ router.post("/update-availability", async (req, res) => {
   }
 });
 
-router.get("/availability/:id", async (req, res) => {
-  const { id } = req.params;
 
-  try {
-    const result = await pool.query(
-      "SELECT available FROM employees WHERE id = $1 AND role = 'Hd delivery'",
-      [id]
-    );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Delivery boy not found" });
-    }
-
-    res.json({ available: result.rows[0].available });
-  } catch (error) {
-    console.error("Error fetching delivery boy availability:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-// GET available delivery boys
-router.get("/available", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT id, full_name FROM employees WHERE role='Hd delivery' AND available = true"
-    );
-
-    res.json({ success: true, employees: result.rows });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-});
 
 
 router.post("/verify-delivery-otp", async (req, res) => {
