@@ -306,7 +306,7 @@ router.get("/availability/:id", async (req, res) => {
 router.get("/available", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, name FROM employees WHERE role='HD delivery' AND available = TRUE"
+      "SELECT id, name FROM employees WHERE role='Hd delivery' AND available = true"
     );
 
     res.json({ success: true, deliveryboys: result.rows });
