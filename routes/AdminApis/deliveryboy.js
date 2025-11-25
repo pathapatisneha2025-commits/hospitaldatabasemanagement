@@ -266,7 +266,7 @@ router.post("/deliveryboy/update-availability", async (req, res) => {
     }
 
     const employee = result.rows[0];
-    if (employee.role !== "HD delivery") {
+    if (employee.role !== "Hd delivery") {
       return res.status(403).json({ error: "Only HD delivery employees can update availability" });
     }
 
