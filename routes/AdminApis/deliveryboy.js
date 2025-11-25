@@ -188,7 +188,7 @@ await client.query(
   }
 });
 
-module.exports = router;
+
 
 // -------------------- GET ALL DELIVERY BOYS --------------------
 router.get("/all", async (req, res) => {
