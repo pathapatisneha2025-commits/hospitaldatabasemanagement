@@ -283,6 +283,25 @@ router.post("/deliveryboy/update-availability", async (req, res) => {
   }
 });
 
+router.get("/availability/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      "SELECT available FROM employees WHERE id = $1 AND role = 'Hd delivery'",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Delivery boy not found" });
+    }
+
+    res.json({ available: result.rows[0].available });
+  } catch (error) {
+    console.error("Error fetching delivery boy availability:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
 router.post("/verify-delivery-otp", async (req, res) => {
