@@ -207,7 +207,7 @@ router.get("/all", async (req, res) => {
 router.get("/available", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, full_name FROM employees WHERE role='Hd delivery' AND available = true"
+      "SELECT id, full_name ,mobile ,available FROM employees WHERE role='Hd delivery' AND available = true"
     );
 
     res.json({ success: true, employees: result.rows });
