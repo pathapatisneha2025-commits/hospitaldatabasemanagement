@@ -302,6 +302,19 @@ router.get("/availability/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// GET available delivery boys
+router.get("/available", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name FROM employees WHERE role='HD delivery' AND available = TRUE"
+    );
+
+    res.json({ success: true, deliveryboys: result.rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 
 router.post("/verify-delivery-otp", async (req, res) => {
