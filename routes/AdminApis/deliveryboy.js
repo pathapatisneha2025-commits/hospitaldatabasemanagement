@@ -251,7 +251,7 @@ router.post("/update-delivery-status", async (req, res) => {
 });
 
 // Update availability only for HD delivery employees
-router.post("/deliveryboy/update-availability", async (req, res) => {
+router.post("/update-availability", async (req, res) => {
   const { id, available } = req.body;
 
   try {
