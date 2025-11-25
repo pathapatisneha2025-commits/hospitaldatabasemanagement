@@ -136,10 +136,9 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    // Parse JSON fields before sending (optional)
+// Parse JSON fields before sending (optional)
     const order = result.rows[0];
-    if (order.address) order.address = JSON.parse(order.address);
-    if (order.order_summary) order.order_summary = JSON.parse(order.order_summary);
+   
 
     res.status(200).json(order);
   } catch (error) {
@@ -158,7 +157,7 @@ router.delete("/delete/:id", async (req, res) => {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    res.json({ message: "Order deleted successfully" });
+    res.json({ message: "Order delet    ed successfully" });
   } catch (error) {
     console.error("Delete Order Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
