@@ -126,6 +126,28 @@ router.get("/patient/:patientId", async (req, res) => {
   }
 });
 
+// GET /orders/:id - Get order by ID
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query("SELECT * FROM orders WHERE id = $1", [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Parse JSON fields before sending (optional)
+    const order = result.rows[0];
+    if (order.address) order.address = JSON.parse(order.address);
+    if (order.order_summary) order.order_summary = JSON.parse(order.order_summary);
+
+    res.status(200).json(order);
+  } catch (error) {
+    console.error("Get Order by ID Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 router.delete("/delete/:id", async (req, res) => {
   try {
