@@ -163,6 +163,42 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.post("/update-bus-delivery", async (req, res) => {
+  try {
+    const { orderId, deliveryType, busDetails } = req.body;
+
+    if (!orderId || !deliveryType || !busDetails) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const query = `
+      UPDATE orders
+      SET deliverytype = $1,
+          busdetails = $2,
+          status = 'pending'
+      WHERE id = $3
+      RETURNING *
+    `;
+
+    const values = [
+      deliveryType,
+      busDetails, // JSON automatically stored by PG
+      orderId,
+    ];
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({ message: "Bus delivery details saved", order: result.rows[0] });
+  } catch (err) {
+    console.error("Bus Delivery Error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ✅ POST /update-status
 router.post('/update-status', async (req, res) => {
   const { orderId, status } = req.body;
