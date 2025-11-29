@@ -206,94 +206,16 @@ router.get("/all", async (req, res) => {
 // GET available delivery boys
 router.get("/available", async (req, res) => {
   try {
-    const deliverRes = await pool.query(`
-      SELECT id, full_name, mobile, available
-      FROM employees
-      WHERE role = 'Delivery Boy' AND available = true
-    `);
+    const result = await pool.query(
+      "SELECT id, full_name ,mobile ,available FROM employees WHERE role='Hd delivery' AND available = true"
+    );
 
-    const employees = deliverRes.rows;
-
-    if (employees.length === 0) {
-      return res.json({ success: true, employees: [] });
-    }
-
-    const finalData = [];
-
-    for (let emp of employees) {
-
-      // ---- Attendance Check (On Duty) ----
-      const dutyRes = await pool.query(`
-        SELECT *
-        FROM attendance
-        WHERE employee_id = $1 AND status = 'On Duty'
-        ORDER BY timestamp DESC
-        LIMIT 1
-      `, [emp.id]);
-
-      const isOnDuty = dutyRes.rows.length > 0;
-
-
-      // ---- Break Log Latest ----
-      const breakStatusRes = await pool.query(`
-        SELECT id, break_type, timestamp, image_url, status
-        FROM break_logs
-        WHERE employee_id = $1
-        ORDER BY timestamp DESC
-        LIMIT 1
-      `, [emp.id]);
-
-      let breakInfo = breakStatusRes.rows.length > 0 ? breakStatusRes.rows[0] : null;
-
-
-      // ---- Active Break (break not ended) ----
-      const breakRes = await pool.query(`
-        SELECT *
-        FROM breaklog
-        WHERE employee_id = $1 AND break_end IS NULL
-        ORDER BY break_start DESC
-        LIMIT 1
-      `, [emp.id]);
-
-      const isOnBreak = breakRes.rows.length > 0;
-
-
-      // ---- FINAL STATUS LOGIC ----
-      let finalStatus = "Offline";
-
-      if (isOnBreak) finalStatus = "On Break";
-      else if (isOnDuty) finalStatus = "On Duty";
-      else if (breakInfo && breakInfo.status === "pending") finalStatus = "Break Pending";
-      else if (emp.available) finalStatus = "Available";
-
-
-      // Push final merged result
-      finalData.push({
-        ...emp,
-        status: finalStatus,  // <-- FINAL STATUS HERE
-
-        // Optional details
-        break_status: breakInfo?.status || null,
-        break_type: breakInfo?.break_type || null,
-        break_timestamp: breakInfo?.timestamp || null,
-        break_image: breakInfo?.image_url || null
-      });
-    }
-
-    return res.json({
-      success: true,
-      employees: finalData
-    });
-
-  } catch (err) {
-    console.error("deliveryboy/available error:", err.message);
-    return res.status(500).json({
-      success: false,
-      message: "Server error fetching available delivery boys"
-    });
+    res.json({ success: true, employees: result.rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
-
 
 // Get availability
 router.get("/availability/:id", async (req, res) => {
