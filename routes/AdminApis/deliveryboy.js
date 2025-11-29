@@ -206,9 +206,24 @@ router.get("/all", async (req, res) => {
 // GET available delivery boys
 router.get("/available", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT id, full_name ,mobile ,available FROM employees WHERE role='Hd delivery' AND available = true"
-    );
+    const query = `
+      SELECT 
+        e.id,
+        e.full_name,
+        e.mobile,
+        e.available,
+        a.status AS attendance_status,
+        b.status AS break_status
+      FROM employees e
+      LEFT JOIN attendance a 
+        ON a.employee_id = e.id
+      LEFT JOIN break_logs b 
+        ON b.employee_id = e.id
+      WHERE e.role = 'Hd delivery'
+      AND e.available = true
+    `;
+
+    const result = await pool.query(query);
 
     res.json({ success: true, employees: result.rows });
   } catch (error) {
