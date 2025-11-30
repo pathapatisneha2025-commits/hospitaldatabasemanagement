@@ -113,6 +113,23 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.get("/delivered-by-bus", async (req, res) => {
+  try {
+    const query = `
+      SELECT *
+      FROM orders
+      WHERE deliverytype = 'bus'
+      ORDER BY created_at DESC
+    `;
+
+    const result = await pool.query(query);
+
+    res.json({ busDeliveredOrders: result.rows });
+  } catch (err) {
+    console.error("Fetch Bus Delivered Orders Error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 router.get("/patient/:patientId", async (req, res) => {
   try {
     const result = await pool.query(
@@ -198,23 +215,7 @@ router.post("/update-bus-delivery", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router.get("/delivered-by-bus", async (req, res) => {
-  try {
-    const query = `
-      SELECT *
-      FROM orders
-      WHERE deliverytype = 'bus'
-      ORDER BY created_at DESC
-    `;
 
-    const result = await pool.query(query);
-
-    res.json({ busDeliveredOrders: result.rows });
-  } catch (err) {
-    console.error("Fetch Bus Delivered Orders Error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
 
 // ✅ POST /update-status
 router.post('/update-status', async (req, res) => {
