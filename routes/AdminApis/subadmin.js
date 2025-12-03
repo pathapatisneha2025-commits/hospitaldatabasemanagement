@@ -40,7 +40,7 @@ router.get("/export", async (req, res) => {
         phone, 
         joining_date, 
         status 
-      FROM subadmins
+      FROM subadmin
       ORDER BY id ASC
     `);
 
