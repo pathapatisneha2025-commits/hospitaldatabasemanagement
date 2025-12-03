@@ -6,7 +6,8 @@ const path = require("path");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../../cloudinary"); // ✅ your custom cloudinary config file
 const multer = require("multer");
-
+const { Parser } = require("json2csv");
+const ExcelJS = require("exceljs");
 /* =========================================================
    1. Register Admin
 ========================================================= */
@@ -28,6 +29,46 @@ const upload = multer({ storage });
 /* ======================================================
    Register Admin (with Cloudinary Image Upload)
 ====================================================== */
+router.get("/export", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        id,
+        name,
+        email,
+        joining_date,
+        phone
+      FROM adminlogin
+      ORDER BY id ASC
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No admins found" });
+    }
+
+    const fields = [
+      { label: "ID", value: "id" },
+      { label: "Name", value: "name" },
+      { label: "Email", value: "email" },
+      { label: "Joining Date", value: "joining_date" },
+      { label: "Phone", value: "phone" }
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(result.rows);
+
+    const fileName = `admins_${Date.now()}.csv`;
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(fileName);
+    return res.send(csv);
+
+  } catch (error) {
+    console.error("CSV Export Error:", error);
+    res.status(500).json({ message: "Failed to export CSV" });
+  }
+});
+
 router.post("/register", upload.single("image"), async (req, res) => {
   try {
     const { name, email, password, confirm_password, joining_date, phone } = req.body;

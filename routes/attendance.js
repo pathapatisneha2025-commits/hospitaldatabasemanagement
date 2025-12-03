@@ -8,7 +8,8 @@ const { spawn } = require("child_process");
 const path = require("path");
 const axios = require("axios");
 const rekognition = require("../awsConfig");
-
+const { Parser } = require("json2csv");
+const ExcelJS = require("exceljs");
 // ✅ Cloudinary storage
 // storage config (reuse for both routes)
 const storage = new CloudinaryStorage({
@@ -233,6 +234,54 @@ router.post("/mark-attendance", async (req, res) => {
   }
 });
 
+router.get("/export", async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        l.id AS login_id,
+        lo.id AS logout_id,
+        l.employee_id,
+        l.full_name AS name,
+        l.timestamp AS login_time,
+        lo.timestamp AS logout_time,
+        b.break_type,
+        b.timestamp AS break_time
+      FROM attendance_login l
+      LEFT JOIN attendance_logout lo ON l.employee_id = lo.employee_id 
+        AND DATE(lo.timestamp) = DATE(l.timestamp)
+      LEFT JOIN break_attendance b ON l.employee_id = b.employee_id
+        AND DATE(b.timestamp) = DATE(l.timestamp)
+      ORDER BY l.employee_id, l.timestamp;
+    `;
+
+    const result = await pool.query(query);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No attendance records found" });
+    }
+
+    const fields = [
+      { label: "Employee ID", value: "employee_id" },
+      { label: "Name", value: "name" },
+      { label: "Login Time", value: "login_time" },
+      { label: "Logout Time", value: "logout_time" },
+      { label: "Break Type", value: "break_type" },
+      { label: "Break Time", value: "break_time" },
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(result.rows);
+
+    const filename = `attendance_${Date.now()}.csv`;
+    res.header("Content-Type", "text/csv");
+    res.attachment(filename);
+    return res.send(csv);
+
+  } catch (err) {
+    console.error("Export Error:", err);
+    res.status(500).json({ message: "Failed to export attendance" });
+  }
+});
 
 
  // ✅ Fetch all "On Duty" attendance records
