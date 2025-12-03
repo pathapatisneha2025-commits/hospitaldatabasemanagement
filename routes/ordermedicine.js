@@ -1,7 +1,68 @@
 const express = require("express");
 const pool = require("../db");
 const router = express.Router();
+const { Parser } = require("json2csv");
+const ExcelJS = require("exceljs");
+router.get("/export", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        o.id,
+        o.status,
+        o.payment_method,
+        o.subtotal,
+        o.tax,
+        o.delivery_fee,
+        o.total,
+        o.expected_delivery,
+        o.address ->> 'name' AS name,
+        o.address ->> 'mobile' AS mobile,
+        o.address ->> 'flat' AS flat,
+        o.address ->> 'street' AS street,
+        o.address ->> 'landmark' AS landmark,
+        o.address ->> 'city' AS city,
+        o.address ->> 'state' AS state,
+        o.address ->> 'pincode' AS pincode,
+        ARRAY_TO_STRING(ARRAY(
+          SELECT m->>'name' || ' x' || m->>'quantity'
+          FROM json_array_elements(o.order_summary) AS m
+        ), ', ') AS medicines
+      FROM orders o
+      ORDER BY o.id DESC
+    `);
 
+    const fields = [
+      { label: "Order ID", value: "id" },
+      { label: "Status", value: "status" },
+      { label: "Payment", value: "payment_method" },
+      { label: "Subtotal", value: "subtotal" },
+      { label: "Tax", value: "tax" },
+      { label: "Delivery Fee", value: "delivery_fee" },
+      { label: "Total", value: "total" },
+      { label: "Expected Delivery", value: "expected_delivery" },
+      { label: "Patient Name", value: "name" },
+      { label: "Mobile", value: "mobile" },
+      { label: "Flat", value: "flat" },
+      { label: "Street", value: "street" },
+      { label: "Landmark", value: "landmark" },
+      { label: "City", value: "city" },
+      { label: "State", value: "state" },
+      { label: "Pincode", value: "pincode" },
+      { label: "Medicines", value: "medicines" },
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(result.rows);
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(`orders_${Date.now()}.csv`);
+    return res.send(csv);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Export failed" });
+  }
+});
 router.post("/checkout", async (req, res) => {
   const { patientId, addressId, paymentMethod, expectedDelivery } = req.body;
 

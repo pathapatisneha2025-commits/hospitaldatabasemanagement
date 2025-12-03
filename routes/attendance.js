@@ -234,54 +234,102 @@ router.post("/mark-attendance", async (req, res) => {
   }
 });
 
-router.get("/export", async (req, res) => {
+// ------------------------------------------------------
+// ✅ ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
+// ------------------------------------------------------
+router.get("/export", async (req, res) => { 
   try {
+    const format = req.query.format || "csv";
+
     const query = `
-      SELECT 
-        l.id AS login_id,
-        lo.id AS logout_id,
-        l.employee_id,
-        l.full_name AS name,
-        l.timestamp AS login_time,
-        lo.timestamp AS logout_time,
-        b.break_type,
-        b.timestamp AS break_time
-      FROM attendance_login l
-      LEFT JOIN attendance_logout lo ON l.employee_id = lo.employee_id 
-        AND DATE(lo.timestamp) = DATE(l.timestamp)
-      LEFT JOIN break_attendance b ON l.employee_id = b.employee_id
-        AND DATE(b.timestamp) = DATE(l.timestamp)
-      ORDER BY l.employee_id, l.timestamp;
+      SELECT
+        a.employee_id,
+        e.full_name,
+        a.status AS attendance_status,
+        a.timestamp AS attendance_time,
+        a.session_hours,
+        a.overtime,
+        a.remaining_hours,
+        a.daily_hours,
+        a.weekly_hours,
+        a.monthly_hours,
+
+        bl.break_type,
+        bl.status AS break_status,
+        bl.timestamp AS break_time
+
+      FROM attendance a
+      LEFT JOIN employees e ON e.id = a.employee_id
+      LEFT JOIN break_logs bl ON bl.employee_id = a.employee_id
+        AND DATE(bl.timestamp) = DATE(a.timestamp)
+
+      ORDER BY a.employee_id, a.timestamp, bl.timestamp;
     `;
 
     const result = await pool.query(query);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No attendance records found" });
+      return res.status(404).json({
+        success: false,
+        message: "No attendance records found",
+      });
     }
 
-    const fields = [
-      { label: "Employee ID", value: "employee_id" },
-      { label: "Name", value: "name" },
-      { label: "Login Time", value: "login_time" },
-      { label: "Logout Time", value: "logout_time" },
-      { label: "Break Type", value: "break_type" },
-      { label: "Break Time", value: "break_time" },
-    ];
+    const rows = result.rows.map((r) => ({
+      employee_id: r.employee_id,
+      name: r.full_name,
+      attendance_status: r.attendance_status,
+      attendance_time: r.attendance_time,
+      session_hours: r.session_hours,
+      overtime: r.overtime,
+      remaining_hours: r.remaining_hours,
+      daily_hours: r.daily_hours,
+      weekly_hours: r.weekly_hours,
+      monthly_hours: r.monthly_hours,
+      break_type: r.break_type || "-",
+      break_status: r.break_status || "-",
+      break_time: r.break_time || "-",
+    }));
 
-    const parser = new Parser({ fields });
-    const csv = parser.parse(result.rows);
+    // ------------------------------------------------------
+    // CSV EXPORT (Same Format You Requested)
+    // ------------------------------------------------------
+    if (format === "csv") {
+      const fields = [
+        { label: "Employee ID", value: "employee_id" },
+        { label: "Name", value: "name" },
+        { label: "Attendance Status", value: "attendance_status" },
+        { label: "Attendance Time", value: "attendance_time" },
+        { label: "Session Hours", value: "session_hours" },
+        { label: "Overtime", value: "overtime" },
+        { label: "Remaining Hours", value: "remaining_hours" },
+        { label: "Daily Hours", value: "daily_hours" },
+        { label: "Weekly Hours", value: "weekly_hours" },
+        { label: "Monthly Hours", value: "monthly_hours" },
 
-    const filename = `attendance_${Date.now()}.csv`;
-    res.header("Content-Type", "text/csv");
-    res.attachment(filename);
-    return res.send(csv);
+        // Break logs
+        { label: "Break Type", value: "break_type" },
+        { label: "Break Status", value: "break_status" },
+        { label: "Break Time", value: "break_time" },
+      ];
 
-  } catch (err) {
-    console.error("Export Error:", err);
-    res.status(500).json({ message: "Failed to export attendance" });
+      const parser = new Parser({ fields });
+      const csv = parser.parse(rows);
+
+      const fileName = `attendance_${Date.now()}.csv`;
+
+      res.header("Content-Type", "text/csv");
+      res.attachment(fileName);
+
+      return res.send(csv);
+    }
+
+  } catch (error) {
+    console.error("Export Error:", error);
+    res.status(500).json({ success: false, message: "Export failed" });
   }
 });
+
 
 
  // ✅ Fetch all "On Duty" attendance records

@@ -38,7 +38,7 @@ router.get("/export", async (req, res) => {
         email,
         joining_date,
         phone
-      FROM adminlogin
+      FROM admin
       ORDER BY id ASC
     `);
 
