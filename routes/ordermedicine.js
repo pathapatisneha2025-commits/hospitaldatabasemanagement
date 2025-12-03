@@ -12,7 +12,7 @@ router.get("/bus/export", async (req, res) => {
         om.id,
         om.patient_id,
         om.payment_method,
-        om.total,
+        om.subtotal,
         om.order_summary,
         om.busdetails
       FROM orders om
