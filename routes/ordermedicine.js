@@ -250,7 +250,7 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-router.post("/update/:id", async (req, res) => {
+router.put("/update/:id", async (req, res) => {
   try {
     const {
       payment_method,
