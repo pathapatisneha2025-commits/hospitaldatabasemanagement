@@ -3,6 +3,113 @@ const pool = require("../db");
 const router = express.Router();
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
+
+
+router.get("/bus/export", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        om.id,
+        om.patient_id,
+        om.payment_method,
+        om.total,
+        om.order_summary,
+        om.busdetails
+      FROM orders om
+      WHERE om.deliverytype = 'bus'
+      ORDER BY om.id ASC
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No bus orders found" });
+    }
+
+    // FORMAT ROWS
+    const formattedRows = result.rows.map((row) => ({
+      order_id: row.id,
+      patient: row.patient_id,
+      payment: row.payment_method,
+
+      items: (row.order_summary || [])
+        .map((i) => `${i.name} (x${i.quantity})`)
+        .join(", "),
+
+      total: row.total,
+
+      bus: row.busdetails?.busName || "-",
+      driver: row.busdetails?.driverName || "-",
+    }));
+
+    const fields = [
+      { label: "Order ID", value: "order_id" },
+      { label: "Patient", value: "patient" },
+      { label: "Payment", value: "payment" },
+      { label: "Items", value: "items" },
+      { label: "Total", value: "total" },
+      { label: "Bus", value: "bus" },
+      { label: "Driver", value: "driver" },
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(formattedRows);
+
+    const fileName = `bus_orders_${Date.now()}.csv`;
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(fileName);
+    return res.send(csv);
+
+  } catch (error) {
+    console.error("CSV Export Error:", error);
+    res.status(500).json({ message: "Failed to export CSV" });
+  }
+});
+
+router.get("/export-deliveryboy", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        o.id,
+        o.patient_id,
+        o.payment_method,
+        o.subtotal,
+        o.order_summary,
+        e.full_name AS deliveryboy_name
+      FROM order_medicine o
+      LEFT JOIN employees e ON o.deliveryboy_id = e.id
+      WHERE o.delivery_type = 'normal'
+      ORDER BY o.id DESC
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No delivered orders found" });
+    }
+
+    // CSV Fields
+    const fields = [
+      { label: "Order ID", value: "id" },
+      { label: "Patient ID", value: "patient_id" },
+      { label: "Payment Method", value: "payment_method" },
+      { label: "Subtotal", value: "subtotal" },
+      { label: "Delivery Boy", value: "deliveryboy_name" },
+      { label: "Order Summary", value: row => JSON.stringify(row.order_summary) }
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(result.rows);
+
+    const fileName = `bus_delivered_orders_${Date.now()}.csv`;
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(fileName);
+    return res.send(csv);
+
+  } catch (error) {
+    console.error("CSV Export Error:", error);
+    res.status(500).json({ message: "Failed to export CSV" });
+  }
+});
+
 router.get("/export", async (req, res) => {
   try {
     const result = await pool.query(`
