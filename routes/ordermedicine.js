@@ -193,10 +193,13 @@ router.get("/delivered-by-bus", async (req, res) => {
 router.get("/deliveredby-delivryboy", async (req, res) => {
   try {
     const query = `
-      SELECT *
-      FROM orders
-      WHERE deliverytype = 'normal'
-      ORDER BY created_at DESC;
+      SELECT 
+        o.*,
+        e.full_name AS deliveryboy_name
+      FROM orders o
+      LEFT JOIN employees e ON e.id = o.deliveryboy_id
+      WHERE o.deliverytype = 'normal'
+      ORDER BY o.created_at DESC;
     `;
 
     const result = await pool.query(query);
@@ -212,6 +215,8 @@ router.get("/deliveredby-delivryboy", async (req, res) => {
     res.status(500).json({ error: "Server error fetching normal delivery orders" });
   }
 });
+
+
 router.get("/patient/:patientId", async (req, res) => {
   try {
     const result = await pool.query(
