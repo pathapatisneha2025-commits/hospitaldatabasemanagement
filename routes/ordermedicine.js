@@ -250,6 +250,69 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.post("/update/:id", async (req, res) => {
+  try {
+    const {
+      payment_method,
+      payment_status,
+      payment_mode,
+      amount_received,
+      deliverytype,
+      address
+    } = req.body;
+
+    // Fetch existing order
+    const oldOrder = await pool.query(
+      "SELECT * FROM orders WHERE id = $1",
+      [req.params.id]
+    );
+
+    if (oldOrder.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Merge address (existing + new)
+    let updatedAddress = oldOrder.rows[0].address || {};
+    if (address) {
+      updatedAddress = { ...updatedAddress, ...address };
+    }
+
+    const query = `
+      UPDATE orders
+      SET 
+        payment_method = COALESCE($1, payment_method),
+        payment_status = COALESCE($2, payment_status),
+        payment_mode = COALESCE($3, payment_mode),
+        amount_received = COALESCE($4, amount_received),
+        deliverytype = COALESCE($5, deliverytype),
+        address = $6
+      WHERE id = $7
+      RETURNING *
+    `;
+
+    const values = [
+      payment_method || null,
+      payment_status || null,
+      payment_mode || null,
+      amount_received || null,
+      deliverytype || null,
+      updatedAddress,
+      req.params.id
+    ];
+
+    const result = await pool.query(query, values);
+
+    res.json({
+      success: true,
+      message: "Order updated successfully",
+      order: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Update Order Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 router.delete("/delete/:id", async (req, res) => {
   try {
