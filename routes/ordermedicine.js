@@ -189,6 +189,29 @@ router.get("/delivered-by-bus", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+// GET: Orders with deliverytype = 'normal' using delivry boy 
+router.get("/deliveredby-delivryboy", async (req, res) => {
+  try {
+    const query = `
+      SELECT *
+      FROM orders
+      WHERE deliverytype = 'normal'
+      ORDER BY created_at DESC;
+    `;
+
+    const result = await pool.query(query);
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      orders: result.rows
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error fetching normal delivery orders" });
+  }
+});
 router.get("/patient/:patientId", async (req, res) => {
   try {
     const result = await pool.query(
