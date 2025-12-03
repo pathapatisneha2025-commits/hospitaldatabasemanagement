@@ -313,6 +313,46 @@ router.post("/update/:id", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.put("/update-bus-delivery/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const { deliveryType, busDetails } = req.body;
+
+    if (!deliveryType || !busDetails) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const query = `
+      UPDATE orders SET
+        deliverytype = $1,
+        busdetails = $2,
+        status = 'pending'
+      WHERE id = $3
+      RETURNING *
+    `;
+
+    const values = [
+      deliveryType,
+      busDetails, // JSON object allowed
+      orderId,
+    ];
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({
+      message: "Bus delivery updated successfully",
+      order: result.rows[0],
+    });
+
+  } catch (err) {
+    console.error("Bus Delivery Update Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 router.delete("/delete/:id", async (req, res) => {
   try {
