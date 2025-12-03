@@ -103,7 +103,66 @@ router.post("/checkout", async (req, res) => {
     client.release();
   }
 });
+// POST: Collect Payment (store directly in orders table)
+router.post("/collect-payment", async (req, res) => {
+  try {
+    const {
+      orderId,
+      deliveryBoyId,
+      deliveryType,
+      paymentMode,
+      amount,
+      amountReceived,
+    } = req.body;
 
+    if (!orderId || !deliveryBoyId || !paymentMode) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Determine payment status
+    let paymentStatus = "Paid";
+    if (paymentMode === "Credit") paymentStatus = "Credit";
+    if (paymentMode === "Already Paid") paymentStatus = "Paid";
+
+    // Update the order table directly
+    const updateOrder = `
+      UPDATE orders
+      SET 
+        payment_collected_by = $1,
+        payment_mode = $2,
+        amount_received = $3,
+        payment_status = $4,
+        deliverytype = $5,
+        status = 'Delivered',
+        payment_collected_at = NOW()
+      WHERE id = $6
+      RETURNING *;
+    `;
+
+    const result = await pool.query(updateOrder, [
+      deliveryBoyId,
+      paymentMode,
+      amountReceived || 0,
+      paymentStatus,
+      deliveryType,
+      orderId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Payment collected & order delivered",
+      order: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error while updating order" });
+  }
+});
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM orders ORDER BY created_at DESC");
