@@ -2,8 +2,88 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
 
+const { Parser } = require("json2csv");
+const ExcelJS = require("exceljs");
 
+router.get("/export", async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        'Online' AS type,
+        a.tokenid AS id,
+        a.name AS patient_name,
+        a.age,
+        a.gender,
+        a.bloodgroup,
+        a.doctorname,
+        a.department,
+        a.date,
+        a.timeslot,
+        a.consultantfees,
+        a.reason,
+        a.patientphone,
+        a.paymentstatus
+      FROM appointment a
 
+      UNION ALL
+
+      SELECT
+        'Offline' AS type,
+        d.daily_id AS id,
+        d.patient_name,
+        d.patient_age AS age,
+        d.patient_gender AS gender,
+        d.patient_blood_group AS bloodgroup,
+        d.doctor_name AS doctorname,
+        d.specialization AS department,
+        d.appointment_date AS date,
+        d.appointment_time AS timeslot,
+        d.doctor_consultant_fee AS consultantfees,
+        d.doctor_description AS reason,
+        d.patient_phone,
+        d.status AS paymentstatus
+      FROM doctorbooking d
+
+      ORDER BY date ASC;
+    `;
+
+    const result = await pool.query(query);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No appointments found" });
+    }
+
+    const fields = [
+      { label: "Type", value: "type" },
+      { label: "Appointment ID", value: "id" },
+      { label: "Patient Name", value: "patient_name" },
+      { label: "Age", value: "age" },
+      { label: "Gender", value: "gender" },
+      { label: "Blood Group", value: "bloodgroup" },
+      { label: "Doctor Name", value: "doctorname" },
+      { label: "Department", value: "department" },
+      { label: "Date", value: "date" },
+      { label: "Time Slot", value: "timeslot" },
+      { label: "Consultant Fees", value: "consultantfees" },
+      { label: "Reason", value: "reason" },
+      { label: "Phone", value: "patientphone" },
+      { label: "Payment Status", value: "paymentstatus" },
+    ];
+
+    const parser = new Parser({ fields });
+    const csv = parser.parse(result.rows);
+
+    const fileName = `appointments_${Date.now()}.csv`;
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(fileName);
+    return res.send(csv);
+
+  } catch (error) {
+    console.error("CSV Export Error:", error);
+    res.status(500).json({ message: "Failed to export appointments CSV" });
+  }
+});
 
 
 // -------------------- CREATE (POST) --------------------
