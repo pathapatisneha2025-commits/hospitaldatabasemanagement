@@ -100,7 +100,7 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
 // -----------------------------------------------------------
 // GET ALL ORDERS (with items)
 // -----------------------------------------------------------
-router.get("/", async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
     const orders = await pool.query("SELECT * FROM orders ORDER BY id DESC");
 
