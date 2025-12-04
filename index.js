@@ -23,6 +23,8 @@ const DeliveryAddress = require("./routes/deliveryaddress");
 const Medicineorder = require("./routes/ordermedicine"); 
 const OrderCancelled = require("./routes/cancelorder"); 
 const Medicinecategory = require("./routes/medicinecategory"); 
+const SalesOrders = require("./routes/salesorders"); 
+
 const BreakInattendance = require("./routes/AdminApis/attendancebreak"); 
 const LatetoCome = require("./routes/AdminApis/latetocome"); 
 const Manageexpenses = require("./routes/AdminApis/manageexpenses"); 
@@ -87,6 +89,7 @@ app.use("/delivery-addresses",DeliveryAddress);
 app.use("/order-medicine",Medicineorder); 
 app.use("/cancel-order", OrderCancelled); 
 app.use("/medicine-category", Medicinecategory); 
+app.use("/salesorders", SalesOrders); 
 app.use("/BreakIn-attendance", BreakInattendance); 
 app.use("/late_tocome", LatetoCome); 
 app.use("/expenses", Manageexpenses); 
