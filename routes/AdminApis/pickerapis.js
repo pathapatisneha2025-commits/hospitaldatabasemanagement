@@ -102,6 +102,44 @@ router.get("/:pickerId", async (req, res) => {
   }
 });
 
+router.post("/send-to-checker", async (req, res) => {
+  const { orderId, picked_items, status } = req.body;
+
+  if (!orderId || !picked_items) {
+    return res.json({
+      success: false,
+      error: "Missing orderId or picked_items",
+    });
+  }
+
+  try {
+    // 👉 Combined both updates in one query using multiple fields
+    await pool.query(
+      `UPDATE sales_orders
+       SET picked_items = $1,
+           status       = $2
+       WHERE id = $3`,
+      [
+        JSON.stringify(picked_items),   // store array as JSON
+        status || "Picked",             // default status
+        orderId
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Order marked as picked and sent to checker",
+    });
+
+  } catch (err) {
+    console.log("Picker API Error:", err);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
 
 router.post("/update-status", async (req, res) => {
   const { orderId, status } = req.body;
