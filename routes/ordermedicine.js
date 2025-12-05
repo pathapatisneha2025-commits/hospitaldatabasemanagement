@@ -34,7 +34,7 @@ router.get("/bus/export", async (req, res) => {
         .map((i) => `${i.name} (x${i.quantity})`)
         .join(", "),
 
-      total: row.total,
+      total: row.subtotal,
 
       bus: row.busdetails?.busName || "-",
       driver: row.busdetails?.driverName || "-",
