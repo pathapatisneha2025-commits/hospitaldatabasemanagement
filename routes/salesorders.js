@@ -37,8 +37,16 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
 
     const prescription_image = req.file ? req.file.path : null;
 
-    // items will come as string → convert to JSON
-    const parsedItems = JSON.parse(items);
+    // Parse items safely
+    let parsedItems = [];
+    try {
+      parsedItems = JSON.parse(items);   // array of { item_name, quantity }
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid JSON format for items"
+      });
+    }
 
     const insertQuery = `
       INSERT INTO sales_orders (
@@ -60,7 +68,7 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
       delivery_type,
       prescription_required === "true",
       prescription_image,
-      parsedItems
+      JSON.stringify(parsedItems)    // ← REQUIRED
     ];
 
     const result = await pool.query(insertQuery, values);
@@ -76,6 +84,7 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
     res.status(500).json({ success: false, error: "Server Error" });
   }
 });
+
 
 
 // -------------------------------------------------------------------
