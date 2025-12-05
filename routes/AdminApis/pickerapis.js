@@ -113,7 +113,7 @@ router.post("/send-to-checker", async (req, res) => {
   }
 
   try {
-    // 👉 Combined both updates in one query using multiple fields
+    
     await pool.query(
       `UPDATE sales_orders
        SET picked_items = $1,
