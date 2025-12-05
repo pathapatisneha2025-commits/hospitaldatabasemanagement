@@ -75,7 +75,7 @@ router.get("/export-deliveryboy", async (req, res) => {
         o.subtotal,
         o.order_summary,
         e.full_name AS deliveryboy_name
-      FROM order_medicine o
+      FROM orders o
       LEFT JOIN employees e ON o.deliveryboy_id = e.id
       WHERE o.delivery_type = 'normal'
       ORDER BY o.id DESC
