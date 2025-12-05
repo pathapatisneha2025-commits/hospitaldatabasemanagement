@@ -200,6 +200,23 @@ router.post("/update-checkerstatus", async (req, res) => {
   }
 });
 
+router.get("/picked/all", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT *
+       FROM sales_orders
+       WHERE status = 'Picked'
+       ORDER BY id DESC`
+    );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    console.error("Get Picked Orders Error:", err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
 
 
 module.exports = router;
