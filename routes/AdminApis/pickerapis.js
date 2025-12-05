@@ -102,7 +102,7 @@ router.get("/:pickerId", async (req, res) => {
   }
 });
 
-router.post("/send-to-checker", async (req, res) => {
+router.post("/mark-as-picked", async (req, res) => {
   const { orderId, picked_items, status } = req.body;
 
   if (!orderId || !picked_items) {
