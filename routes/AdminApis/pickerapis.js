@@ -110,7 +110,7 @@ router.post("/update-status", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "UPDATE orders SET status = $1 WHERE id = $2 RETURNING *",
+      "UPDATE sales_orders SET status = $1 WHERE id = $2 RETURNING *",
       [status, orderId]
     );
 
