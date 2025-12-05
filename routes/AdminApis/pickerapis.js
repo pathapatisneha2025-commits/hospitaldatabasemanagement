@@ -141,26 +141,65 @@ router.post("/send-to-checker", async (req, res) => {
 });
 
 
-router.post("/update-status", async (req, res) => {
-  const { orderId, status } = req.body;
-  if (!orderId || !status)
-    return res.status(400).json({ success: false, error: "OrderId and Status required" });
+router.post("/update-checkerstatus", async (req, res) => {
+  const { orderId, status, checked_items } = req.body;
+
+  if (!orderId || !status) {
+    return res.status(400).json({
+      success: false,
+      error: "OrderId and Status required",
+    });
+  }
 
   try {
-    const result = await pool.query(
+    // 1) Fetch order first
+    const orderRes = await pool.query(
+      "SELECT * FROM sales_orders WHERE id = $1",
+      [orderId]
+    );
+
+    if (orderRes.rowCount === 0) {
+      return res.status(404).json({ success: false, error: "Order not found" });
+    }
+
+    const order = orderRes.rows[0];
+
+    // 2) Checker can only update after picker sends
+    if (order.status !== "Picked") {
+      return res.status(400).json({
+        success: false,
+        error: "Order must be in 'Picked' status before checker can update",
+      });
+    }
+
+    // 3) Save checked items (optional)
+    if (checked_items) {
+      await pool.query(
+        `UPDATE sales_orders 
+         SET checked_items = $1 
+         WHERE id = $2`,
+        [JSON.stringify(checked_items), orderId]
+      );
+    }
+
+    // 4) Update status (Checked / Rejected / Correction Needed)
+    const updateRes = await pool.query(
       "UPDATE sales_orders SET status = $1 WHERE id = $2 RETURNING *",
       [status, orderId]
     );
 
-    if (result.rowCount === 0)
-      return res.status(404).json({ success: false, error: "Order not found" });
+    res.json({
+      success: true,
+      message: "Checker status updated successfully",
+      order: updateRes.rows[0],
+    });
 
-    res.json({ success: true, order: result.rows[0] });
   } catch (err) {
-    console.error(err);
+    console.error("Checker Update Error:", err);
     res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
+
 
 
 module.exports = router;
