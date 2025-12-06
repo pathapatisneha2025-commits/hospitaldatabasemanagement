@@ -197,4 +197,33 @@ await client.query(
   }
 });
 
+
+// -------------------------------------------------------------------
+// GET SALES ORDERS by deliveryboy_id
+// -------------------------------------------------------------------
+router.get("/by-deliveryboy/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = `
+      SELECT *
+      FROM sales_orders
+      WHERE deliveryboy_id = $1
+      ORDER BY id DESC
+    `;
+
+    const result = await pool.query(query, [id]);
+
+    res.json({
+      success: true,
+      orders: result.rows
+    });
+
+  } catch (err) {
+    console.error("Fetch by DeliveryBoy Error:", err);
+    res.status(500).json({ success: false, error: "Server Error" });
+  }
+});
+
+
 module.exports = router;
