@@ -253,10 +253,10 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
       }
     });
 
-    // Save invoice record
+    // Save invoice amount (removed invoice_generated)
     await pool.query(
       `UPDATE sales_orders 
-       SET invoice_generated = true, invoice_amount = $1 
+       SET invoice_amount = $1 
        WHERE id = $2`,
       [totalAmount, orderId]
     );
