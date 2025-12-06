@@ -123,7 +123,7 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
-router.post("/assign-delivery", async (req, res) => {
+router.post("/assign-deliveryboy", async (req, res) => {
   const { orderId, employee_id } = req.body;
 
   // 🔹 Validation
