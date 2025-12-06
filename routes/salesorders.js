@@ -224,6 +224,54 @@ router.get("/by-deliveryboy/:id", async (req, res) => {
     res.status(500).json({ success: false, error: "Server Error" });
   }
 });
+router.post("/generate-invoice/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Fetch order
+    const result = await pool.query(
+      "SELECT * FROM sales_orders WHERE id = $1",
+      [orderId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ success: false, error: "Order not found" });
+    }
+
+    const order = result.rows[0];
+    const picked = order.picked_items || [];
+    const items = order.items || [];
+
+    let totalAmount = 0;
+
+    // Loop through picked items and match with items array
+    picked.forEach((p) => {
+      const matched = items.find((i) => i.item_name === p.item_name);
+
+      if (matched) {
+        totalAmount += Number(p.picked_qty) * Number(matched.rate);
+      }
+    });
+
+    // Save invoice record
+    await pool.query(
+      `UPDATE sales_orders 
+       SET invoice_generated = true, invoice_amount = $1 
+       WHERE id = $2`,
+      [totalAmount, orderId]
+    );
+
+    res.json({
+      success: true,
+      message: "Invoice generated successfully",
+      amount: totalAmount,
+    });
+
+  } catch (err) {
+    console.error("Invoice Error:", err);
+    res.status(500).json({ success: false, error: "Server Error" });
+  }
+});
 
 
 module.exports = router;
