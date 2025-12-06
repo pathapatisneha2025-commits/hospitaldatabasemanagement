@@ -207,7 +207,7 @@ router.get("/all", async (req, res) => {
 router.get("/available", async (req, res) => {
   try {
     const query = `
-      SELECT 
+      SELECT DISTINCT ON (e.id)
         e.id,
         e.full_name,
         e.mobile,
@@ -215,17 +215,17 @@ router.get("/available", async (req, res) => {
         a.status AS attendance_status,
         b.status AS break_status
       FROM employees e
-      LEFT JOIN attendance a 
-        ON a.employee_id = e.id
-      LEFT JOIN break_logs b 
-        ON b.employee_id = e.id
+      LEFT JOIN attendance a ON a.employee_id = e.id
+      LEFT JOIN break_logs b ON b.employee_id = e.id
       WHERE e.role = 'Hd delivery'
       AND e.available = true
+      ORDER BY e.id, a.id DESC, b.id DESC
     `;
 
     const result = await pool.query(query);
 
     res.json({ success: true, employees: result.rows });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: "Server error" });
