@@ -224,54 +224,71 @@ router.get("/by-deliveryboy/:id", async (req, res) => {
     res.status(500).json({ success: false, error: "Server Error" });
   }
 });
+// Generate Invoice for Sales Order
 router.post("/generate-invoice/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Fetch order
-    const result = await pool.query(
+    // Fetch sales order
+    const orderResult = await pool.query(
       "SELECT * FROM sales_orders WHERE id = $1",
       [orderId]
     );
 
-    if (result.rows.length === 0) {
-      return res.json({ success: false, error: "Order not found" });
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    const order = result.rows[0];
+    const order = orderResult.rows[0];
     const picked = order.picked_items || [];
     const items = order.items || [];
 
-    let totalAmount = 0;
+    // Build medicines array
+    const medicines = picked.map((p) => {
+      const match = items.find((i) => i.item_name === p.item_name);
 
-    // Loop through picked items and match with items array
-    picked.forEach((p) => {
-      const matched = items.find((i) => i.item_name === p.item_name);
-
-      if (matched) {
-        totalAmount += Number(p.picked_qty) * Number(matched.rate);
-      }
+      return {
+        name: p.item_name,
+        quantity: Number(p.picked_qty),
+        unitPrice: match ? Number(match.rate) : 0,
+        total: match ? Number(match.rate) * Number(p.picked_qty) : 0,
+      };
     });
 
-    // Save invoice amount (removed invoice_generated)
-    await pool.query(
-      `UPDATE sales_orders 
-       SET invoice_amount = $1 
-       WHERE id = $2`,
-      [totalAmount, orderId]
+    // Calculate total amount
+    const totalAmount = medicines.reduce((sum, m) => sum + m.total, 0);
+
+    // Generate invoice number
+    const invoiceNo = "SOI-" + Date.now();  // SOI = Sales Order Invoice
+
+    // Save invoice into sales_order_invoices table
+    const insertInvoice = await pool.query(
+      `INSERT INTO sales_order_invoices 
+       (invoice_no, order_id, customer_name, customer_mobile, address, medicines, total_amount, payment_mode, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW() AT TIME ZONE 'Asia/Kolkata')
+       RETURNING *`,
+      [
+        invoiceNo,
+        orderId,
+        order.customer_name,
+        order.mobile,
+        order.address,
+        JSON.stringify(medicines),
+        totalAmount,
+        order.payment_mode,
+      ]
     );
 
     res.json({
       success: true,
       message: "Invoice generated successfully",
-      amount: totalAmount,
+      data: { ...insertInvoice.rows[0], medicines },
     });
 
-  } catch (err) {
-    console.error("Invoice Error:", err);
-    res.status(500).json({ success: false, error: "Server Error" });
+  } catch (error) {
+    console.error("Sales Order Invoice Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 });
-
 
 module.exports = router;
