@@ -205,7 +205,7 @@ router.get("/picked/all", async (req, res) => {
     const result = await pool.query(
       `SELECT *
        FROM sales_orders
-       WHERE status = 'Picked'
+       WHERE status IN ('Picked', 'Checked')
        ORDER BY id DESC`
     );
 
@@ -216,6 +216,7 @@ router.get("/picked/all", async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
+
 
 
 
