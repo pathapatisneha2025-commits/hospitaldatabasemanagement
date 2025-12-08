@@ -266,12 +266,12 @@ router.post("/update-status", async (req, res) => {
     let query;
     let values;
 
-    // 👉 If task is completed, set completed_time = NOW()
+    // 👉 If task is completed, set completed_time = IST (Asia/Kolkata)
     if (status.toLowerCase() === "completed") {
       query = `
         UPDATE tasks
         SET status = $1,
-            completed_time = NOW()
+            completed_time = NOW() AT TIME ZONE 'Asia/Kolkata'
         WHERE id = $2
         RETURNING *;
       `;
@@ -305,6 +305,7 @@ router.post("/update-status", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 
 
