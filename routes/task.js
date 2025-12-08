@@ -28,10 +28,20 @@ router.post("/add", async (req, res) => {
     const employeeIds = employeeResult.rows.map(emp => emp.id);
 
     // Step 2: Insert task (save emails as array in assignto)
-    const newTask = await pool.query(
-      `INSERT INTO tasks (title, description, assignto, priority, due_date, due_time, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [title, description || null, assignees, priority, due_date, due_time, "pending"]
+   const newTask = await pool.query(
+      `INSERT INTO tasks 
+        (title, description, assignto, priority, due_date, due_time, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'Asia/Kolkata')
+       RETURNING *`,
+      [
+        title,
+        description || null,
+        assignees,
+        priority,
+        due_date,
+        due_time,
+        "pending"
+      ]
     );
 
     const task = newTask.rows[0];
