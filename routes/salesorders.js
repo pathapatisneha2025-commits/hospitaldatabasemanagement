@@ -315,4 +315,24 @@ router.post("/delivery/address-change/request", async (req, res) => {
   }
 });
 
+router.get("/delivery/address-change/all", async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        acr.*,
+        e.full_name AS delivery_boy_name
+      FROM address_change_requests acr
+      LEFT JOIN employees e ON e.id = acr.delivery_boy_id
+      ORDER BY acr.created_at DESC
+    `;
+
+    const result = await pool.query(query);
+    res.json({ success: true, requests: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load requests" });
+  }
+});
+
+
 module.exports = router;
