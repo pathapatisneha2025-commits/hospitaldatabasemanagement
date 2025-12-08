@@ -423,6 +423,42 @@ router.put("/delivery/address-change/update/:id", async (req, res) => {
   }
 });
 
+router.post("/sales/payment/collect", async (req, res) => {
+  const { order_id, collected_by, amount_collected, payment_mode_collected, remarks } = req.body;
+
+  try {
+    const query = `
+      UPDATE sales_orders
+      SET 
+        payment_collected = true,
+        amount_collected = $1,
+        payment_mode_collected = $2,
+        collected_by = $3,
+        collection_remarks = $4,
+        collected_at = NOW()
+      WHERE id = $5
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      amount_collected,
+      payment_mode_collected,
+      collected_by,
+      remarks,
+      order_id
+    ]);
+
+    res.json({
+      message: "Payment collected successfully",
+      order: result.rows[0]
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Payment collection failed" });
+  }
+});
+
 
 
 module.exports = router;
