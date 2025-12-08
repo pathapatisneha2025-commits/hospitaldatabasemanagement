@@ -344,7 +344,7 @@ router.put("/delivery/address-change/update/:id", async (req, res) => {
   }
 
   try {
-    // 1. Fetch the request first
+    // 1. Fetch the address change request
     const reqData = await pool.query(
       `SELECT * FROM address_change_requests WHERE id = $1`,
       [requestId]
@@ -358,19 +358,34 @@ router.put("/delivery/address-change/update/:id", async (req, res) => {
 
     let update;
 
-    // 2. APPROVED → update status + store new_address back into table
+    // 2. APPROVED → update request AND update sales_orders
     if (status === "approved") {
+      // Update request status
       update = await pool.query(
         `UPDATE address_change_requests
-         SET status = $1,
-             new_address = $2
-         WHERE id = $3
+         SET status = $1
+         WHERE id = $2
          RETURNING *`,
-        [status, request.new_address, requestId]
+        [status, requestId]
+      );
+
+      // Update the address in sales_orders table
+      await pool.query(
+        `UPDATE sales_orders
+         SET address = $1,
+             landmark = $2,
+             pincode = $3
+         WHERE id = $4`,
+        [
+          request.new_address,       // new address
+          request.new_landmark,      // new landmark
+          request.new_pincode,       // new pincode
+          request.order_id           // the order id affected
+        ]
       );
     }
 
-    // 3. REJECTED → update only status
+    // 3. REJECTED → update only the request status
     else {
       update = await pool.query(
         `UPDATE address_change_requests
@@ -381,6 +396,7 @@ router.put("/delivery/address-change/update/:id", async (req, res) => {
       );
     }
 
+    // 4. Response
     res.json({
       success: true,
       message: `Address change request ${status} successfully.`,
@@ -392,6 +408,7 @@ router.put("/delivery/address-change/update/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update request." });
   }
 });
+
 
 
 module.exports = router;
