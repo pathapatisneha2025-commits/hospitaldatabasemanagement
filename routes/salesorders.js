@@ -291,29 +291,43 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
   }
 });
 router.post("/delivery/address-change/request", async (req, res) => {
-  const { order_id, delivery_boy_id, old_address, new_address, reason } = req.body;
+  const { 
+    order_id, 
+    delivery_boy_id, 
+    old_address, 
+    new_address, 
+    new_landmark, 
+    new_pincode, 
+    reason 
+  } = req.body;
 
   try {
     const query = `
       INSERT INTO address_change_requests
-      (order_id, delivery_boy_id, old_address, new_address, reason, status)
-      VALUES ($1,$2,$3,$4,$5,'pending')
+      (order_id, delivery_boy_id, old_address, new_address, new_landmark, new_pincode, reason, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'pending')
       RETURNING *
     `;
 
-    const result = await pool.query(query, [
+    const params = [
       order_id,
       delivery_boy_id,
       old_address,
       new_address,
+      new_landmark,
+      new_pincode,
       reason
-    ]);
+    ];
+
+    const result = await pool.query(query, params);
 
     res.json({ success: true, request: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: "Failed to submit request" });
+    console.error("Address Change Request Error:", err);
+    res.status(500).json({ error: "Failed to submit address change request" });
   }
 });
+
 
 router.get("/delivery/address-change/all", async (req, res) => {
   try {
