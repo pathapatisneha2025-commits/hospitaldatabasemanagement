@@ -333,6 +333,65 @@ router.get("/delivery/address-change/all", async (req, res) => {
     res.status(500).json({ error: "Failed to load requests" });
   }
 });
+router.put("/delivery/address-change/update/:id", async (req, res) => {
+  const requestId = req.params.id;
+  const { status } = req.body;
+
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({
+      error: "Invalid status. Use 'approved' or 'rejected'"
+    });
+  }
+
+  try {
+    // 1. Fetch the request first
+    const reqData = await pool.query(
+      `SELECT * FROM address_change_requests WHERE id = $1`,
+      [requestId]
+    );
+
+    if (reqData.rows.length === 0) {
+      return res.status(404).json({ error: "Address change request not found" });
+    }
+
+    const request = reqData.rows[0];
+
+    let update;
+
+    // 2. APPROVED → update status + store new_address back into table
+    if (status === "approved") {
+      update = await pool.query(
+        `UPDATE address_change_requests
+         SET status = $1,
+             new_address = $2
+         WHERE id = $3
+         RETURNING *`,
+        [status, request.new_address, requestId]
+      );
+    }
+
+    // 3. REJECTED → update only status
+    else {
+      update = await pool.query(
+        `UPDATE address_change_requests
+         SET status = $1
+         WHERE id = $2
+         RETURNING *`,
+        [status, requestId]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Address change request ${status} successfully.`,
+      request: update.rows[0],
+    });
+
+  } catch (err) {
+    console.error("Address update error:", err);
+    res.status(500).json({ error: "Failed to update request." });
+  }
+});
 
 
 module.exports = router;
