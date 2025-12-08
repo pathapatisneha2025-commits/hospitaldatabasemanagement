@@ -290,5 +290,29 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 });
+router.post("/delivery/address-change/request", async (req, res) => {
+  const { order_id, delivery_boy_id, old_address, new_address, reason } = req.body;
+
+  try {
+    const query = `
+      INSERT INTO address_change_requests
+      (order_id, delivery_boy_id, old_address, new_address, reason, status)
+      VALUES ($1,$2,$3,$4,$5,'pending')
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      order_id,
+      delivery_boy_id,
+      old_address,
+      new_address,
+      reason
+    ]);
+
+    res.json({ success: true, request: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to submit request" });
+  }
+});
 
 module.exports = router;
