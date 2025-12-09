@@ -482,6 +482,49 @@ router.post("/bus/freight", async (req, res) => {
     res.json({ success: false, error: "DB Error", details: err });
   }
 });
+router.post("/update-bus-delivery", async (req, res) => {
+  const {
+    orderId,
+    deliveryType,
+    busDetails,   // coming from frontend
+    status
+  } = req.body;
+
+  try {
+    const query = `
+      UPDATE sales_orders
+      SET 
+        delivery_type = $1,
+        busdetail = $2,          -- <<=== UPDATED HERE
+        status = $3
+      WHERE id = $4
+      RETURNING *;
+    `;
+
+    const values = [
+      deliveryType,              // "bus"
+      busDetails,                // JSON data to store
+      status || "pending",
+      orderId
+    ];
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Sales order not found" });
+    }
+
+    res.json({
+      message: "Bus delivery details saved successfully (Sales Order)",
+      order: result.rows[0]
+    });
+
+  } catch (err) {
+    console.error("BUS DELIVERY (SALES) ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 
 module.exports = router;
