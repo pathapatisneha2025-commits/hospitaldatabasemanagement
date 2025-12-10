@@ -482,26 +482,42 @@ router.post("/sales/payment/collect", async (req, res) => {
 
 // UPDATE BUS FREIGHT OPTION
 router.post("/bus/freight", async (req, res) => {
-  const { order_id, freight_by } = req.body;
+  const { orderId, freight_option } = req.body;
 
-  if (!order_id || !freight_by) {
+  if (!orderId || !freight_option) {
     return res.json({ success: false, error: "Missing fields" });
+  }
+
+  // Allowed freight options
+  const validOptions = [
+    "customer_to_bus",
+    "company_to_bus",
+    "customer_to_company",
+    "delivery_boy_to_bus",
+  ];
+
+  if (!validOptions.includes(freight_option)) {
+    return res.json({ success: false, error: "Invalid freight option" });
   }
 
   try {
     const q = `
       UPDATE sales_orders
-      SET freight_option_selected = $1
+      SET freight_option = $1
       WHERE id = $2
-      RETURNING *
+      RETURNING id, freight_option, invoice_generated, payment_received;
     `;
-    const result = await pool.query(q, [freight_by, order_id]);
+
+    const result = await pool.query(q, [freight_option, orderId]);
 
     res.json({ success: true, data: result.rows[0] });
+
   } catch (err) {
-    res.json({ success: false, error: "DB Error", details: err });
+    console.error(err);
+    res.json({ success: false, error: "DB Error", details: err.message });
   }
 });
+
 router.post("/update-bus-delivery", async (req, res) => {
   const {
     orderId,
