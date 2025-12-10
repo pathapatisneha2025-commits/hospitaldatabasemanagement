@@ -376,6 +376,33 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+router.post("/assign-doctor", async (req, res) => {
+  const { nurseId, doctorId } = req.body;
+
+  if (!nurseId || !doctorId) {
+    return res.status(400).json({ message: "Missing nurseId or doctorId" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE employees
+       SET assigned_doctor = $1
+       WHERE id = $2 AND role = 'nurse'
+       RETURNING *`,
+      [doctorId, nurseId]
+    );
+
+    res.json({
+      success: true,
+      message: "Doctor assigned successfully",
+      nurse: result.rows[0]
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // GET NURSE → ASSIGNED DOCTOR DETAILS
 router.get("/nurse/assigned-doctor/:id", async (req, res) => {
   const nurseId = req.params.id;
@@ -385,17 +412,21 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
       SELECT 
         n.id AS nurse_id,
         n.name AS nurse_name,
+        n.email AS nurse_email,
+        n.phone AS nurse_phone,
+
         d.id AS doctor_id,
         d.name AS doctor_name,
-        d.specialization,
-        d.mobile,
-        d.email
-      FROM nurses n
-      LEFT JOIN doctors d ON n.assigned_doctor = d.id
-      WHERE n.id = $1
+        d.department AS doctor_department,
+        d.email AS doctor_email,
+        d.phone AS doctor_phone
+
+      FROM employees n
+      LEFT JOIN employees d ON n.assigned_doctor = d.id
+      WHERE n.id = $1 AND n.role = 'nurse'
     `;
 
-    const result = await pool.query(query, [nurseId]);
+    const result = await db.query(query, [nurseId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Nurse not found" });
@@ -403,15 +434,29 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
 
     return res.json({
       success: true,
-      data: result.rows[0],
+      data: result.rows[0]
     });
+
   } catch (error) {
     console.error("Error fetching assigned doctor:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "Internal server error"
     });
   }
+});
+
+router.get("/employees/nurses", async (req, res) => {
+  const result = await db.query(
+    "SELECT id, name FROM employees WHERE role = 'pune'"
+  );
+  res.json(result.rows);
+});
+router.get("/employees/doctors", async (req, res) => {
+  const result = await db.query(
+    "SELECT id, name, department FROM employees WHERE role = 'doctor'"
+  );
+  res.json(result.rows);
 });
 
 
