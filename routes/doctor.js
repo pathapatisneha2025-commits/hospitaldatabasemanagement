@@ -376,6 +376,44 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+// GET NURSE → ASSIGNED DOCTOR DETAILS
+router.get("/nurse/assigned-doctor/:id", async (req, res) => {
+  const nurseId = req.params.id;
+
+  try {
+    const query = `
+      SELECT 
+        n.id AS nurse_id,
+        n.name AS nurse_name,
+        d.id AS doctor_id,
+        d.name AS doctor_name,
+        d.specialization,
+        d.mobile,
+        d.email
+      FROM nurses n
+      LEFT JOIN doctors d ON n.assigned_doctor = d.id
+      WHERE n.id = $1
+    `;
+
+    const result = await pool.query(query, [nurseId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nurse not found" });
+    }
+
+    return res.json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error fetching assigned doctor:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
 
 
 module.exports = router;
