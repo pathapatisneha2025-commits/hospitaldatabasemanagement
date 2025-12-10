@@ -114,31 +114,32 @@ router.get("/export", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        o.id,
-        o.status,
-        o.payment_method,
-        o.subtotal,
-        o.tax,
-        o.delivery_fee,
-        o.total,
-        o.expected_delivery,
+  o.id,
+  o.status,
+  o.payment_method,
+  o.subtotal,
+  o.tax,
+  o.delivery_fee,
+  o.total,
+  o.expected_delivery,
 
-        (o.address::jsonb) ->> 'name' AS name,
-        (o.address::jsonb) ->> 'mobile' AS mobile,
-        (o.address::jsonb) ->> 'flat' AS flat,
-        (o.address::jsonb) ->> 'street' AS street,
-        (o.address::jsonb) ->> 'landmark' AS landmark,
-        (o.address::jsonb) ->> 'city' AS city,
-        (o.address::jsonb) ->> 'state' AS state,
-        (o.address::jsonb) ->> 'pincode' AS pincode,
+  ((o.address::text)::jsonb)->>'name' AS name,
+  ((o.address::text)::jsonb)->>'mobile' AS mobile,
+  ((o.address::text)::jsonb)->>'flat' AS flat,
+  ((o.address::text)::jsonb)->>'street' AS street,
+  ((o.address::text)::jsonb)->>'landmark' AS landmark,
+  ((o.address::text)::jsonb)->>'city' AS city,
+  ((o.address::text)::jsonb)->>'state' AS state,
+  ((o.address::text)::jsonb)->>'pincode' AS pincode,
 
-        ARRAY_TO_STRING(ARRAY(
-          SELECT m->>'name' || 'x' || m->>'quantity'
-          FROM jsonb_array_elements(o.order_summary::jsonb) AS m
-        ), ', ') AS medicines
+  ARRAY_TO_STRING(ARRAY(
+    SELECT m->>'name' || 'x' || m->>'quantity'
+    FROM jsonb_array_elements((o.order_summary::text)::jsonb) AS m
+  ), ', ') AS medicines
 
-      FROM orders o
-      ORDER BY o.id DESC;
+FROM orders o
+ORDER BY o.id DESC;
+
     `);
 
     const fields = [
