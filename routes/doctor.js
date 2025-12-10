@@ -411,7 +411,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
     const query = `
       SELECT 
         n.id AS nurse_id,
-        n.name AS nurse_name,
+        n.full_name AS nurse_name,
         n.email AS nurse_email,
         n.phone AS nurse_phone,
 
@@ -419,10 +419,10 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
         d.name AS doctor_name,
         d.department AS doctor_department,
         d.email AS doctor_email,
-        d.phone AS doctor_phone
+        d.phone_number AS doctor_phone
 
       FROM employees n
-      LEFT JOIN employees d ON n.assigned_doctor = d.id
+      LEFT JOIN doctors d ON n.assigned_doctor = d.id
       WHERE n.id = $1 AND n.role = 'nurse'
     `;
 
