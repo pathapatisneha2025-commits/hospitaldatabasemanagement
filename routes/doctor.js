@@ -448,13 +448,13 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
 
 router.get("/employees/nurses", async (req, res) => {
   const result = await db.query(
-    "SELECT id, name FROM employees WHERE role = 'pune'"
+    "SELECT id, full_name FROM employees WHERE role = 'pune'"
   );
   res.json(result.rows);
 });
 router.get("/employees/doctors", async (req, res) => {
   const result = await db.query(
-    "SELECT id, name, department FROM employees WHERE role = 'doctor'"
+    "SELECT id, full_name, department FROM employees WHERE role = 'doctor'"
   );
   res.json(result.rows);
 });
