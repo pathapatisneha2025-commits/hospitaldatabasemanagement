@@ -454,7 +454,7 @@ router.get("/employees/nurses", async (req, res) => {
 });
 router.get("/employees/doctors", async (req, res) => {
   const result = await db.query(
-    "SELECT id, full_name, department FROM employees WHERE role = 'doctor'"
+    "SELECT id, name, department FROM doctors"
   );
   res.json(result.rows);
 });
