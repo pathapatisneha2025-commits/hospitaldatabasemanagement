@@ -388,7 +388,7 @@ router.post("/assign-doctor", async (req, res) => {
     const result = await db.query(
       `UPDATE employees
        SET assigned_doctor = $1
-       WHERE id = $2 AND role = 'nurse'
+       WHERE id = $2 AND role = 'pune'
        RETURNING *`,
       [doctorId, nurseId]
     );
