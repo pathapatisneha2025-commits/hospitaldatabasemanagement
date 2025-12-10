@@ -385,7 +385,7 @@ router.post("/assign-doctor", async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE employees
        SET assigned_doctor = $1
        WHERE id = $2 AND role = 'nurse'
@@ -393,15 +393,21 @@ router.post("/assign-doctor", async (req, res) => {
       [doctorId, nurseId]
     );
 
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nurse not found or not a nurse" });
+    }
+
     res.json({
       success: true,
       message: "Doctor assigned successfully",
       nurse: result.rows[0]
     });
   } catch (error) {
+    console.error("Assign Doctor Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // GET NURSE → ASSIGNED DOCTOR DETAILS
 router.get("/nurse/assigned-doctor/:id", async (req, res) => {
