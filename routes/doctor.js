@@ -419,7 +419,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
         n.id AS nurse_id,
         n.full_name AS nurse_name,
         n.email AS nurse_email,
-        n.phone AS nurse_phone,
+        n.mobile AS nurse_phone,
 
         d.id AS doctor_id,
         d.name AS doctor_name,
