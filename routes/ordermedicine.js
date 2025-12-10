@@ -113,7 +113,7 @@ router.get("/export-deliveryboy", async (req, res) => {
 router.get("/export", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT
+     SELECT
   o.id,
   o.status,
   o.payment_method,
@@ -122,14 +122,15 @@ router.get("/export", async (req, res) => {
   o.delivery_fee,
   o.total,
   o.expected_delivery,
-  o.address ->> 'name' AS name,
-  o.address ->> 'mobile' AS mobile,
-  o.address ->> 'flat' AS flat,
-  o.address ->> 'street' AS street,
-  o.address ->> 'landmark' AS landmark,
-  o.address ->> 'city' AS city,
-  o.address ->> 'state' AS state,
-  o.address ->> 'pincode' AS pincode,
+
+  (o.address::jsonb) ->> 'name' AS name,
+  (o.address::jsonb) ->> 'mobile' AS mobile,
+  (o.address::jsonb) ->> 'flat' AS flat,
+  (o.address::jsonb) ->> 'street' AS street,
+  (o.address::jsonb) ->> 'landmark' AS landmark,
+  (o.address::jsonb) ->> 'city' AS city,
+  (o.address::jsonb) ->> 'state' AS state,
+  (o.address::jsonb) ->> 'pincode' AS pincode,
 
   ARRAY_TO_STRING(ARRAY(
     SELECT m->>'name' || ' x' || m->>'quantity'
@@ -138,6 +139,7 @@ router.get("/export", async (req, res) => {
 
 FROM orders o
 ORDER BY o.id DESC;
+
 
     `);
 
