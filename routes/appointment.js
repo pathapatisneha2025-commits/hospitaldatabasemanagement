@@ -23,7 +23,7 @@ router.get("/export", async (req, res) => {
         a.reason,
         a.patientphone,
         a.paymentstatus
-      FROM appointment a
+      FROM appointments a
 
       UNION ALL
 
