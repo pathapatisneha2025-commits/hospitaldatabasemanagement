@@ -541,7 +541,7 @@ router.post("/update-bus-delivery", async (req, res) => {
   const {
     orderId,
     deliveryType,
-    busDetails,   // coming from frontend
+    busDetails,
     status
   } = req.body;
 
@@ -550,15 +550,15 @@ router.post("/update-bus-delivery", async (req, res) => {
       UPDATE sales_orders
       SET 
         delivery_type = $1,
-        busdetail = $2,          -- <<=== UPDATED HERE
+        busdetail = $2,
         status = $3
       WHERE id = $4
       RETURNING *;
     `;
 
     const values = [
-      deliveryType,              // "bus"
-      busDetails,                // JSON data to store
+      deliveryType,          // "bus"
+      busDetails,            // JSON
       status || "pending",
       orderId
     ];
@@ -566,17 +566,24 @@ router.post("/update-bus-delivery", async (req, res) => {
     const result = await pool.query(query, values);
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Sales order not found" });
+      return res.status(404).json({
+        success: false,
+        error: "Sales order not found"
+      });
     }
 
     res.json({
-      message: "Bus delivery details saved successfully (Sales Order)",
+      success: true,
+      message: "Bus delivery details saved successfully",
       order: result.rows[0]
     });
 
   } catch (err) {
     console.error("BUS DELIVERY (SALES) ERROR:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({
+      success: false,
+      error: "Server error"
+    });
   }
 });
 
