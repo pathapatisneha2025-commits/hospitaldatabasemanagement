@@ -133,7 +133,7 @@ router.get("/export", async (req, res) => {
   ((o.address::text)::jsonb)->>'pincode' AS pincode,
 
   ARRAY_TO_STRING(ARRAY(
-    SELECT m->>'name' || 'x' || m->>'quantity'
+    SELECT m->>'name'  || m->>'quantity'
     FROM jsonb_array_elements((o.order_summary::text)::jsonb) AS m
   ), ', ') AS medicines
 
