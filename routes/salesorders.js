@@ -537,7 +537,7 @@ router.post("/bus/freight", async (req, res) => {
 });
 
 
-router.post("/update-bus-delivery", async (req, res) => {
+router.post("/update-busdelivery", async (req, res) => {
   const {
     orderId,
     deliveryType,
