@@ -229,7 +229,7 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Fetch sales order
+    // Fetch order
     const orderResult = await pool.query(
       "SELECT * FROM sales_orders WHERE id = $1",
       [orderId]
@@ -240,8 +240,15 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
     }
 
     const order = orderResult.rows[0];
-    const picked = order.picked_items || [];
-    const items = order.items || [];
+
+    // Convert items JSON if needed
+    const picked = typeof order.picked_items === "string" 
+      ? JSON.parse(order.picked_items)
+      : order.picked_items || [];
+
+    const items = typeof order.items === "string"
+      ? JSON.parse(order.items)
+      : order.items || [];
 
     // Build medicines array
     const medicines = picked.map((p) => {
@@ -255,14 +262,12 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
       };
     });
 
-    // Calculate total amount
     const totalAmount = medicines.reduce((sum, m) => sum + m.total, 0);
 
-    // Generate invoice number
-    const invoiceNo = "SOI-" + Date.now();  // SOI = Sales Order Invoice
+    const invoiceNo = "SOI-" + Date.now();
 
-    // Save invoice into sales_order_invoices table
-    const insertInvoice = await pool.query(
+    // 1️⃣ INSERT invoice in invoice table
+    const inserted = await pool.query(
       `INSERT INTO sales_order_invoices 
        (invoice_no, order_id, customer_name, customer_mobile, address, medicines, total_amount, payment_mode, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW() AT TIME ZONE 'Asia/Kolkata')
@@ -279,10 +284,24 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
       ]
     );
 
+    // 2️⃣ UPDATE sales_orders table → THIS WAS MISSING 🔥
+    await pool.query(
+      `UPDATE sales_orders 
+       SET invoice_generated = TRUE,
+           invoice_no = $1,
+           total_amount = $2
+       WHERE id = $3`,
+      [invoiceNo, totalAmount, orderId]
+    );
+
     res.json({
       success: true,
       message: "Invoice generated successfully",
-      data: { ...insertInvoice.rows[0], medicines },
+      data: {
+        ...inserted.rows[0],
+        medicines,
+        invoice_generated: true,
+      },
     });
 
   } catch (error) {
@@ -290,6 +309,7 @@ router.post("/generate-invoice/:orderId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 });
+
 router.post("/delivery/address-change/request", async (req, res) => {
   const { 
     order_id, 
