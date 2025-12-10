@@ -416,7 +416,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
   const query = `
     SELECT 
       e.id AS nurse_id,
-      e.name AS nurse_name,
+      e.full_name AS nurse_name,
       d.id AS doctor_id,
       d.name AS doctor_name,
       d.specialization,
@@ -428,7 +428,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
   `;
 
   try {
-    const result = await pool.query(query, [nurseId]);
+    const result = await db.query(query, [nurseId]);
 
     if (result.rows.length === 0 || !result.rows[0].doctor_id) {
       return res.json({ success: false, message: "Doctor not assigned" });
