@@ -420,7 +420,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
       d.id AS doctor_id,
       d.name AS doctor_name,
       d.department,
-      d.mobile,
+      d.phone_number,
       d.email
     FROM employees e
     LEFT JOIN doctors d ON e.assigned_doctor = d.id
