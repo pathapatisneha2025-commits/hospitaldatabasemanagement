@@ -419,7 +419,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
       e.full_name AS nurse_name,
       d.id AS doctor_id,
       d.name AS doctor_name,
-      d.specialization,
+      d.department,
       d.mobile,
       d.email
     FROM employees e
