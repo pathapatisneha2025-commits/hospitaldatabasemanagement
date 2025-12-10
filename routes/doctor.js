@@ -423,7 +423,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
       d.mobile,
       d.email
     FROM employees e
-    LEFT JOIN doctors d ON e.assigned_doctor_id = d.id
+    LEFT JOIN doctors d ON e.assigned_doctor = d.id
     WHERE e.id = $1 AND e.role = 'pune'
   `;
 
