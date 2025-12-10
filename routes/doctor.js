@@ -413,44 +413,37 @@ router.post("/assign-doctor", async (req, res) => {
 router.get("/nurse/assigned-doctor/:id", async (req, res) => {
   const nurseId = req.params.id;
 
+  const query = `
+    SELECT 
+      e.id AS nurse_id,
+      e.name AS nurse_name,
+      d.id AS doctor_id,
+      d.name AS doctor_name,
+      d.specialization,
+      d.mobile,
+      d.email
+    FROM employees e
+    LEFT JOIN doctors d ON e.assigned_doctor_id = d.id
+    WHERE e.id = $1 AND e.role = 'pune'
+  `;
+
   try {
-    const query = `
-      SELECT 
-        n.id AS nurse_id,
-        n.full_name AS nurse_name,
-        n.email AS nurse_email,
-        n.mobile AS nurse_phone,
+    const result = await pool.query(query, [nurseId]);
 
-        d.id AS doctor_id,
-        d.name AS doctor_name,
-        d.department AS doctor_department,
-        d.email AS doctor_email,
-        d.phone_number AS doctor_phone
-
-      FROM employees n
-      LEFT JOIN doctors d ON n.assigned_doctor = d.id
-      WHERE n.id = $1 AND n.role = 'pune'
-    `;
-
-    const result = await db.query(query, [nurseId]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Nurse not found" });
+    if (result.rows.length === 0 || !result.rows[0].doctor_id) {
+      return res.json({ success: false, message: "Doctor not assigned" });
     }
 
     return res.json({
       success: true,
-      data: result.rows[0]
+      doctor: result.rows[0],
     });
-
-  } catch (error) {
-    console.error("Error fetching assigned doctor:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 router.get("/employees/nurses", async (req, res) => {
   const result = await db.query(
