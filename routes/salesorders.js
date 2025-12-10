@@ -482,7 +482,7 @@ router.post("/sales/payment/collect", async (req, res) => {
 
 // UPDATE BUS FREIGHT OPTION
 router.post("/bus/freight", async (req, res) => {
-  const { orderId, freight_option } = req.body;
+  const { orderId, freight_option_selected } = req.body;
 
   if (!orderId || !freight_option) {
     return res.json({ success: false, error: "Missing fields" });
@@ -491,7 +491,7 @@ router.post("/bus/freight", async (req, res) => {
   // Allowed freight options
   const validOptions = [
     "customer_to_bus",
-    "company_to_bus",
+    "BHM_to_bus",
     "customer_to_company",
     "delivery_boy_to_bus",
   ];
@@ -503,7 +503,7 @@ router.post("/bus/freight", async (req, res) => {
   try {
     const q = `
       UPDATE sales_orders
-      SET freight_option = $1
+      SET freight_option_selected = $1
       WHERE id = $2
       RETURNING id, freight_option, invoice_generated, payment_received;
     `;
