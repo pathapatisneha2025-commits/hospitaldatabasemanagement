@@ -484,39 +484,58 @@ router.post("/sales/payment/collect", async (req, res) => {
 router.post("/bus/freight", async (req, res) => {
   const { orderId, freight_option_selected } = req.body;
 
-  if (!orderId || !freight_option) {
+  if (!orderId || !freight_option_selected) {
     return res.json({ success: false, error: "Missing fields" });
   }
 
   // Allowed freight options
   const validOptions = [
     "customer_to_bus",
-    "BHM_to_bus",
+    "BHM_to_bus",           // <- You requested this name
     "customer_to_company",
     "delivery_boy_to_bus",
   ];
 
-  if (!validOptions.includes(freight_option)) {
-    return res.json({ success: false, error: "Invalid freight option" });
+  if (!validOptions.includes(freight_option_selected)) {
+    return res.json({
+      success: false,
+      error: "Invalid freight option",
+    });
   }
 
   try {
-    const q = `
+    const query = `
       UPDATE sales_orders
       SET freight_option_selected = $1
       WHERE id = $2
-      RETURNING id, freight_option, invoice_generated, payment_received;
+      RETURNING id, freight_option_selected, invoice_generated, payment_received;
     `;
 
-    const result = await pool.query(q, [freight_option, orderId]);
+    // Corrected: Use freight_option_selected in SQL parameter
+    const result = await pool.query(query, [
+      freight_option_selected,
+      orderId,
+    ]);
 
-    res.json({ success: true, data: result.rows[0] });
+    if (result.rowCount === 0) {
+      return res.json({ success: false, error: "Order not found" });
+    }
 
+    return res.json({
+      success: true,
+      message: "Freight option saved",
+      data: result.rows[0],
+    });
   } catch (err) {
-    console.error(err);
-    res.json({ success: false, error: "DB Error", details: err.message });
+    console.error("Freight Save Error:", err);
+    return res.json({
+      success: false,
+      error: "DB Error",
+      details: err.message,
+    });
   }
 });
+
 
 router.post("/update-bus-delivery", async (req, res) => {
   const {
