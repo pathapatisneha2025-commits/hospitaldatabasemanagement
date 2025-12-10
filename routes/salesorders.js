@@ -508,7 +508,7 @@ router.post("/bus/freight", async (req, res) => {
       UPDATE sales_orders
       SET freight_option_selected = $1
       WHERE id = $2
-      RETURNING id, freight_option_selected, invoice_generated, payment_received;
+      RETURNING id, freight_option_selected, invoice_generated;
     `;
 
     // Corrected: Use freight_option_selected in SQL parameter
