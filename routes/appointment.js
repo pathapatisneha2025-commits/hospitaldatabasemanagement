@@ -47,7 +47,7 @@ router.get("/export", async (req, res) => {
       ORDER BY date ASC;
     `;
 
-    const result = await pool.query(query);
+    const result = await db.query(query);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "No appointments found" });
