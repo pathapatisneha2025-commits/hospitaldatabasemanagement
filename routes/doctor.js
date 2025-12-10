@@ -429,7 +429,7 @@ router.get("/nurse/assigned-doctor/:id", async (req, res) => {
 
       FROM employees n
       LEFT JOIN doctors d ON n.assigned_doctor = d.id
-      WHERE n.id = $1 AND n.role = 'nurse'
+      WHERE n.id = $1 AND n.role = 'pune'
     `;
 
     const result = await db.query(query, [nurseId]);
