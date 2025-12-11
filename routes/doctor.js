@@ -131,6 +131,7 @@ router.post("/login", async (req, res) => {
         description: doctor.rows[0].description,
         scheduleIn: doctor.rows[0].schedule_in,
         scheduleOut: doctor.rows[0].schedule_out,
+        status:doctor.rows[0].status,
       },
     });
 
