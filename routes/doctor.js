@@ -60,14 +60,14 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert doctor
+    // INSERT with STATUS (default = pending)
     const newDoctor = await db.query(
       `INSERT INTO doctors 
-        (name, email, password, phone_number, department, role, gender, experience, description, schedule_in, schedule_out)
+        (name, email, password, phone_number, department, role, gender, experience, description, schedule_in, schedule_out, status)
        VALUES 
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
        RETURNING 
-        id, name, email, phone_number, department, role, gender, experience, description, schedule_in, schedule_out`,
+        id, name, email, phone_number, department, role, gender, experience, description, schedule_in, schedule_out, status`,
       [
         name,
         email,
@@ -186,7 +186,7 @@ router.get("/all", async (req, res) => {
     const doctors = await db.query(
       `SELECT 
         id, name, email, phone_number, department, role, gender, 
-        experience, description, schedule_in, schedule_out 
+        experience, description, schedule_in, schedule_out,status
        FROM doctors`
     );
 
