@@ -593,7 +593,7 @@ router.post("/complete-delivery", async (req, res) => {
   try {
     const result = await pool.query(
       `
-      UPDATE orders
+      UPDATE sales_orders
       SET status = 'Delivered'
       WHERE id = $1
       `,
