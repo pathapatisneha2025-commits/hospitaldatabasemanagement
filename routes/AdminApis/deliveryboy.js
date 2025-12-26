@@ -433,6 +433,27 @@ router.post('/:deliveryBoyId/handover', async (req, res) => {
   const { date, total_cash, total_digital, credit_orders, cash_returned, cashier_photo, signature } = req.body;
 
   try {
+    let cashierPhotoUrl = null;
+    let signatureUrl = null;
+
+    // Upload cashier photo if provided
+    if (cashier_photo) {
+      const uploadedCashier = await cloudinary.uploader.upload(cashier_photo, {
+        folder: `handover/${deliveryBoyId}/cashier`,
+        format: "jpg"
+      });
+      cashierPhotoUrl = uploadedCashier.secure_url;
+    }
+
+    // Upload signature if provided
+    if (signature) {
+      const uploadedSignature = await cloudinary.uploader.upload(signature, {
+        folder: `handover/${deliveryBoyId}/signature`,
+        format: "png"
+      });
+      signatureUrl = uploadedSignature.secure_url;
+    }
+
     const handover = new Handover({
       deliveryboy_id: deliveryBoyId,
       date,
@@ -440,8 +461,8 @@ router.post('/:deliveryBoyId/handover', async (req, res) => {
       total_digital,
       credit_orders,
       cash_returned,
-      cashier_photo,
-      signature
+      cashier_photo: cashierPhotoUrl,
+      signature: signatureUrl
     });
 
     await handover.save();
