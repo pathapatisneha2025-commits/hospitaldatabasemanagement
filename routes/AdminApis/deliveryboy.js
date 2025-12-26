@@ -380,6 +380,88 @@ router.post("/verify-delivery-otp", async (req, res) => {
     res.status(400).json({ error: "Invalid or expired OTP token ❌" });
   }
 });
+router.get('/:deliveryBoyId/collections', async (req, res) => {
+  const { deliveryBoyId } = req.params;
+  const { date } = req.query; // YYYY-MM-DD
 
+  try {
+    const start = new Date(date + 'T00:00:00.000Z');
+    const end = new Date(date + 'T23:59:59.999Z');
+
+    // Only orders where payment was collected
+    const orders = await Order.find({
+      deliveryboy_id: deliveryBoyId,
+      payment_collected: true,
+      collected_at: { $gte: start, $lte: end }
+    });
+
+    // Calculate total collected
+    let total_cash = 0;
+    let total_digital = 0;
+    let credit_orders = 0;
+
+    orders.forEach(order => {
+      if (order.amount_collected) {
+        const amount = parseFloat(order.amount_collected);
+        if (order.payment_mode_collected) {
+          const modes = order.payment_mode_collected.split(',');
+          modes.forEach(mode => {
+            const [type, val] = mode.split(':');
+            const amt = parseFloat(val) || 0;
+            if (type.toLowerCase().includes('cash')) total_cash += amt;
+            else if (type.toLowerCase().includes('upi') || type.toLowerCase().includes('online')) total_digital += amt;
+          });
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      total_cash,
+      total_digital,
+      credit_orders, // can be calculated if needed
+      orders
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 2️⃣ Submit cash handover
+router.post('/:deliveryBoyId/handover', async (req, res) => {
+  const { deliveryBoyId } = req.params;
+  const { date, total_cash, total_digital, credit_orders, cash_returned, cashier_photo, signature } = req.body;
+
+  try {
+    const handover = new Handover({
+      deliveryboy_id: deliveryBoyId,
+      date,
+      total_cash,
+      total_digital,
+      credit_orders,
+      cash_returned,
+      cashier_photo,
+      signature
+    });
+
+    await handover.save();
+    res.json({ success: true, message: 'Cash handover recorded successfully', handover_id: handover._id });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3️⃣ Fetch existing handover (optional)
+router.get('/:deliveryBoyId/handover', async (req, res) => {
+  const { deliveryBoyId } = req.params;
+  const { date } = req.query;
+
+  try {
+    const handover = await Handover.findOne({ deliveryboy_id: deliveryBoyId, date });
+    res.json({ success: true, handover });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 module.exports = router;
