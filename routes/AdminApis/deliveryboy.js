@@ -493,19 +493,12 @@ router.post(
         ? req.files['signature'][0].path
         : null;
 
-      // Insert / Update (UPSERT)
+      // Simple Insert
       const result = await pool.query(
         `
         INSERT INTO cash_handovers
         (deliveryboy_id, date, total_cash, total_digital, cash_returned, cashier_photo, signature)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT (deliveryboy_id, date)
-        DO UPDATE SET
-          total_cash = EXCLUDED.total_cash,
-          total_digital = EXCLUDED.total_digital,
-          cash_returned = EXCLUDED.cash_returned,
-          cashier_photo = EXCLUDED.cashier_photo,
-          signature = EXCLUDED.signature
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id
         `,
         [
@@ -530,6 +523,7 @@ router.post(
     }
   }
 );
+
 
 
 
