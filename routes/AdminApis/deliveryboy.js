@@ -398,7 +398,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     const ordersResult = await pool.query(
       `
       SELECT *
-      FROM orders
+      FROM sales_orders
       WHERE deliveryboy_id = $1
         AND payment_collected = true
         AND collected_at BETWEEN $2 AND $3
