@@ -587,6 +587,32 @@ router.post("/update-busdelivery", async (req, res) => {
   }
 });
 
+router.post("/complete-delivery", async (req, res) => {
+  const { orderId } = req.body;
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE orders
+      SET status = 'Delivered'
+      WHERE id = $1
+      `,
+      [orderId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Delivery completed successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
 module.exports = router;
