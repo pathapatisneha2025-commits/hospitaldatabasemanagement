@@ -473,74 +473,64 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
 
 
 // 2️⃣ Submit cash handover
-router.post('/:deliveryBoyId/handover', async (req, res) => { 
-  const { deliveryBoyId } = req.params;
-  const {
-    date,
-    total_cash,
-    total_digital,
-    cash_returned,
-    cashier_photo,
-    signature
-  } = req.body;
+router.post(
+  '/:deliveryBoyId/handover',
+  upload.fields([
+    { name: 'cashier_photo', maxCount: 1 },
+    { name: 'signature', maxCount: 1 }
+  ]),
+  async (req, res) => {
+    const { deliveryBoyId } = req.params;
+    const { date, total_cash, total_digital, cash_returned } = req.body;
 
-  try {
-    let cashierPhotoUrl = null;
-    let signatureUrl = null;
+    try {
+      // File paths
+      const cashierPhotoUrl = req.files['cashier_photo']
+        ? req.files['cashier_photo'][0].path
+        : null;
 
-    // 1️⃣ Upload cashier photo
-    if (cashier_photo) {
-      const uploadedCashier = await cloudinary.uploader.upload(cashier_photo, {
-        folder: `handover/${deliveryBoyId}/cashier`
+      const signatureUrl = req.files['signature']
+        ? req.files['signature'][0].path
+        : null;
+
+      // Insert / Update (UPSERT)
+      const result = await pool.query(
+        `
+        INSERT INTO cash_handovers
+        (deliveryboy_id, date, total_cash, total_digital, cash_returned, cashier_photo, signature)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT (deliveryboy_id, date)
+        DO UPDATE SET
+          total_cash = EXCLUDED.total_cash,
+          total_digital = EXCLUDED.total_digital,
+          cash_returned = EXCLUDED.cash_returned,
+          cashier_photo = EXCLUDED.cashier_photo,
+          signature = EXCLUDED.signature
+        RETURNING id
+        `,
+        [
+          deliveryBoyId,
+          date,
+          total_cash,
+          total_digital,
+          cash_returned,
+          cashierPhotoUrl,
+          signatureUrl
+        ]
+      );
+
+      res.json({
+        success: true,
+        message: 'Cash handover recorded successfully',
+        handover_id: result.rows[0].id
       });
-      cashierPhotoUrl = uploadedCashier.secure_url;
+    } catch (err) {
+      console.error('Handover error:', err);
+      res.status(500).json({ success: false, message: err.message });
     }
-
-    // 2️⃣ Upload signature
-    if (signature) {
-      const uploadedSignature = await cloudinary.uploader.upload(signature, {
-        folder: `handover/${deliveryBoyId}/signature`
-      });
-      signatureUrl = uploadedSignature.secure_url;
-    }
-
-    // 3️⃣ Insert / Update (UPSERT)
-    const result = await pool.query(
-      `
-      INSERT INTO cash_handovers
-      (deliveryboy_id, date, total_cash, total_digital, cash_returned, cashier_photo, signature)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
-      ON CONFLICT (deliveryboy_id, date)
-      DO UPDATE SET
-        total_cash = EXCLUDED.total_cash,
-        total_digital = EXCLUDED.total_digital,
-        cash_returned = EXCLUDED.cash_returned,
-        cashier_photo = EXCLUDED.cashier_photo,
-        signature = EXCLUDED.signature
-      RETURNING id
-      `,
-      [
-        deliveryBoyId,
-        date,
-        total_cash,
-        total_digital,
-        cash_returned,
-        cashierPhotoUrl,
-        signatureUrl
-      ]
-    );
-
-    res.json({
-      success: true,
-      message: 'Cash handover recorded successfully',
-      handover_id: result.rows[0].id
-    });
-
-  } catch (err) {
-    console.error("Handover error:", err);
-    res.status(500).json({ success: false, message: err.message });
   }
-});
+);
+
 
 
 // 3️⃣ Fetch existing handover (optional)
