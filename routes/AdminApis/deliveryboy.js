@@ -390,43 +390,60 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       return res.status(400).json({ success: false, message: "Date is required" });
     }
 
-    // Parse start/end in UTC
-    const [year, month, day] = date.split('-').map(Number);
-    const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-    const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    // PostgreSQL date range (LOCAL day)
+    const start = `${date} 00:00:00`;
+    const end = `${date} 23:59:59`;
 
-    const collectedOrders = await Order.find({
-      deliveryboy_id: deliveryBoyId,
-      payment_collected: true,
-      collected_at: { $gte: start, $lte: end }
-    });
+    // 1️⃣ Fetch collected orders
+    const ordersResult = await pool.query(
+      `
+      SELECT *
+      FROM orders
+      WHERE deliveryboy_id = $1
+        AND payment_collected = true
+        AND collected_at BETWEEN $2 AND $3
+      `,
+      [deliveryBoyId, start, end]
+    );
 
+    const orders = ordersResult.rows;
+
+    // 2️⃣ Calculate totals
     let total_cash = 0;
     let total_digital = 0;
 
-    collectedOrders.forEach(order => {
+    orders.forEach(order => {
       if (order.payment_mode_collected) {
-        const modes = order.payment_mode_collected.split(',');
-        modes.forEach(mode => {
+        order.payment_mode_collected.split(',').forEach(mode => {
           const [type, val] = mode.split(':');
-          const amt = parseFloat(val) || 0;
-          if (type.toLowerCase().includes('cash')) total_cash += amt;
-          else total_digital += amt; // UPI/Online as digital
+          const amt = Number(val) || 0;
+
+          if (type.toLowerCase().includes('cash')) {
+            total_cash += amt;
+          } else {
+            total_digital += amt; // UPI / Online
+          }
         });
       }
     });
 
-    const credit_orders = await Order.countDocuments({
-      deliveryboy_id: deliveryBoyId,
-      payment_collected: false
-    });
+    // 3️⃣ Credit orders count
+    const creditResult = await pool.query(
+      `
+      SELECT COUNT(*) 
+      FROM orders
+      WHERE deliveryboy_id = $1
+        AND payment_collected = false
+      `,
+      [deliveryBoyId]
+    );
 
     res.json({
       success: true,
       total_cash,
       total_digital,
-      credit_orders,
-      orders: collectedOrders
+      credit_orders: Number(creditResult.rows[0].count),
+      orders
     });
 
   } catch (err) {
@@ -437,48 +454,75 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
 
 
 
-
 // 2️⃣ Submit cash handover
 router.post('/:deliveryBoyId/handover', async (req, res) => {
   const { deliveryBoyId } = req.params;
-  const { date, total_cash, total_digital, credit_orders, cash_returned, cashier_photo, signature } = req.body;
+  const {
+    date,
+    total_cash,
+    total_digital,
+    credit_orders,
+    cash_returned,
+    cashier_photo,
+    signature
+  } = req.body;
 
   try {
     let cashierPhotoUrl = null;
     let signatureUrl = null;
 
-    // Upload cashier photo if provided
+    // 1️⃣ Upload cashier photo
     if (cashier_photo) {
       const uploadedCashier = await cloudinary.uploader.upload(cashier_photo, {
-        folder: `handover/${deliveryBoyId}/cashier`,
-        format: "jpg"
+        folder: `handover/${deliveryBoyId}/cashier`
       });
       cashierPhotoUrl = uploadedCashier.secure_url;
     }
 
-    // Upload signature if provided
+    // 2️⃣ Upload signature
     if (signature) {
       const uploadedSignature = await cloudinary.uploader.upload(signature, {
-        folder: `handover/${deliveryBoyId}/signature`,
-        format: "png"
+        folder: `handover/${deliveryBoyId}/signature`
       });
       signatureUrl = uploadedSignature.secure_url;
     }
 
-    const handover = new Handover({
-      deliveryboy_id: deliveryBoyId,
-      date,
-      total_cash,
-      total_digital,
-      credit_orders,
-      cash_returned,
-      cashier_photo: cashierPhotoUrl,
-      signature: signatureUrl
+    // 3️⃣ Insert / Update (UPSERT)
+    const result = await pool.query(
+      `
+      INSERT INTO cash_handovers
+      (deliveryboy_id, date, total_cash, total_digital, credit_orders, cash_returned, cashier_photo, signature)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (deliveryboy_id, date)
+      DO UPDATE SET
+        total_cash = EXCLUDED.total_cash,
+        total_digital = EXCLUDED.total_digital,
+        credit_orders = EXCLUDED.credit_orders,
+        cash_returned = EXCLUDED.cash_returned,
+        cashier_photo = EXCLUDED.cashier_photo,
+        signature = EXCLUDED.signature
+      RETURNING id
+      `,
+      [
+        deliveryBoyId,
+        date,
+        total_cash,
+        total_digital,
+        credit_orders,
+        cash_returned,
+        cashierPhotoUrl,
+        signatureUrl
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'Cash handover recorded successfully',
+      handover_id: result.rows[0].id
     });
 
-    await handover.save();
-    res.json({ success: true, message: 'Cash handover recorded successfully', handover_id: handover._id });
   } catch (err) {
+    console.error("Handover error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -489,11 +533,25 @@ router.get('/:deliveryBoyId/handover', async (req, res) => {
   const { date } = req.query;
 
   try {
-    const handover = await Handover.findOne({ deliveryboy_id: deliveryBoyId, date });
-    res.json({ success: true, handover });
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM cash_handovers
+      WHERE deliveryboy_id = $1 AND date = $2
+      `,
+      [deliveryBoyId, date]
+    );
+
+    res.json({
+      success: true,
+      handover: result.rows[0] || null
+    });
+
   } catch (err) {
+    console.error("Fetch handover error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 module.exports = router;
