@@ -413,18 +413,36 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     let total_digital = 0;
 
     orders.forEach(order => {
-      if (order.payment_mode_collected) {
-        order.payment_mode_collected.split(',').forEach(mode => {
-          const [type, val] = mode.split(':');
-          const amt = Number(val) || 0;
+      const totalAmount = Number(order.amount_collected) || 0;
 
-          if (type.toLowerCase().includes('cash')) {
-            total_cash += amt;
-          } else {
-            total_digital += amt; // UPI / Online
-          }
-        });
+      if (!order.payment_mode_collected) return;
+
+      const modeLower = order.payment_mode_collected.toLowerCase();
+
+      // CASE 1: Cash Only (no split)
+      if (modeLower.includes('cash only')) {
+        total_cash += totalAmount;
+        return;
       }
+
+      // CASE 2: Online Only / Digital Only (no split)
+      if (modeLower.includes('online only') || modeLower.includes('digital only')) {
+        total_digital += totalAmount;
+        return;
+      }
+
+      // CASE 3: Split payments (Cash:xxxx, UPI:xxxx, Online:xxxx)
+      order.payment_mode_collected.split(',').forEach(mode => {
+        const [type, val] = mode.split(':');
+        if (!val) return; // Skip if no amount
+        const amt = Number(val) || 0;
+
+        if (type.toLowerCase().includes('cash')) {
+          total_cash += amt;
+        } else {
+          total_digital += amt; // UPI / Online / other digital
+        }
+      });
     });
 
     // 3️⃣ Credit orders count
