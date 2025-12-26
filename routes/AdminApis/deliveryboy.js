@@ -383,18 +383,18 @@ router.post("/verify-delivery-otp", async (req, res) => {
 // Get collections by delivery boy for today
 router.get('/:deliveryBoyId/collections', async (req, res) => {
   const { deliveryBoyId } = req.params;
-  const { date } = req.query; // YYYY-MM-DD format
+  const { date } = req.query; // YYYY-MM-DD
 
   try {
     if (!date) {
-      return res.status(400).json({ success: false, message: "Date is required in YYYY-MM-DD format" });
+      return res.status(400).json({ success: false, message: "Date is required" });
     }
 
-    // Parse date as UTC start and end of the day
-    const start = new Date(date + 'T00:00:00.000Z');
-    const end = new Date(date + 'T23:59:59.999Z');
+    // Parse start/end in UTC
+    const [year, month, day] = date.split('-').map(Number);
+    const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
-    // Find all collected orders for this delivery boy today
     const collectedOrders = await Order.find({
       deliveryboy_id: deliveryBoyId,
       payment_collected: true,
@@ -411,12 +411,11 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
           const [type, val] = mode.split(':');
           const amt = parseFloat(val) || 0;
           if (type.toLowerCase().includes('cash')) total_cash += amt;
-          else if (type.toLowerCase().includes('upi') || type.toLowerCase().includes('online')) total_digital += amt;
+          else total_digital += amt; // UPI/Online as digital
         });
       }
     });
 
-    // Count credit orders (not yet collected)
     const credit_orders = await Order.countDocuments({
       deliveryboy_id: deliveryBoyId,
       payment_collected: false
@@ -435,6 +434,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 
 
