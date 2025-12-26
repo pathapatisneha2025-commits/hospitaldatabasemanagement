@@ -431,7 +431,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     const creditResult = await pool.query(
       `
       SELECT COUNT(*) 
-      FROM orders
+      FROM sales_orders
       WHERE deliveryboy_id = $1
         AND payment_collected = false
       `,
