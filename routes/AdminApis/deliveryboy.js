@@ -388,39 +388,38 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     const start = new Date(date + 'T00:00:00.000Z');
     const end = new Date(date + 'T23:59:59.999Z');
 
-    // Only orders where payment was collected
-    const orders = await Order.find({
+    const collectedOrders = await Order.find({
       deliveryboy_id: deliveryBoyId,
       payment_collected: true,
       collected_at: { $gte: start, $lte: end }
     });
 
-    // Calculate total collected
     let total_cash = 0;
     let total_digital = 0;
-    let credit_orders = 0;
 
-    orders.forEach(order => {
-      if (order.amount_collected) {
-        const amount = parseFloat(order.amount_collected);
-        if (order.payment_mode_collected) {
-          const modes = order.payment_mode_collected.split(',');
-          modes.forEach(mode => {
-            const [type, val] = mode.split(':');
-            const amt = parseFloat(val) || 0;
-            if (type.toLowerCase().includes('cash')) total_cash += amt;
-            else if (type.toLowerCase().includes('upi') || type.toLowerCase().includes('online')) total_digital += amt;
-          });
-        }
+    collectedOrders.forEach(order => {
+      if (order.payment_mode_collected) {
+        const modes = order.payment_mode_collected.split(',');
+        modes.forEach(mode => {
+          const [type, val] = mode.split(':');
+          const amt = parseFloat(val) || 0;
+          if (type.toLowerCase().includes('cash')) total_cash += amt;
+          else if (type.toLowerCase().includes('upi') || type.toLowerCase().includes('online')) total_digital += amt;
+        });
       }
+    });
+
+    const credit_orders = await Order.countDocuments({
+      deliveryboy_id: deliveryBoyId,
+      payment_collected: false
     });
 
     res.json({
       success: true,
       total_cash,
       total_digital,
-      credit_orders, // can be calculated if needed
-      orders
+      credit_orders,
+      orders: collectedOrders
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
