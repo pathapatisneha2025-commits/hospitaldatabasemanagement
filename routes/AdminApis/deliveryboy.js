@@ -390,101 +390,77 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       return res.status(400).json({ success: false, message: "Date is required" });
     }
 
-    let total_cash = 0;
-    let total_digital = 0;
+    // PostgreSQL date range (LOCAL day)
+    const start = `${date} 00:00:00`;
+    const end = `${date} 23:59:59`;
 
-    /* =========================
-       1️⃣ SALES_ORDERS COLLECTION
-       ========================= */
-    const salesOrdersResult = await pool.query(
-      `
-      SELECT id, amount_collected, payment_mode_collected, collected_at
-      FROM sales_orders
-      WHERE deliveryboy_id = $1
-        AND payment_collected = true
-        AND DATE(collected_at) = $2
-      `,
-      [deliveryBoyId, date]
-    );
-
-    const salesOrders = salesOrdersResult.rows;
-
-    // Create a Set of timestamps to prevent double-counting in orders
-    const salesTimestamps = new Set(salesOrders.map(o => o.collected_at.toISOString()));
-
-    // Calculate totals from sales_orders
-    salesOrders.forEach(order => {
-      const mode = order.payment_mode_collected || '';
-
-      if (mode.includes(':')) {
-        // Split payments like Cash:1000,UPI:3275
-        mode.split(',').forEach(part => {
-          const [typeRaw, valRaw] = part.split(':');
-          const type = typeRaw.trim().toLowerCase();
-          const amt = Number(valRaw.trim()) || 0;
-
-          if (type.includes('cash')) total_cash += amt;
-          else total_digital += amt;
-        });
-      } else {
-        const amt = Number(order.amount_collected) || 0;
-        if (mode.toLowerCase().includes('cash')) total_cash += amt;
-        else total_digital += amt;
-      }
-    });
-
-    /* =========================
-       2️⃣ ORDERS COLLECTION (exclude sales_orders)
-       ========================= */
+    // 1️⃣ Fetch collected orders
     const ordersResult = await pool.query(
       `
       SELECT *
-      FROM orders
-      WHERE payment_collected_by = $1
-        AND payment_status = 'Paid'
-        AND DATE(payment_collected_at) = $2
+      FROM sales_orders
+      WHERE deliveryboy_id = $1
+        AND payment_collected = true
+        AND collected_at BETWEEN $2 AND $3
       `,
-      [deliveryBoyId, date]
+      [deliveryBoyId, start, end]
     );
 
-    // Exclude orders already counted in sales_orders
-    const orders = ordersResult.rows.filter(
-      o => !salesTimestamps.has(o.payment_collected_at.toISOString())
-    );
+    const orders = ordersResult.rows;
+
+    // 2️⃣ Calculate totals
+    let total_cash = 0;
+    let total_digital = 0;
 
     orders.forEach(order => {
-      const amount = Number(order.amount_received) || 0;
-      const mode = (order.payment_mode || '').toLowerCase();
+      const totalAmount = Number(order.amount_collected) || 0;
 
-      if (mode.includes('cash')) total_cash += amount;
-      else total_digital += amount;
+      if (!order.payment_mode_collected) return;
+
+      const modeLower = order.payment_mode_collected.toLowerCase();
+
+      // CASE 1: Cash Only (no split)
+      if (modeLower.includes('cash only')) {
+        total_cash += totalAmount;
+        return;
+      }
+
+      // CASE 2: Online Only / Digital Only (no split)
+      if (modeLower.includes('online only') || modeLower.includes('digital only')) {
+        total_digital += totalAmount;
+        return;
+      }
+
+      // CASE 3: Split payments (Cash:xxxx, UPI:xxxx, Online:xxxx)
+      order.payment_mode_collected.split(',').forEach(mode => {
+        const [type, val] = mode.split(':');
+        if (!val) return; // Skip if no amount
+        const amt = Number(val) || 0;
+
+        if (type.toLowerCase().includes('cash')) {
+          total_cash += amt;
+        } else {
+          total_digital += amt; // UPI / Online / other digital
+        }
+      });
     });
 
-    /* =========================
-       3️⃣ CREDIT ORDERS
-       ========================= */
+    // 3️⃣ Credit orders count
     const creditResult = await pool.query(
       `
-      SELECT COUNT(*)
-      FROM orders
+      SELECT COUNT(*) 
+      FROM sales_orders
       WHERE deliveryboy_id = $1
-        AND payment_status = 'Pending'
+        AND payment_collected = false
       `,
       [deliveryBoyId]
     );
 
-    /* =========================
-       RESPONSE
-       ========================= */
     res.json({
       success: true,
-      date,
-      deliveryBoyId,
       total_cash,
       total_digital,
-      grand_total: total_cash + total_digital,
       credit_orders: Number(creditResult.rows[0].count),
-      sales_orders: salesOrders,
       orders
     });
 
@@ -493,9 +469,6 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
-
-
 
 
 
