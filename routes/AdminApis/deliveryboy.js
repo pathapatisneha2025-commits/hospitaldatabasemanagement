@@ -435,19 +435,20 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     /* =========================
        2️⃣ ORDERS COLLECTION (exclude sales_orders)
        ========================= */
-    const ordersResult = await pool.query(
-      `
-      SELECT *
-      FROM orders
-      WHERE payment_collected_by = $1
-        AND payment_status = 'Paid'
-        AND DATE(payment_collected_at) = $2
-        AND id NOT IN (
-          SELECT order_id FROM sales_orders WHERE deliveryboy_id = $1 AND DATE(collected_at) = $2
-        )
-      `,
-      [deliveryBoyId, date]
-    );
+   /* =========================
+   2️⃣ ORDERS COLLECTION
+   ========================= */
+const ordersResult = await pool.query(
+  `
+  SELECT *
+  FROM orders
+  WHERE payment_collected_by = $1
+    AND payment_status = 'Paid'
+    AND DATE(payment_collected_at) = $2
+  `,
+  [deliveryBoyId, date]
+);
+
 
     const orders = ordersResult.rows;
 
