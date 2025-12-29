@@ -407,35 +407,30 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
         AND payment_collected = true
         AND DATE(collected_at) = $2
       `,
-      [deliveryBoyId, date] // ✅ ONLY TWO PARAMS
+      [deliveryBoyId, date]
     );
 
     const salesOrders = salesOrdersResult.rows;
 
     salesOrders.forEach(order => {
-      const amount = Number(order.amount_collected) || 0;
       const mode = (order.payment_mode_collected || '').toLowerCase();
 
-      if (mode.includes('cash only')) {
-        total_cash += amount;
-      } else if (
-        mode.includes('online only') ||
-        mode.includes('digital only')
-      ) {
-        total_digital += amount;
-      } else {
-        // split payments
+      // Split-safe logic (NO double counting)
+      if (mode.includes(':')) {
         mode.split(',').forEach(part => {
           const [type, val] = part.split(':');
-          if (!val) return;
-
           const amt = Number(val) || 0;
+
           if (type.toLowerCase().includes('cash')) {
             total_cash += amt;
           } else {
             total_digital += amt;
           }
         });
+      } else {
+        const amount = Number(order.amount_collected) || 0;
+        if (mode.includes('cash')) total_cash += amount;
+        else total_digital += amount;
       }
     });
 
@@ -447,9 +442,10 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       SELECT *
       FROM orders
       WHERE payment_collected_by = $1
+        AND payment_status = 'Paid'
         AND DATE(payment_collected_at) = $2
       `,
-      [deliveryBoyId, date] // ✅ ONLY TWO PARAMS
+      [deliveryBoyId, date]
     );
 
     const orders = ordersResult.rows;
@@ -487,6 +483,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       deliveryBoyId,
       total_cash,
       total_digital,
+      grand_total: total_cash + total_digital,
       credit_orders: Number(creditResult.rows[0].count),
       sales_orders: salesOrders,
       orders
