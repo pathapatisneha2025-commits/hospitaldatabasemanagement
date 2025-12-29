@@ -413,29 +413,27 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     const salesOrders = salesOrdersResult.rows;
 
     salesOrders.forEach(order => {
-      const mode = (order.payment_mode_collected || '').toLowerCase();
+      const mode = order.payment_mode_collected || '';
 
-      // Split-safe logic (NO double counting)
       if (mode.includes(':')) {
+        // Split payments like Cash:1000,UPI:3275
         mode.split(',').forEach(part => {
-          const [type, val] = part.split(':');
-          const amt = Number(val) || 0;
+          const [typeRaw, valRaw] = part.split(':');
+          const type = typeRaw.trim().toLowerCase();
+          const amt = Number(valRaw.trim()) || 0;
 
-          if (type.toLowerCase().includes('cash')) {
-            total_cash += amt;
-          } else {
-            total_digital += amt;
-          }
+          if (type.includes('cash')) total_cash += amt;
+          else total_digital += amt;
         });
       } else {
-        const amount = Number(order.amount_collected) || 0;
-        if (mode.includes('cash')) total_cash += amount;
-        else total_digital += amount;
+        const amt = Number(order.amount_collected) || 0;
+        if (mode.toLowerCase().includes('cash')) total_cash += amt;
+        else total_digital += amt;
       }
     });
 
     /* =========================
-       2️⃣ ORDERS COLLECTION
+       2️⃣ ORDERS COLLECTION (exclude sales_orders)
        ========================= */
     const ordersResult = await pool.query(
       `
@@ -444,6 +442,9 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       WHERE payment_collected_by = $1
         AND payment_status = 'Paid'
         AND DATE(payment_collected_at) = $2
+        AND id NOT IN (
+          SELECT order_id FROM sales_orders WHERE deliveryboy_id = $1 AND DATE(collected_at) = $2
+        )
       `,
       [deliveryBoyId, date]
     );
@@ -454,11 +455,8 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       const amount = Number(order.amount_received) || 0;
       const mode = (order.payment_mode || '').toLowerCase();
 
-      if (mode.includes('cash')) {
-        total_cash += amount;
-      } else {
-        total_digital += amount;
-      }
+      if (mode.includes('cash')) total_cash += amount;
+      else total_digital += amount;
     });
 
     /* =========================
