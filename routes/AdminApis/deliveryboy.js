@@ -408,7 +408,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       FROM sales_orders
       WHERE deliveryboy_id = $1
         AND payment_collected = true
-        AND collected_at BETWEEN $2 AND $3
+AND DATE(collected_at) = $2
       `,
       [deliveryBoyId, start, end]
     );
@@ -451,7 +451,8 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       FROM orders
       WHERE payment_collected_by = $1
         AND payment_status = 'Paid'
-        AND payment_collected_at BETWEEN $2 AND $3
+       AND DATE(payment_collected_at) = $2
+
       `,
       [deliveryBoyId, start, end]
     );
