@@ -393,9 +393,6 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       });
     }
 
-    const start = `${date} 00:00:00`;
-    const end = `${date} 23:59:59`;
-
     let total_cash = 0;
     let total_digital = 0;
 
@@ -408,9 +405,9 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       FROM sales_orders
       WHERE deliveryboy_id = $1
         AND payment_collected = true
-AND DATE(collected_at) = $2
+        AND DATE(collected_at) = $2
       `,
-      [deliveryBoyId, start, end]
+      [deliveryBoyId, date] // ✅ ONLY TWO PARAMS
     );
 
     const salesOrders = salesOrdersResult.rows;
@@ -431,8 +428,8 @@ AND DATE(collected_at) = $2
         mode.split(',').forEach(part => {
           const [type, val] = part.split(':');
           if (!val) return;
-          const amt = Number(val) || 0;
 
+          const amt = Number(val) || 0;
           if (type.toLowerCase().includes('cash')) {
             total_cash += amt;
           } else {
@@ -451,10 +448,9 @@ AND DATE(collected_at) = $2
       FROM orders
       WHERE payment_collected_by = $1
         AND payment_status = 'Paid'
-       AND DATE(payment_collected_at) = $2
-
+        AND DATE(payment_collected_at) = $2
       `,
-      [deliveryBoyId, start, end]
+      [deliveryBoyId, date] // ✅ ONLY TWO PARAMS
     );
 
     const orders = ordersResult.rows;
@@ -466,12 +462,12 @@ AND DATE(collected_at) = $2
       if (mode.includes('cash')) {
         total_cash += amount;
       } else {
-        total_digital += amount; // UPI / Online
+        total_digital += amount;
       }
     });
 
     /* =========================
-       3️⃣ CREDIT ORDERS (optional)
+       3️⃣ CREDIT ORDERS
        ========================= */
     const creditResult = await pool.query(
       `
@@ -490,12 +486,9 @@ AND DATE(collected_at) = $2
       success: true,
       date,
       deliveryBoyId,
-
       total_cash,
       total_digital,
-
       credit_orders: Number(creditResult.rows[0].count),
-
       sales_orders: salesOrders,
       orders
     });
