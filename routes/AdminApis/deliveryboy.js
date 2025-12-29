@@ -413,7 +413,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     const salesOrders = salesOrdersResult.rows;
 
     salesOrders.forEach(order => {
-      const mode = order.payment_mode_collected || '';
+      const mode = (order.payment_mode_collected || '').toLowerCase();
 
       if (mode.includes(':')) {
         // Split payments like Cash:1000,UPI:3275
@@ -427,28 +427,24 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
         });
       } else {
         const amt = Number(order.amount_collected) || 0;
-        if (mode.toLowerCase().includes('cash')) total_cash += amt;
+        if (mode.includes('cash')) total_cash += amt;
         else total_digital += amt;
       }
     });
 
     /* =========================
-       2️⃣ ORDERS COLLECTION (exclude sales_orders)
+       2️⃣ ORDERS COLLECTION
        ========================= */
-   /* =========================
-   2️⃣ ORDERS COLLECTION
-   ========================= */
-const ordersResult = await pool.query(
-  `
-  SELECT *
-  FROM orders
-  WHERE payment_collected_by = $1
-    AND payment_status = 'Paid'
-    AND DATE(payment_collected_at) = $2
-  `,
-  [deliveryBoyId, date]
-);
-
+    const ordersResult = await pool.query(
+      `
+      SELECT *
+      FROM orders
+      WHERE payment_collected_by = $1
+        AND payment_status = 'Paid'
+        AND DATE(payment_collected_at) = $2
+      `,
+      [deliveryBoyId, date]
+    );
 
     const orders = ordersResult.rows;
 
@@ -465,7 +461,7 @@ const ordersResult = await pool.query(
        ========================= */
     const creditResult = await pool.query(
       `
-      SELECT COUNT(*)
+      SELECT COUNT(*) AS pending_count
       FROM orders
       WHERE deliveryboy_id = $1
         AND payment_status = 'Pending'
@@ -483,7 +479,7 @@ const ordersResult = await pool.query(
       total_cash,
       total_digital,
       grand_total: total_cash + total_digital,
-      credit_orders: Number(creditResult.rows[0].count),
+      credit_orders: Number(creditResult.rows[0].pending_count),
       sales_orders: salesOrders,
       orders
     });
@@ -496,6 +492,7 @@ const ordersResult = await pool.query(
     });
   }
 });
+
 
 
 
