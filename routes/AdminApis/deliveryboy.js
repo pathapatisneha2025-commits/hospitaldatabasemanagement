@@ -447,7 +447,6 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       SELECT *
       FROM orders
       WHERE payment_collected_by = $1
-        AND payment_status = 'Paid'
         AND DATE(payment_collected_at) = $2
       `,
       [deliveryBoyId, date] // ✅ ONLY TWO PARAMS
