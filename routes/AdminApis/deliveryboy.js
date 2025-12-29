@@ -387,10 +387,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
 
   try {
     if (!date) {
-      return res.status(400).json({
-        success: false,
-        message: "Date is required"
-      });
+      return res.status(400).json({ success: false, message: "Date is required" });
     }
 
     let total_cash = 0;
@@ -401,7 +398,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
        ========================= */
     const salesOrdersResult = await pool.query(
       `
-      SELECT *
+      SELECT id, amount_collected, payment_mode_collected, collected_at
       FROM sales_orders
       WHERE deliveryboy_id = $1
         AND payment_collected = true
@@ -412,8 +409,12 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
 
     const salesOrders = salesOrdersResult.rows;
 
+    // Create a Set of timestamps to prevent double-counting in orders
+    const salesTimestamps = new Set(salesOrders.map(o => o.collected_at.toISOString()));
+
+    // Calculate totals from sales_orders
     salesOrders.forEach(order => {
-      const mode = (order.payment_mode_collected || '').toLowerCase();
+      const mode = order.payment_mode_collected || '';
 
       if (mode.includes(':')) {
         // Split payments like Cash:1000,UPI:3275
@@ -427,13 +428,13 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
         });
       } else {
         const amt = Number(order.amount_collected) || 0;
-        if (mode.includes('cash')) total_cash += amt;
+        if (mode.toLowerCase().includes('cash')) total_cash += amt;
         else total_digital += amt;
       }
     });
 
     /* =========================
-       2️⃣ ORDERS COLLECTION
+       2️⃣ ORDERS COLLECTION (exclude sales_orders)
        ========================= */
     const ordersResult = await pool.query(
       `
@@ -446,7 +447,10 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       [deliveryBoyId, date]
     );
 
-    const orders = ordersResult.rows;
+    // Exclude orders already counted in sales_orders
+    const orders = ordersResult.rows.filter(
+      o => !salesTimestamps.has(o.payment_collected_at.toISOString())
+    );
 
     orders.forEach(order => {
       const amount = Number(order.amount_received) || 0;
@@ -461,7 +465,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
        ========================= */
     const creditResult = await pool.query(
       `
-      SELECT COUNT(*) AS pending_count
+      SELECT COUNT(*)
       FROM orders
       WHERE deliveryboy_id = $1
         AND payment_status = 'Pending'
@@ -479,19 +483,17 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       total_cash,
       total_digital,
       grand_total: total_cash + total_digital,
-      credit_orders: Number(creditResult.rows[0].pending_count),
+      credit_orders: Number(creditResult.rows[0].count),
       sales_orders: salesOrders,
       orders
     });
 
   } catch (err) {
     console.error("Error fetching collections:", err);
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 
 
