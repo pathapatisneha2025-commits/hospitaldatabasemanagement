@@ -285,7 +285,6 @@ router.post("/collect-payment", async (req, res) => {
       deliveryBoyId,
       deliveryType,
       paymentMode,
-      amount,
       amountReceived,
     } = req.body;
 
@@ -298,7 +297,7 @@ router.post("/collect-payment", async (req, res) => {
     if (paymentMode === "Credit") paymentStatus = "Credit";
     if (paymentMode === "Already Paid") paymentStatus = "Paid";
 
-    // Update the order table directly
+    // Update the order table WITHOUT changing the status
     const updateOrder = `
       UPDATE orders
       SET 
@@ -307,7 +306,6 @@ router.post("/collect-payment", async (req, res) => {
         amount_received = $3,
         payment_status = $4,
         deliverytype = $5,
-        status = 'Delivered',
         payment_collected_at = NOW()
       WHERE id = $6
       RETURNING *;
@@ -328,7 +326,7 @@ router.post("/collect-payment", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Payment collected & order delivered",
+      message: "Payment collected successfully",
       order: result.rows[0]
     });
 
@@ -337,6 +335,39 @@ router.post("/collect-payment", async (req, res) => {
     res.status(500).json({ error: "Server error while updating order" });
   }
 });
+router.post("/mark-delivered", async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ error: "Order ID is required" });
+    }
+
+    const updateStatus = `
+      UPDATE orders
+      SET status = 'Delivered'
+      WHERE id = $1
+      RETURNING *;
+    `;
+
+    const result = await pool.query(updateStatus, [orderId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Order marked as delivered",
+      order: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error while updating order status" });
+  }
+});
+
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM orders ORDER BY created_at DESC");
