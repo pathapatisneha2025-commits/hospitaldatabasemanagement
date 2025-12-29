@@ -387,15 +387,22 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
 
   try {
     if (!date) {
-      return res.status(400).json({ success: false, message: "Date is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Date is required"
+      });
     }
 
-    // PostgreSQL date range (LOCAL day)
     const start = `${date} 00:00:00`;
     const end = `${date} 23:59:59`;
 
-    // 1️⃣ Fetch collected orders
-    const ordersResult = await pool.query(
+    let total_cash = 0;
+    let total_digital = 0;
+
+    /* =========================
+       1️⃣ SALES_ORDERS COLLECTION
+       ========================= */
+    const salesOrdersResult = await pool.query(
       `
       SELECT *
       FROM sales_orders
@@ -406,69 +413,101 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       [deliveryBoyId, start, end]
     );
 
-    const orders = ordersResult.rows;
+    const salesOrders = salesOrdersResult.rows;
 
-    // 2️⃣ Calculate totals
-    let total_cash = 0;
-    let total_digital = 0;
+    salesOrders.forEach(order => {
+      const amount = Number(order.amount_collected) || 0;
+      const mode = (order.payment_mode_collected || '').toLowerCase();
 
-    orders.forEach(order => {
-      const totalAmount = Number(order.amount_collected) || 0;
+      if (mode.includes('cash only')) {
+        total_cash += amount;
+      } else if (
+        mode.includes('online only') ||
+        mode.includes('digital only')
+      ) {
+        total_digital += amount;
+      } else {
+        // split payments
+        mode.split(',').forEach(part => {
+          const [type, val] = part.split(':');
+          if (!val) return;
+          const amt = Number(val) || 0;
 
-      if (!order.payment_mode_collected) return;
-
-      const modeLower = order.payment_mode_collected.toLowerCase();
-
-      // CASE 1: Cash Only (no split)
-      if (modeLower.includes('cash only')) {
-        total_cash += totalAmount;
-        return;
+          if (type.toLowerCase().includes('cash')) {
+            total_cash += amt;
+          } else {
+            total_digital += amt;
+          }
+        });
       }
-
-      // CASE 2: Online Only / Digital Only (no split)
-      if (modeLower.includes('online only') || modeLower.includes('digital only')) {
-        total_digital += totalAmount;
-        return;
-      }
-
-      // CASE 3: Split payments (Cash:xxxx, UPI:xxxx, Online:xxxx)
-      order.payment_mode_collected.split(',').forEach(mode => {
-        const [type, val] = mode.split(':');
-        if (!val) return; // Skip if no amount
-        const amt = Number(val) || 0;
-
-        if (type.toLowerCase().includes('cash')) {
-          total_cash += amt;
-        } else {
-          total_digital += amt; // UPI / Online / other digital
-        }
-      });
     });
 
-    // 3️⃣ Credit orders count
+    /* =========================
+       2️⃣ ORDERS COLLECTION
+       ========================= */
+    const ordersResult = await pool.query(
+      `
+      SELECT *
+      FROM orders
+      WHERE payment_collected_by = $1
+        AND payment_status = 'Paid'
+        AND payment_collected_at BETWEEN $2 AND $3
+      `,
+      [deliveryBoyId, start, end]
+    );
+
+    const orders = ordersResult.rows;
+
+    orders.forEach(order => {
+      const amount = Number(order.amount_received) || 0;
+      const mode = (order.payment_mode || '').toLowerCase();
+
+      if (mode.includes('cash')) {
+        total_cash += amount;
+      } else {
+        total_digital += amount; // UPI / Online
+      }
+    });
+
+    /* =========================
+       3️⃣ CREDIT ORDERS (optional)
+       ========================= */
     const creditResult = await pool.query(
       `
-      SELECT COUNT(*) 
-      FROM sales_orders
+      SELECT COUNT(*)
+      FROM orders
       WHERE deliveryboy_id = $1
-        AND payment_collected = false
+        AND payment_status = 'Pending'
       `,
       [deliveryBoyId]
     );
 
+    /* =========================
+       RESPONSE
+       ========================= */
     res.json({
       success: true,
+      date,
+      deliveryBoyId,
+
       total_cash,
       total_digital,
+
       credit_orders: Number(creditResult.rows[0].count),
+
+      sales_orders: salesOrders,
       orders
     });
 
   } catch (err) {
     console.error("Error fetching collections:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 });
+
 
 
 
