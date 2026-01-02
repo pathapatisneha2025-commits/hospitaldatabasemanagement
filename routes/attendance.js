@@ -237,98 +237,123 @@ router.post("/mark-attendance", async (req, res) => {
 // ------------------------------------------------------
 // ✅ ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
 // ------------------------------------------------------
-router.get("/export", async (req, res) => { 
-  try {
-    const format = req.query.format || "csv";
+const { Parser } = require("json2csv");
 
+router.get("/export", async (req, res) => {
+  try {
     const query = `
       SELECT
         a.employee_id,
-        e.full_name,
-        a.status AS attendance_status,
-        a.timestamp AS attendance_time,
-        a.session_hours,
-        a.overtime,
-        a.remaining_hours,
-        a.daily_hours,
-        a.weekly_hours,
-        a.monthly_hours,
-
+        e.full_name AS name,
+        a.status,
+        a.timestamp,
         bl.break_type,
-        bl.status AS break_status,
         bl.timestamp AS break_time
-
       FROM attendance a
       LEFT JOIN employees e ON e.id = a.employee_id
-      LEFT JOIN break_logs bl ON bl.employee_id = a.employee_id
+      LEFT JOIN break_logs bl
+        ON bl.employee_id = a.employee_id
         AND DATE(bl.timestamp) = DATE(a.timestamp)
-
-      ORDER BY a.employee_id, a.timestamp, bl.timestamp;
+      ORDER BY a.employee_id, a.timestamp;
     `;
 
-    const result = await pool.query(query);
+    const { rows } = await pool.query(query);
 
-    if (result.rows.length === 0) {
+    if (!rows.length) {
       return res.status(404).json({
         success: false,
         message: "No attendance records found",
       });
     }
 
-    const rows = result.rows.map((r) => ({
-      employee_id: r.employee_id,
-      name: r.full_name,
-      attendance_status: r.attendance_status,
-      attendance_time: r.attendance_time,
-      session_hours: r.session_hours,
-      overtime: r.overtime,
-      remaining_hours: r.remaining_hours,
-      daily_hours: r.daily_hours,
-      weekly_hours: r.weekly_hours,
-      monthly_hours: r.monthly_hours,
-      break_type: r.break_type || "-",
-      break_status: r.break_status || "-",
-      break_time: r.break_time || "-",
+    // -------- MERGE LIKE FRONTEND --------
+    const map = {};
+
+    rows.forEach((r) => {
+      const dateKey = new Date(r.timestamp).toISOString().split("T")[0];
+      const key = `${r.employee_id}-${dateKey}`;
+
+      if (!map[key]) {
+        map[key] = {
+          name: r.name,
+          date: new Date(r.timestamp).toLocaleDateString(),
+          check_in: "--",
+          logout: "--",
+          total_hours: "--",
+          break_status: "--",
+          checkInFull: null,
+          logoutFull: null,
+        };
+      }
+
+      if (r.status === "On Duty") {
+        map[key].check_in = new Date(r.timestamp).toLocaleTimeString();
+        map[key].checkInFull = r.timestamp;
+      }
+
+      if (r.status === "Off Duty") {
+        map[key].logout = new Date(r.timestamp).toLocaleTimeString();
+        map[key].logoutFull = r.timestamp;
+      }
+
+      if (r.break_type) {
+        map[key].break_status =
+          r.break_type === "Break In" ? "On Break" : "Returned";
+      }
+    });
+
+    // -------- CALCULATE TOTAL HOURS --------
+    const calculateHours = (inTime, outTime) => {
+      if (!inTime || !outTime) return "--";
+
+      const start = new Date(inTime);
+      const end = new Date(outTime);
+      if (end <= start) return "--";
+
+      const diff = end - start;
+      const hrs = Math.floor(diff / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+      return `${hrs}h ${mins}m`;
+    };
+
+    const exportRows = Object.values(map).map((r) => ({
+      name: r.name,
+      status: r.logoutFull ? "Off Duty" : "On Duty",
+      break_status: r.break_status,
+      check_in: r.check_in,
+      logout: r.logout,
+      total_hours: calculateHours(r.checkInFull, r.logoutFull),
+      date: r.date,
     }));
 
-    // ------------------------------------------------------
-    // CSV EXPORT (Same Format You Requested)
-    // ------------------------------------------------------
-    if (format === "csv") {
-      const fields = [
-        { label: "Employee ID", value: "employee_id" },
-        { label: "Name", value: "name" },
-        { label: "Attendance Status", value: "attendance_status" },
-        { label: "Attendance Time", value: "attendance_time" },
-        { label: "Session Hours", value: "session_hours" },
-        { label: "Overtime", value: "overtime" },
-        { label: "Remaining Hours", value: "remaining_hours" },
-        { label: "Daily Hours", value: "daily_hours" },
-        { label: "Weekly Hours", value: "weekly_hours" },
-        { label: "Monthly Hours", value: "monthly_hours" },
+    // -------- CSV FIELDS (MATCH TABLE) --------
+    const fields = [
+      { label: "Name", value: "name" },
+      { label: "Status", value: "status" },
+      { label: "Break Status", value: "break_status" },
+      { label: "Check-In", value: "check_in" },
+      { label: "Logout", value: "logout" },
+      { label: "Total Hours", value: "total_hours" },
+      { label: "Date", value: "date" },
+    ];
 
-        // Break logs
-        { label: "Break Type", value: "break_type" },
-        { label: "Break Status", value: "break_status" },
-        { label: "Break Time", value: "break_time" },
-      ];
+    const parser = new Parser({ fields });
+    const csv = parser.parse(exportRows);
 
-      const parser = new Parser({ fields });
-      const csv = parser.parse(rows);
-
-      const fileName = `attendance_${Date.now()}.csv`;
-
-      res.header("Content-Type", "text/csv");
-      res.attachment(fileName);
-
-      return res.send(csv);
-    }
+    res.header("Content-Type", "text/csv");
+    res.attachment(`attendance_${Date.now()}.csv`);
+    res.send(csv);
 
   } catch (error) {
     console.error("Export Error:", error);
-    res.status(500).json({ success: false, message: "Export failed" });
+    res.status(500).json({
+      success: false,
+      message: "Export failed",
+    });
   }
 });
+
 
 
 
