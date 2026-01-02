@@ -241,7 +241,7 @@ router.get("/export", async (req, res) => {
   try {
     const format = req.query.format || "csv";
 
-    // Query attendance with associated break logs
+    // Query attendance with aggregated break logs
     const query = `
       SELECT
         a.employee_id,
@@ -249,15 +249,16 @@ router.get("/export", async (req, res) => {
         a.status AS attendance_status,
         a.timestamp AS attendance_time,
         a.session_hours,
-        bl.break_type,
-        bl.status AS break_status,
-        bl.timestamp AS break_time
+        COALESCE(STRING_AGG(bl.break_type, ', ' ORDER BY bl.timestamp), '-') AS break_types,
+        COALESCE(STRING_AGG(bl.status, ', ' ORDER BY bl.timestamp), '-') AS break_statuses,
+        COALESCE(STRING_AGG(bl.timestamp::text, ', ' ORDER BY bl.timestamp), '-') AS break_times
       FROM attendance a
       LEFT JOIN employees e ON e.id = a.employee_id
       LEFT JOIN break_logs bl 
         ON bl.employee_id = a.employee_id
         AND DATE(bl.timestamp) = DATE(a.timestamp)
-      ORDER BY a.employee_id, a.timestamp, bl.timestamp;
+      GROUP BY a.employee_id, e.full_name, a.status, a.timestamp, a.session_hours
+      ORDER BY a.employee_id, a.timestamp;
     `;
 
     const result = await pool.query(query);
@@ -275,13 +276,12 @@ router.get("/export", async (req, res) => {
       name: r.full_name,
       attendance_status: r.attendance_status,
       attendance_time: r.attendance_time,
-      total_hours: r.session_hours || 0, // renamed field
-      break_type: r.break_type || "-",
-      break_status: r.break_status || "-",
-      break_time: r.break_time || "-",
+      total_hours: r.session_hours || 0,
+      break_types: r.break_types,
+      break_statuses: r.break_statuses,
+      break_times: r.break_times,
     }));
 
-    // CSV export
     if (format === "csv") {
       const fields = [
         { label: "Employee ID", value: "employee_id" },
@@ -289,16 +289,15 @@ router.get("/export", async (req, res) => {
         { label: "Attendance Status", value: "attendance_status" },
         { label: "Attendance Time", value: "attendance_time" },
         { label: "Total Hours", value: "total_hours" },
-        { label: "Break Type", value: "break_type" },
-        { label: "Break Status", value: "break_status" },
-        { label: "Break Time", value: "break_time" },
+        { label: "Break Types", value: "break_types" },
+        { label: "Break Statuses", value: "break_statuses" },
+        { label: "Break Times", value: "break_times" },
       ];
 
       const parser = new Parser({ fields });
       const csv = parser.parse(rows);
 
       const fileName = `attendance_${Date.now()}.csv`;
-
       res.header("Content-Type", "text/csv");
       res.attachment(fileName);
       return res.send(csv);
@@ -308,7 +307,6 @@ router.get("/export", async (req, res) => {
       success: false,
       message: "Unsupported export format. Only 'csv' is supported.",
     });
-
   } catch (error) {
     console.error("Export Error:", error);
     res.status(500).json({ success: false, message: "Export failed" });
