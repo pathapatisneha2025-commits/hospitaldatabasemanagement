@@ -267,34 +267,17 @@ router.get("/export", async (req, res) => {
       });
     }
 
-    // ================= IST HELPERS =================
-    const IST = "Asia/Kolkata";
-
-    const istDateKey = (ts) =>
-      new Date(ts).toLocaleDateString("en-CA", { timeZone: IST }); // YYYY-MM-DD
-
-    const istDate = (ts) =>
-      new Date(ts).toLocaleDateString("en-IN", { timeZone: IST });
-
-    const istTime = (ts) =>
-      new Date(ts).toLocaleTimeString("en-IN", {
-        timeZone: IST,
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
-
     // ================= MERGE RECORDS =================
     const map = {};
 
     rows.forEach((r) => {
-      const dateKey = istDateKey(r.timestamp);
+      const dateKey = r.timestamp.toISOString().split("T")[0]; // YYYY-MM-DD
       const key = `${r.employee_id}-${dateKey}`;
 
       if (!map[key]) {
         map[key] = {
           name: r.name,
-          date: istDate(r.timestamp),
+          date: dateKey, // already IST in DB
           check_in: "--",
           logout: "--",
           break_status: "--",
@@ -304,13 +287,13 @@ router.get("/export", async (req, res) => {
       }
 
       if (r.status === "On Duty") {
-        map[key].check_in = istTime(r.timestamp);
-        map[key].checkInFull = r.timestamp; // keep UTC for calculation
+        map[key].check_in = r.timestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+        map[key].checkInFull = r.timestamp;
       }
 
       if (r.status === "Off Duty") {
-        map[key].logout = istTime(r.timestamp);
-        map[key].logoutFull = r.timestamp; // keep UTC for calculation
+        map[key].logout = r.timestamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+        map[key].logoutFull = r.timestamp;
       }
 
       if (r.break_type) {
@@ -322,13 +305,10 @@ router.get("/export", async (req, res) => {
     // ================= TOTAL HOURS =================
     const calculateHours = (inTime, outTime) => {
       if (!inTime || !outTime) return "--";
-
       const diff = new Date(outTime) - new Date(inTime);
       if (diff <= 0) return "--";
-
       const hrs = Math.floor(diff / (1000 * 60 * 60));
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
       return `${hrs}h ${mins}m`;
     };
 
@@ -368,6 +348,7 @@ router.get("/export", async (req, res) => {
     });
   }
 });
+
 
 
 
