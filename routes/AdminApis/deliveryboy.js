@@ -573,6 +573,28 @@ router.post(
   }
 );
 
+// GET all cash handovers (Admin)
+router.get('/handover/all', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM cash_handovers
+      ORDER BY date DESC, created_at DESC
+      `
+    );
+
+    res.json({
+      success: true,
+      count: result.rowCount,
+      handovers: result.rows
+    });
+
+  } catch (err) {
+    console.error("Fetch all handovers error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 
 
