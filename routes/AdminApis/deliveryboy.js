@@ -400,7 +400,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     let total_digital = 0;
 
     /* ======================================================
-       1️⃣ SALES ORDERS (Already working – keep as-is)
+       1️⃣ SALES ORDERS (unchanged – already correct)
     ====================================================== */
 
     const salesResult = await pool.query(
@@ -443,7 +443,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     });
 
     /* ======================================================
-       2️⃣ MEDICINE ORDERS COLLECTIONS
+       2️⃣ MEDICINE ORDERS (FIXED – split-safe)
     ====================================================== */
 
     const ordersResult = await pool.query(
@@ -458,20 +458,38 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     );
 
     ordersResult.rows.forEach(order => {
-      const amount = Number(order.amount_received) || 0;
       if (!order.payment_mode) return;
 
-      const mode = order.payment_mode.toLowerCase();
+      const rawMode = order.payment_mode;
+      const mode = rawMode.toLowerCase();
 
-      if (mode.includes('cash')) {
-        total_cash += amount;
-      } else {
-        total_digital += amount; // UPI / Online
+      // ✅ SPLIT PAYMENTS (Cash:500, UPI:500)
+      if (mode.includes(':')) {
+        rawMode.split(',').forEach(part => {
+          const [type, val] = part.split(':');
+          const amt = Number(val) || 0;
+
+          if (type.toLowerCase().includes('cash')) {
+            total_cash += amt;
+          } else {
+            total_digital += amt;
+          }
+        });
+        return;
       }
+
+      // ✅ CASH ONLY
+      if (mode.includes('cash')) {
+        total_cash += Number(order.amount_received) || 0;
+        return;
+      }
+
+      // ✅ DIGITAL ONLY (UPI / Card / Online)
+      total_digital += Number(order.amount_received) || 0;
     });
 
     /* ======================================================
-       3️⃣ CREDIT ORDERS (unpaid)
+       3️⃣ CREDIT ORDERS
     ====================================================== */
 
     const creditResult = await pool.query(
@@ -500,6 +518,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     });
   }
 });
+
 
 
 // 2️⃣ Submit cash handover
