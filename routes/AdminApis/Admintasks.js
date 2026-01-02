@@ -2,6 +2,37 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db"); 
 
+// -------------------- HELPER: Generate Recurring Dates --------------------
+function getRecurringDates(startDate, endDate, recurringType) {
+  const dates = [];
+  let current = new Date(startDate);
+
+  while (current <= new Date(endDate)) {
+    dates.push(new Date(current)); // copy date
+
+    switch (recurringType) {
+      case "Daily":
+        current.setDate(current.getDate() + 1);
+        break;
+      case "Weekly":
+        current.setDate(current.getDate() + 7);
+        break;
+      case "Monthly":
+        current.setMonth(current.getMonth() + 1);
+        break;
+      case "Yearly":
+        current.setFullYear(current.getFullYear() + 1);
+        break;
+      default:
+        // Not recurring → only one date
+        current = new Date(endDate.getTime() + 1); // break loop
+        break;
+    }
+  }
+
+  return dates;
+}
+
 // -------------------- ADD TASK --------------------
 router.post("/add", async (req, res) => {
   try {
@@ -9,18 +40,18 @@ router.post("/add", async (req, res) => {
       title,
       startDate,
       endDate,
-      assignedTo, 
+      assignedTo,
       priority,
       attachment,
       description,
       recurringType = "Not Recurring",
-      status = "Pending"   // ✅ Default status added
+      status = "Pending",
     } = req.body;
 
     if (!title || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: "Title, StartDate, and EndDate are required"
+        message: "Title, StartDate, and EndDate are required",
       });
     }
 
@@ -30,52 +61,57 @@ router.post("/add", async (req, res) => {
       const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
       const employeeQuery = `SELECT id, email FROM employees WHERE email IN (${placeholders})`;
       const employeeResult = await pool.query(employeeQuery, assignedTo);
-      
-      employeeIds = employeeResult.rows.map(row => row.id);
+      employeeIds = employeeResult.rows.map((row) => row.id);
 
       if (employeeIds.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "No valid employees found for assigned emails"
+          message: "No valid employees found for assigned emails",
         });
       }
     }
 
-    // 2️⃣ Insert task with status
-    const query = `
-      INSERT INTO Admintasks
-      (Title, StartDate, DueDate, AssignedTo, EmployeeIDs, Priority, Attachment, Description, RecurringType, Status)
-      VALUES ($1, $2, $3, $4::text[], $5::int[], $6, $7, $8, $9, $10)
-      RETURNING *;
-    `;
+    // 2️⃣ Generate recurring dates
+    const dates = getRecurringDates(startDate, endDate, recurringType);
 
-    const values = [
-      title,
-      startDate,
-      endDate,
-      Array.isArray(assignedTo) ? assignedTo : null,
-      employeeIds.length ? employeeIds : null,
-      priority || null,
-      attachment || null,
-      description || null,
-      recurringType,
-      status                   // ✅ inserted
-    ];
+    // 3️⃣ Insert one task per date
+    const insertedTasks = [];
+    for (let date of dates) {
+      const query = `
+        INSERT INTO Admintasks
+        (Title, StartDate, DueDate, AssignedTo, EmployeeIDs, Priority, Attachment, Description, RecurringType, Status)
+        VALUES ($1, $2, $3, $4::text[], $5::int[], $6, $7, $8, $9, $10)
+        RETURNING *;
+      `;
 
-    const result = await pool.query(query, values);
+      const values = [
+        title,
+        date, // StartDate for this occurrence
+        endDate,
+        Array.isArray(assignedTo) ? assignedTo : null,
+        employeeIds.length ? employeeIds : null,
+        priority || null,
+        attachment || null,
+        description || null,
+        recurringType,
+        status,
+      ];
+
+      const result = await pool.query(query, values);
+      insertedTasks.push(result.rows[0]);
+    }
 
     return res.status(201).json({
       success: true,
-      message: "Task created successfully",
-      data: result.rows[0]
+      message: "Task(s) created successfully",
+      data: insertedTasks,
     });
-
   } catch (error) {
     console.error("Error creating task:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message
+      error: error.message,
     });
   }
 });
