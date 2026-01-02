@@ -238,6 +238,7 @@ router.post("/mark-attendance", async (req, res) => {
 // ✅ ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
 // ------------------------------------------------------
 
+
 router.get("/export", async (req, res) => {
   try {
     const query = `
@@ -265,20 +266,36 @@ router.get("/export", async (req, res) => {
       });
     }
 
-    // -------- MERGE LIKE FRONTEND --------
+    // ================= TIMEZONE HELPERS =================
+    const IST = "Asia/Kolkata";
+
+    const istDateKey = (ts) =>
+      new Date(ts).toLocaleDateString("en-CA", { timeZone: IST }); // YYYY-MM-DD
+
+    const istDate = (ts) =>
+      new Date(ts).toLocaleDateString("en-IN", { timeZone: IST });
+
+    const istTime = (ts) =>
+      new Date(ts).toLocaleTimeString("en-IN", {
+        timeZone: IST,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+    // ================= MERGE RECORDS =================
     const map = {};
 
     rows.forEach((r) => {
-      const dateKey = new Date(r.timestamp).toISOString().split("T")[0];
+      const dateKey = istDateKey(r.timestamp);
       const key = `${r.employee_id}-${dateKey}`;
 
       if (!map[key]) {
         map[key] = {
           name: r.name,
-          date: new Date(r.timestamp).toLocaleDateString(),
+          date: istDate(r.timestamp),
           check_in: "--",
           logout: "--",
-          total_hours: "--",
           break_status: "--",
           checkInFull: null,
           logoutFull: null,
@@ -286,13 +303,13 @@ router.get("/export", async (req, res) => {
       }
 
       if (r.status === "On Duty") {
-        map[key].check_in = new Date(r.timestamp).toLocaleTimeString();
-        map[key].checkInFull = r.timestamp;
+        map[key].check_in = istTime(r.timestamp);
+        map[key].checkInFull = r.timestamp; // keep UTC
       }
 
       if (r.status === "Off Duty") {
-        map[key].logout = new Date(r.timestamp).toLocaleTimeString();
-        map[key].logoutFull = r.timestamp;
+        map[key].logout = istTime(r.timestamp);
+        map[key].logoutFull = r.timestamp; // keep UTC
       }
 
       if (r.break_type) {
@@ -301,15 +318,13 @@ router.get("/export", async (req, res) => {
       }
     });
 
-    // -------- CALCULATE TOTAL HOURS --------
+    // ================= TOTAL HOURS =================
     const calculateHours = (inTime, outTime) => {
       if (!inTime || !outTime) return "--";
 
-      const start = new Date(inTime);
-      const end = new Date(outTime);
-      if (end <= start) return "--";
+      const diff = new Date(outTime) - new Date(inTime);
+      if (diff <= 0) return "--";
 
-      const diff = end - start;
       const hrs = Math.floor(diff / (1000 * 60 * 60));
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
@@ -326,7 +341,7 @@ router.get("/export", async (req, res) => {
       date: r.date,
     }));
 
-    // -------- CSV FIELDS (MATCH TABLE) --------
+    // ================= CSV FIELDS =================
     const fields = [
       { label: "Name", value: "name" },
       { label: "Status", value: "status" },
