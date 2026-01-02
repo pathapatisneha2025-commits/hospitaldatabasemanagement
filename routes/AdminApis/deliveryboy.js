@@ -624,6 +624,32 @@ router.get('/:deliveryBoyId/handover', async (req, res) => {
   }
 });
 
+// GET all handovers for a delivery boy
+router.get('/:deliveryBoyId/handover/all', async (req, res) => {
+  const { deliveryBoyId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM cash_handovers
+      WHERE deliveryboy_id = $1
+      ORDER BY date DESC, created_at DESC
+      `,
+      [deliveryBoyId]
+    );
+
+    res.json({
+      success: true,
+      count: result.rowCount,
+      handovers: result.rows
+    });
+
+  } catch (err) {
+    console.error("Fetch deliveryboy handovers error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 
 module.exports = router;
