@@ -237,7 +237,6 @@ router.post("/mark-attendance", async (req, res) => {
 // ------------------------------------------------------
 // ✅ ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
 // ------------------------------------------------------
-const { Parser } = require("json2csv");
 
 router.get("/export", async (req, res) => {
   try {
