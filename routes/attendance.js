@@ -239,6 +239,7 @@ router.post("/mark-attendance", async (req, res) => {
 // ------------------------------------------------------
 
 
+
 router.get("/export", async (req, res) => {
   try {
     const query = `
@@ -266,7 +267,7 @@ router.get("/export", async (req, res) => {
       });
     }
 
-    // ================= TIMEZONE HELPERS =================
+    // ================= IST HELPERS =================
     const IST = "Asia/Kolkata";
 
     const istDateKey = (ts) =>
@@ -304,12 +305,12 @@ router.get("/export", async (req, res) => {
 
       if (r.status === "On Duty") {
         map[key].check_in = istTime(r.timestamp);
-        map[key].checkInFull = r.timestamp; // keep UTC
+        map[key].checkInFull = r.timestamp; // keep UTC for calculation
       }
 
       if (r.status === "Off Duty") {
         map[key].logout = istTime(r.timestamp);
-        map[key].logoutFull = r.timestamp; // keep UTC
+        map[key].logoutFull = r.timestamp; // keep UTC for calculation
       }
 
       if (r.break_type) {
@@ -367,6 +368,7 @@ router.get("/export", async (req, res) => {
     });
   }
 });
+
 
 
 
