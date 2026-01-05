@@ -35,10 +35,14 @@ router.post("/add", async (req, res) => {
 
 
 // ✅ UPDATE department limit
-router.put("/update", async (req, res) => {
+router.put("/update/:department", async (req, res) => {
   try {
-    const { department } = req.params;
+    const { department } = req.params; // now correctly reads from URL
     const { maxLeavesPerDay } = req.body;
+
+    if (!maxLeavesPerDay && maxLeavesPerDay !== 0) {
+      return res.status(400).json({ message: "maxLeavesPerDay is required" });
+    }
 
     const query = `
       UPDATE departments_leave_limit
@@ -47,10 +51,7 @@ router.put("/update", async (req, res) => {
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [
-      maxLeavesPerDay,
-      department,
-    ]);
+    const result = await pool.query(query, [maxLeavesPerDay, department]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: "Department not found" });
@@ -62,6 +63,7 @@ router.put("/update", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 // ✅ DELETE department limit
