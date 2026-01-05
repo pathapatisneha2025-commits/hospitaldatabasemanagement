@@ -54,6 +54,7 @@ const DoctorConsultanceFees = require("./routes/doctorconsultancefees");
 const SalaryDeductions = require("./routes/salarydeductions"); 
 const EmployeeDeductions = require("./routes/employeedeductions"); 
 const Pickersapis = require("./routes/AdminApis/pickerapis"); 
+const Deptleavelimit = require("./routes/leavelimitdepartment"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 
@@ -119,6 +120,8 @@ app.use("/doctorconsultancefee",DoctorConsultanceFees);
 app.use("/salarydeduction",SalaryDeductions); 
 app.use("/employeededuction",EmployeeDeductions); 
 app.use("/picker",Pickersapis); 
+app.use("/leavelimit",Deptleavelimit); 
+
 
 
 app.use("/cron", cronRoutes);
