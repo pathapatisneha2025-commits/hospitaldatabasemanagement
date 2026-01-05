@@ -6,13 +6,13 @@ const pool = require("../db"); // PostgreSQL pool connection
 // Create new task
 router.post("/add", async (req, res) => {
   try {
-    const { title, description, assignto, priority, due_date, due_time } = req.body;
+    const { title, description, assignto, priority, due_date, due_time, created_by } = req.body;
 
-    if (!title || !assignto || !priority || !due_date || !due_time) {
+    // Validation
+    if (!title || !assignto || !priority || !due_date || !due_time || !created_by) {
       return res.status(400).json({ error: "Please fill all required fields" });
     }
 
-    
     const assignees = Array.isArray(assignto) ? assignto : [assignto];
 
     // Step 1: Get employee IDs for all emails
@@ -27,11 +27,11 @@ router.post("/add", async (req, res) => {
 
     const employeeIds = employeeResult.rows.map(emp => emp.id);
 
-    // Step 2: Insert task (save emails as array in assignto)
-   const newTask = await pool.query(
+    // Step 2: Insert task with created_by
+    const newTask = await pool.query(
       `INSERT INTO tasks 
-        (title, description, assignto, priority, due_date, due_time, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'Asia/Kolkata')
+        (title, description, assignto, priority, due_date, due_time, status, created_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'Asia/Kolkata', $8)
        RETURNING *`,
       [
         title,
@@ -40,13 +40,14 @@ router.post("/add", async (req, res) => {
         priority,
         due_date,
         due_time,
-        "pending"
+        "pending",
+        created_by, // <-- added created_by
       ]
     );
 
     const task = newTask.rows[0];
 
-    // Step 3: Create notifications for each employee
+    // Step 3: Create notifications for each assignee
     const notifications = [];
     for (const employeeId of employeeIds) {
       const notificationResult = await pool.query(
@@ -81,7 +82,6 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 // ============================
@@ -186,6 +186,39 @@ router.get("/employee/:empId", async (req, res) => {
 
   } catch (err) {
     console.error("Get employee tasks error:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+// GET /tasks/created/:employeeId
+router.get("/created/:employeeId", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    // Optional: check if employee exists
+    const empResult = await pool.query(
+      "SELECT id, full_name, email FROM employees WHERE id = $1",
+      [employeeId]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    // Fetch tasks created by this employee
+    const tasksResult = await pool.query(
+      `SELECT *
+       FROM tasks
+       WHERE created_by = $1
+       ORDER BY created_at DESC`,
+      [employeeId]
+    );
+
+    res.status(200).json({
+      success: true,
+      tasks: tasksResult.rows,
+    });
+  } catch (err) {
+    console.error("Error fetching tasks by creator:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
