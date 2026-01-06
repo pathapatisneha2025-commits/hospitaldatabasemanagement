@@ -9,7 +9,7 @@ router.post("/breaks", async (req, res) => {
   try {
     const {
       employeeId,
-      subadminId, // optional
+      subadminId,
       capturedUrl,
       locationVerified,
       faceVerified,
@@ -17,31 +17,41 @@ router.post("/breaks", async (req, res) => {
     } = req.body;
 
     // ✅ Validate inputs
-    if ((!employeeId && !subadminId) || !capturedUrl || !breakType) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required fields" });
+    if ((!employeeId && !subadminId) || !breakType) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
     }
 
     if (!["Break In", "Break Out"].includes(breakType)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid break type" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid break type",
+      });
     }
 
-    // ✅ Determine status
-    const status =
-      locationVerified && faceVerified
-        ? breakType === "Break In"
-          ? "On Break"
-          : "Returned"
-        : "Rejected";
+    // ✅ Correct status logic
+    let status = "Rejected";
 
-    // ✅ Insert record (only one ID will be filled)
+    if (breakType === "Break In") {
+      if (locationVerified) {
+        status = "On Break";
+      }
+    }
+
+    if (breakType === "Break Out") {
+      if (locationVerified && faceVerified) {
+        status = "Returned";
+      }
+    }
+
+    // ✅ Insert record
     await pool.query(
-      `INSERT INTO break_logs (employee_id, subadmin_id, break_type, timestamp, image_url, status)
+      `INSERT INTO break_logs 
+       (employee_id, subadmin_id, break_type, timestamp, image_url, status)
        VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'Asia/Kolkata'), $4, $5)`,
-      [employeeId || null, subadminId || null, breakType, capturedUrl, status]
+      [employeeId || null, subadminId || null, breakType, capturedUrl || null, status]
     );
 
     return res.json({
@@ -56,9 +66,13 @@ router.post("/breaks", async (req, res) => {
     });
   } catch (error) {
     console.error("Break log error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
+
 
 
 router.get("/employee/all", async (req, res) => {
