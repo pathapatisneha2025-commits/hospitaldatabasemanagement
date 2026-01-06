@@ -6,21 +6,27 @@ const pool = require("../db");
 // ✅ CREATE department limit
 router.post("/add", async (req, res) => {
   try {
-    const { department, maxLeavesPerDay } = req.body;
+    const { department, maxLeavesPerDay, maxBreaksPerDay } = req.body;
 
-    if (!department || maxLeavesPerDay === undefined) {
+    if (
+      !department ||
+      maxLeavesPerDay === undefined ||
+      maxBreaksPerDay === undefined
+    ) {
       return res.status(400).json({ message: "Invalid data" });
     }
 
     const query = `
-      INSERT INTO departments_leave_limit (department, max_leaves_per_day)
-      VALUES ($1, $2)
+      INSERT INTO departments_leave_limit 
+        (department, max_leaves_per_day, max_breaks_per_day)
+      VALUES ($1, $2, $3)
       RETURNING *;
     `;
 
     const result = await pool.query(query, [
       department.trim(),
       maxLeavesPerDay,
+      maxBreaksPerDay,
     ]);
 
     res.json(result.rows[0]);
@@ -34,24 +40,34 @@ router.post("/add", async (req, res) => {
 });
 
 
+
 // ✅ UPDATE department limit
 router.put("/update/:department", async (req, res) => {
   try {
-    const { department } = req.params; // now correctly reads from URL
-    const { maxLeavesPerDay } = req.body;
+    const { department } = req.params;
+    const { maxLeavesPerDay, maxBreaksPerDay } = req.body;
 
-    if (!maxLeavesPerDay && maxLeavesPerDay !== 0) {
-      return res.status(400).json({ message: "maxLeavesPerDay is required" });
+    if (
+      maxLeavesPerDay === undefined &&
+      maxBreaksPerDay === undefined
+    ) {
+      return res.status(400).json({ message: "Nothing to update" });
     }
 
     const query = `
       UPDATE departments_leave_limit
-      SET max_leaves_per_day = $1
-      WHERE department = $2
+      SET 
+        max_leaves_per_day = COALESCE($1, max_leaves_per_day),
+        max_breaks_per_day = COALESCE($2, max_breaks_per_day)
+      WHERE department = $3
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [maxLeavesPerDay, department]);
+    const result = await pool.query(query, [
+      maxLeavesPerDay,
+      maxBreaksPerDay,
+      department,
+    ]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: "Department not found" });
@@ -66,8 +82,9 @@ router.put("/update/:department", async (req, res) => {
 
 
 
+
 // ✅ DELETE department limit
-router.delete("/delete/", async (req, res) => {
+router.delete("/delete/:department", async (req, res) => {
   try {
     const { department } = req.params;
 
@@ -88,6 +105,7 @@ router.delete("/delete/", async (req, res) => {
 });
 
 
+
 // ✅ GET all department limits
 router.get("/all", async (req, res) => {
   try {
@@ -102,6 +120,7 @@ router.get("/all", async (req, res) => {
 });
 
 
+
 // ✅ TODAY STATUS (Admin Dashboard)
 router.get("/today-status", async (req, res) => {
   try {
@@ -109,12 +128,26 @@ router.get("/today-status", async (req, res) => {
       SELECT
         d.department,
         d.max_leaves_per_day,
-        COUNT(l.id) FILTER (WHERE l.status='APPROVED') AS taken
+        d.max_breaks_per_day,
+
+        COUNT(l.id) FILTER (WHERE l.status='APPROVED') AS leaves_taken,
+        COUNT(b.id) FILTER (WHERE b.status='APPROVED') AS breaks_taken
+
       FROM departments_leave_limit d
+
       LEFT JOIN leaves l
         ON d.department = l.department
-        AND l.leave_date = CURRENT_DATE
-      GROUP BY d.department, d.max_leaves_per_day
+        AND l.start_date::date = CURRENT_DATE
+
+      LEFT JOIN breaks b
+        ON d.department = b.department
+        AND b.break_date::date = CURRENT_DATE
+
+      GROUP BY 
+        d.department, 
+        d.max_leaves_per_day,
+        d.max_breaks_per_day
+
       ORDER BY d.department;
     `;
 
@@ -122,9 +155,14 @@ router.get("/today-status", async (req, res) => {
 
     const data = result.rows.map(r => ({
       department: r.department,
+
       maxLeavesPerDay: r.max_leaves_per_day,
-      taken: Number(r.taken),
-      remaining: r.max_leaves_per_day - Number(r.taken),
+      leavesTaken: Number(r.leaves_taken),
+      leavesRemaining: r.max_leaves_per_day - Number(r.leaves_taken),
+
+      maxBreaksPerDay: r.max_breaks_per_day,
+      breaksTaken: Number(r.breaks_taken),
+      breaksRemaining: r.max_breaks_per_day - Number(r.breaks_taken),
     }));
 
     res.json(data);
@@ -133,5 +171,6 @@ router.get("/today-status", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 module.exports = router;
