@@ -98,14 +98,15 @@ router.get("/all", async (req, res) => {
     `);
 
     // Step 2: Fetch all tasks with created_by name
-    const tasks = await pool.query(`
-      SELECT 
-        t.*,
-        e_created.full_name AS created_by_name
-      FROM tasks t
-      LEFT JOIN employees e_created ON e_created.id = t.created_by
-      ORDER BY t.due_date ASC, t.due_time ASC
-    `);
+   const tasks = await pool.query(`
+  SELECT 
+    t.*,
+    e_created.full_name AS created_by_name
+  FROM tasks t
+  LEFT JOIN employees e_created ON e_created.id::text = t.created_by
+  ORDER BY t.due_date ASC, t.due_time ASC
+`);
+
 
     // Step 3: Map assignto array IDs to full_names
     const formatted = await Promise.all(
