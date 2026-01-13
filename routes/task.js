@@ -97,32 +97,32 @@ router.get("/all", async (req, res) => {
       AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
     `);
 
-    // Step 2: Fetch all tasks with created_by name
-   const tasks = await pool.query(`
-  SELECT 
-    t.*,
-    e_created.full_name AS created_by_name
-  FROM tasks t
-  LEFT JOIN employees e_created ON e_created.id::text = t.created_by
-  ORDER BY t.due_date ASC, t.due_time ASC
-`);
+    // Step 2: Fetch all tasks with created_by employee full_name
+    const tasks = await pool.query(`
+      SELECT 
+        t.*,
+        e_created.full_name AS created_by_name
+      FROM tasks t
+      LEFT JOIN employees e_created ON e_created.id = t.created_by
+      ORDER BY t.due_date ASC, t.due_time ASC
+    `);
 
-
-    // Step 3: Map assignto array IDs to full_names
+    // Step 3: Map assignto array emails to full_names
     const formatted = await Promise.all(
       tasks.rows.map(async (task) => {
         let assigneeNames = [];
         if (task.assignto && task.assignto.length > 0) {
           const assignees = await pool.query(
-            `SELECT full_name FROM employees WHERE id = ANY($1)`,
+            `SELECT full_name FROM employees WHERE email = ANY($1)`,
             [task.assignto]
           );
           assigneeNames = assignees.rows.map(a => a.full_name);
         }
+
         return {
           ...task,
           due_date: task.due_date ? task.due_date.toISOString().split("T")[0] : null,
-          created_by: task.created_by_name || null,
+          created_by: task.created_by_name || null,  // employee name
           assignees: assigneeNames
         };
       })
