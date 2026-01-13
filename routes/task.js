@@ -89,7 +89,7 @@ router.post("/add", async (req, res) => {
 // ============================
 router.get("/all", async (req, res) => {
   try {
-    // Step 1: Update overdue tasks (for all employees)
+    // Step 1: Update overdue tasks
     await pool.query(`
       UPDATE tasks
       SET status = 'overdue'
@@ -97,21 +97,37 @@ router.get("/all", async (req, res) => {
       AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
     `);
 
-    // Step 2: Fetch all tasks (join properly on assignto array)
-    const tasks = await pool.query(
-      `SELECT t.*
-       FROM tasks t
-       LEFT JOIN employees e ON e.email = ANY(t.assignto)
-       ORDER BY t.due_date ASC, t.due_time ASC`
+    // Step 2: Fetch all tasks with created_by name
+    const tasks = await pool.query(`
+      SELECT 
+        t.*,
+        e_created.full_name AS created_by_name
+      FROM tasks t
+      LEFT JOIN employees e_created ON e_created.id = t.created_by
+      ORDER BY t.due_date ASC, t.due_time ASC
+    `);
+
+    // Step 3: Map assignto array IDs to full_names
+    const formatted = await Promise.all(
+      tasks.rows.map(async (task) => {
+        let assigneeNames = [];
+        if (task.assignto && task.assignto.length > 0) {
+          const assignees = await pool.query(
+            `SELECT full_name FROM employees WHERE id = ANY($1)`,
+            [task.assignto]
+          );
+          assigneeNames = assignees.rows.map(a => a.full_name);
+        }
+        return {
+          ...task,
+          due_date: task.due_date ? task.due_date.toISOString().split("T")[0] : null,
+          created_by: task.created_by_name || null,
+          assignees: assigneeNames
+        };
+      })
     );
 
-    // Step 3: Format date (keep only YYYY-MM-DD)
-    const formatted = tasks.rows.map(task => ({
-      ...task,
-      due_date: task.due_date ? task.due_date.toISOString().split("T")[0] : null
-    }));
-
-    // Step 4: Return only tasks
+    // Step 4: Return tasks
     res.status(200).json({
       success: true,
       count: formatted.length,
@@ -123,7 +139,6 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 
