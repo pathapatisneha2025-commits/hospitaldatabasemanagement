@@ -532,6 +532,31 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
   }
 });
 
+router.put('/pending-update/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query(
+      "UPDATE employees SET pending_approve_update='pending' WHERE id=$1",
+      [id]
+    );
+    res.json({ success: true, message: "Update request pending approval" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.put('/approve-update/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query(
+      "UPDATE employees SET pending_approve_update='approved' WHERE id=$1",
+      [id]
+    );
+    res.json({ success: true, message: "Update approved" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 // Delete employee by ID
 router.delete('/delete/:id', async (req, res) => {
