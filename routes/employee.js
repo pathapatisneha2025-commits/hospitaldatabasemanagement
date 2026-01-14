@@ -326,15 +326,21 @@ router.post('/forgot-password', async (req, res) => {
 // Get all employees with pending update
 router.get("/pending_approve_update", async (req, res) => {
   try {
+    // Fetch all employees with pending or approved updates
     const result = await pool.query(
-      "SELECT id, full_name, email, department, role FROM employees WHERE pending_approve_update='pending'"
+      `SELECT id, full_name, email, department, role, pending_approve_update AS status
+       FROM employees
+       WHERE pending_approve_update IN ('pending', 'approved')
+       ORDER BY full_name`
     );
+
     res.json({ success: true, employees: result.rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
