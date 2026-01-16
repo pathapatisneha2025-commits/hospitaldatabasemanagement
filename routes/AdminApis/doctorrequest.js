@@ -35,14 +35,16 @@ router.get("/", async (req, res) => {
 });
 
 // ADD item (Admin/Subadmin) with Cloudinary image upload
-router.post("/add", upload.single("image"), async (req,res)=>{
+router.post("/add", upload.array("images", 5), async (req, res) => {
   try {
     const { name, stock, price, supplier } = req.body;
-    const image_url = req.file?.path || null; // Multer + CloudinaryStorage sets path to the uploaded URL
+
+    // req.files is an array now
+    const imageUrls = req.files?.map(file => file.path) || [];
 
     const dbResult = await pool.query(
-      "INSERT INTO stationaryinventory (name, stock, price, supplier, image_url) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [name, stock || 0, price || 0, supplier || null, image_url]
+      "INSERT INTO stationaryinventory (name, stock, price, supplier, image_urls) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+      [name, stock || 0, price || 0, supplier || null, imageUrls] // make sure image_urls is array type in DB
     );
 
     res.json({ message: "Item added", item: dbResult.rows[0] });
@@ -51,6 +53,7 @@ router.post("/add", upload.single("image"), async (req,res)=>{
     res.status(500).json({ error: "Failed to add item" });
   }
 });
+
 
 // UPDATE item (Admin/Subadmin) with optional new image
 router.put("/update/:id", upload.single("image"), async (req,res)=>{
