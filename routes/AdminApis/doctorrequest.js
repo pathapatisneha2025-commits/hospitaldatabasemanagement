@@ -86,4 +86,88 @@ router.delete("/delete/:id", async (req,res)=>{
   }
 });
 
+
+
+
+/* ============================
+   1️⃣ Submit a request
+============================ */
+router.post("/submitrequest", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { employee_id, department, items } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ message: "No items selected" });
+    }
+
+    const insertQuery = `
+      INSERT INTO inventory_requests (employee_id, department, items)
+      VALUES ($1, $2, $3)
+      RETURNING id, employee_id, department, items, status, created_at
+    `;
+
+    const result = await client.query(insertQuery, [
+      employee_id,
+      department,
+      JSON.stringify(items),
+    ]);
+
+    res.status(201).json({
+      message: "Request submitted",
+      request: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error submitting request:", error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+});
+
+/* ============================
+   2️⃣ Get all requests (Admin)
+============================ */
+router.get("/allrequest", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM inventory_requests ORDER BY created_at DESC"
+    );
+    res.json({ requests: result.rows });
+  } catch (error) {
+    console.error("Error fetching requests:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/* ============================
+   Approve or Reject a request
+============================ */
+router.post("/update-request/:id", async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const { status } = req.body; // expects 'approved' or 'rejected'
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+
+    const result = await pool.query(
+      "UPDATE inventory_requests SET status = $1 WHERE id = $2 RETURNING *",
+      [status, requestId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Request not found" });
+    }
+
+    res.json({ message: `Request ${status}`, request: result.rows[0] });
+  } catch (error) {
+    console.error("Error updating request:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+
 module.exports = router;
