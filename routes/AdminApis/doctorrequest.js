@@ -35,7 +35,7 @@ router.get("/", async (req, res) => {
 });
 
 // ADD item (Admin/Subadmin) with Cloudinary image upload
-router.post("/add", checkRole("admin","subadmin"), upload.single("image"), async (req,res)=>{
+router.post("/add", upload.single("image"), async (req,res)=>{
   try {
     const { name, stock, price, supplier } = req.body;
     const image_url = req.file?.path || null; // Multer + CloudinaryStorage sets path to the uploaded URL
@@ -53,7 +53,7 @@ router.post("/add", checkRole("admin","subadmin"), upload.single("image"), async
 });
 
 // UPDATE item (Admin/Subadmin) with optional new image
-router.put("/update/:id", checkRole("admin","subadmin"), upload.single("image"), async (req,res)=>{
+router.put("/update/:id", upload.single("image"), async (req,res)=>{
   try {
     const { id } = req.params;
     const { name, stock, price, supplier } = req.body;
@@ -72,7 +72,7 @@ router.put("/update/:id", checkRole("admin","subadmin"), upload.single("image"),
 });
 
 // DELETE item (Admin only)
-router.delete("/delete/:id", checkRole("admin"), async (req,res)=>{
+router.delete("/delete/:id", async (req,res)=>{
   try {
     const { id } = req.params;
     const dbResult = await pool.query("DELETE FROM stationaryinventory WHERE id=$1 RETURNING *", [id]);
