@@ -1,213 +1,39 @@
 const express = require("express");
-const db = require("../../db"); // PostgreSQL connection
 const router = express.Router();
+const pool = require("../db");
 
-/* ===========================
-   CREATE NEW DOCTOR REQUEST
-=========================== */
-router.post("/add", async (req, res) => {
-  try {
-    const { name, department, query_reason, email } = req.body;
-
-    if (!name || !department || !query_reason || !email) {
-      return res.status(400).json({ message: "All fields are required including email" });
-    }
-
-    // 1. Fetch employee by email
-    const employeeResult = await db.query(
-      `SELECT id FROM employees WHERE email = $1`,
-      [email]
-    );
-
-    if (employeeResult.rows.length === 0) {
-      return res.status(404).json({ message: "Employee not found for this email" });
-    }
-
-    const employeeId = employeeResult.rows[0].id;
-
-    // 2. Insert doctor request with employee_id
-    const result = await db.query(
-      `INSERT INTO doctor_requests (employee_id, name, department, query_reason, status)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [employeeId, name, department, query_reason, "pending"]
-    );
-
-    res.status(201).json({
-      message: "Doctor request submitted",
-      data: result.rows[0],
-    });
-
-  } catch (err) {
-    console.error("Error creating request:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+// GET all items (employee can view)
+router.get("/", async (req, res) => {
+  const result = await pool.query("SELECT * FROM stationaryinventory ORDER BY id");
+  res.json({ items: result.rows });
 });
 
-
-/* ===========================
-   GET ALL REQUESTS
-=========================== */
-router.get("/all", async (req, res) => {
-  try {
-    const result = await db.query(
-      "SELECT * FROM doctor_requests ORDER BY created_at DESC"
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Error fetching requests:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+// ADD item (Admin/Subadmin)
+router.post("/add", checkRole("admin","subadmin"), async (req,res)=>{
+  const {name, stock, price, supplier, image_url} = req.body;
+  const result = await pool.query(
+    "INSERT INTO stationaryinventory (name, stock, price, supplier, image_url) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+    [name, stock||0, price||0, supplier||null, image_url||null]
+  );
+  res.json({message:"Item added", item: result.rows[0]});
 });
 
-
-/* ===========================
-   🔥 GET ALL REQUESTS BY EMPLOYEE ID
-=========================== */
-router.get("/employee/:employee_id", async (req, res) => {
-  try {
-    const { employee_id } = req.params;
-
-    const result = await db.query(
-      `SELECT * FROM doctor_requests 
-       WHERE employee_id = $1
-       ORDER BY created_at DESC`,
-      [employee_id]
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Error fetching requests by employee_id:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+// UPDATE item (Admin/Subadmin)
+router.put("/update/:id", checkRole("admin","subadmin"), async (req,res)=>{
+  const {id} = req.params;
+  const {name, stock, price, supplier, image_url} = req.body;
+  const result = await pool.query(
+    "UPDATE stationaryinventory SET name=$1, stock=$2, price=$3, supplier=$4, image_url=$5 WHERE id=$6 RETURNING *",
+    [name, stock, price, supplier, image_url, id]
+  );
+  res.json({message:"Item updated", item: result.rows[0]});
 });
 
-
-/* ===========================
-   GET REQUEST BY ID
-=========================== */
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await db.query(
-      "SELECT * FROM doctor_requests WHERE id = $1",
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Request not found" });
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("Error fetching request by ID:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-
-/* ===========================
-   UPDATE REQUEST DETAILS
-=========================== */
-router.put("/update/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, department, query_reason } = req.body;
-
-    // Check existing request
-    const existing = await db.query(
-      "SELECT * FROM doctor_requests WHERE id = $1",
-      [id]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ message: "Request not found" });
-    }
-
-    const old = existing.rows[0];
-
-    // Update with fallback to existing values
-    const updated = await db.query(
-      `UPDATE doctor_requests
-       SET name = $1,
-           email = $2,
-           department = $3,
-           query_reason = $4
-       WHERE id = $5
-       RETURNING *`,
-      [
-        name || old.name,
-        email || old.email,
-        department || old.department,
-        query_reason || old.query_reason,
-        id,
-      ]
-    );
-
-    res.json({
-      success: true,
-      message: "Request updated successfully",
-      data: updated.rows[0],
-    });
-  } catch (err) {
-    console.error("Error updating request:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-
-/* ===========================
-   UPDATE STATUS (Admin Only)
-=========================== */
-router.put("/status", async (req, res) => {
-  try {
-    const { id, status, count } = req.body;
-
-    if (!["pending", "complete", "rejected"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status value" });
-    }
-
-    const updated = await db.query(
-      "UPDATE doctor_requests SET status = $1, count = $2 WHERE id = $3 RETURNING *",
-      [status, count, id]
-    );
-
-    if (updated.rows.length === 0) {
-      return res.status(404).json({ message: "Request not found" });
-    }
-
-    res.json({
-      message: "Status & count updated successfully",
-      data: updated.rows[0],
-    });
-  } catch (err) {
-    console.error("Error updating status:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-
-/* ===========================
-   DELETE REQUEST
-=========================== */
-router.delete("/delete/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const existing = await db.query(
-      "SELECT * FROM doctor_requests WHERE id = $1",
-      [id]
-    );
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ message: "Request not found" });
-    }
-
-    await db.query("DELETE FROM doctor_requests WHERE id = $1", [id]);
-    res.json({ message: "Request deleted successfully" });
-  } catch (err) {
-    console.error("Error deleting request:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+// DELETE item (Admin only)
+router.delete("/delete/:id", checkRole("admin"), async (req,res)=>{
+  const {id} = req.params;
+  const result = await pool.query("DELETE FROM stationaryinventory WHERE id=$1 RETURNING *",[id]);
+  res.json({message:"Item deleted", item: result.rows[0]});
 });
 
 module.exports = router;
