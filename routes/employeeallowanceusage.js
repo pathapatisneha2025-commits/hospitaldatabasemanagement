@@ -124,15 +124,17 @@ router.get("/:id", async (req, res) => {
 // ==========================
 router.get("/employee/:emp_id", async (req, res) => {
   try {
-    const { emp_id } = req.params;
+    const emp_id = parseInt(req.params.emp_id); // convert to number
 
-    // Check if emp_id is provided
     if (!emp_id) {
       return res.status(400).json({ message: "Employee ID is required" });
     }
 
     const usage = await pool.query(
-      "SELECT * FROM employee_allowance_usage WHERE emp_id = $1 ORDER BY created_at DESC",
+      `SELECT * 
+       FROM employee_allowance_usage 
+       WHERE emp_id = $1
+       ORDER BY created_at DESC`,
       [emp_id]
     );
 
@@ -146,6 +148,7 @@ router.get("/employee/:emp_id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ==========================
 // ✅ PUT update allowance usage by ID
