@@ -119,6 +119,33 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// ==========================
+// ✅ GET allowance usage by Employee ID
+// ==========================
+router.get("/employee/:emp_id", async (req, res) => {
+  try {
+    const { emp_id } = req.params;
+
+    // Check if emp_id is provided
+    if (!emp_id) {
+      return res.status(400).json({ message: "Employee ID is required" });
+    }
+
+    const usage = await pool.query(
+      "SELECT * FROM employee_allowance_usage WHERE emp_id = $1 ORDER BY created_at DESC",
+      [emp_id]
+    );
+
+    if (usage.rows.length === 0) {
+      return res.status(404).json({ message: "No allowance usage found for this employee" });
+    }
+
+    res.json(usage.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // ==========================
 // ✅ PUT update allowance usage by ID
