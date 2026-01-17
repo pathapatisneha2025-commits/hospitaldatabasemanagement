@@ -22,9 +22,9 @@ router.get("/all", async (req, res) => {
 // ==========================
 router.post("/add", async (req, res) => {
   try {
-    const { emp_name, emp_email, department, description, amount_used } = req.body;
+    const { emp_id, emp_name, emp_email, department, description, amount_used } = req.body;
 
-    if (!emp_name || !emp_email || !description || !amount_used) {
+    if (!emp_name || !emp_email || !description || !amount_used || !emp_id) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -47,12 +47,12 @@ router.post("/add", async (req, res) => {
     // Store as comma-separated string
     const amountUsedStr = amountUsedArray.join(", ");
 
-    // Insert into database
+    // Insert into database including emp_id
     const newUsage = await pool.query(
       `INSERT INTO employee_allowance_usage 
-        (emp_name, emp_email, department, description, amount, amount_used)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [emp_name, emp_email, department || null, descriptionStr, totalUsed, amountUsedStr]
+        (emp_id, emp_name, emp_email, department, description, amount, amount_used)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [emp_id, emp_name, emp_email, department || null, descriptionStr, totalUsed, amountUsedStr]
     );
 
     res.json(newUsage.rows[0]);
@@ -61,6 +61,7 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
