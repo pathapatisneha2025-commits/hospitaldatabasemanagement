@@ -917,7 +917,7 @@ router.delete("/logout/delete/:id", async (req, res) => {
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status
+      `SELECT a.id, a.employee_id, e.full_name, a.timestamp, a.image_url, a.status,a.phone
        FROM attendance a
        JOIN employees e ON a.employee_id = e.id
        ORDER BY a.timestamp DESC`
