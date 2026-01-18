@@ -379,19 +379,19 @@ router.get("/appointments/summary/:doctorId", async (req, res) => {
 });
 
 router.post("/assign-doctor", async (req, res) => {
-  const { nurseId, doctorId } = req.body;
+  const { nurseId, doctorIds } = req.body;
 
-  if (!nurseId || !doctorId) {
-    return res.status(400).json({ message: "Missing nurseId or doctorId" });
+  if (!nurseId || !doctorIds || !Array.isArray(doctorIds) || doctorIds.length === 0) {
+    return res.status(400).json({ message: "Missing nurseId or doctorIds" });
   }
 
   try {
     const result = await db.query(
       `UPDATE employees
        SET assigned_doctor = $1
-       WHERE id = $2 AND role = 'pune'
+       WHERE id = $2 AND role = 'nurse'
        RETURNING *`,
-      [doctorId, nurseId]
+      [doctorIds, nurseId] // doctorIds is an array
     );
 
     if (result.rows.length === 0) {
@@ -400,14 +400,15 @@ router.post("/assign-doctor", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Doctor assigned successfully",
-      nurse: result.rows[0]
+      message: "Doctors assigned successfully",
+      nurse: result.rows[0],
     });
   } catch (error) {
     console.error("Assign Doctor Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 // GET NURSE → ASSIGNED DOCTOR DETAILS
