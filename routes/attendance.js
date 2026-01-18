@@ -177,13 +177,14 @@ router.post("/mark-attendance", async (req, res) => {
     const {
       employeeId,
       subadminId,
-      adminId,      // ✅ Added adminId
+      adminId,
+      phone,             // ✅ New field for quick attendance
       capturedUrl,
       locationVerified,
       faceVerified,
     } = req.body;
 
-    if ((!employeeId && !subadminId && !adminId) || !capturedUrl) {
+    if ((!employeeId && !subadminId && !adminId && !phone) || !capturedUrl) {
       return res
         .status(400)
         .json({ success: false, message: "Missing required fields" });
@@ -192,27 +193,29 @@ router.post("/mark-attendance", async (req, res) => {
     const status =
       locationVerified === true && faceVerified === true ? "On Duty" : "Absent";
 
-    // ✅ Determine which ID to use and the column
-    let idToUse;
-    let columnToUse;
+    // Determine which ID or phone to use
+    let columnToUse, valueToUse;
 
     if (employeeId) {
-      idToUse = employeeId;
       columnToUse = "employee_id";
+      valueToUse = employeeId;
     } else if (subadminId) {
-      idToUse = subadminId;
       columnToUse = "subadmin_id";
+      valueToUse = subadminId;
     } else if (adminId) {
-      idToUse = adminId;
       columnToUse = "admin_id";
+      valueToUse = adminId;
+    } else if (phone) {
+      columnToUse = "phone";      // ✅ Store phone if employee not logged in
+      valueToUse = phone;
     }
 
-    // ✅ Insert attendance
+    // Insert attendance
     const insertResult = await pool.query(
       `INSERT INTO attendance (${columnToUse}, timestamp, image_url, status)
        VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
        RETURNING id, ${columnToUse}, status, timestamp`,
-      [idToUse, capturedUrl, status]
+      [valueToUse, capturedUrl, status]
     );
 
     const row = insertResult.rows[0];
@@ -224,6 +227,7 @@ router.post("/mark-attendance", async (req, res) => {
         employeeId: employeeId || null,
         subadminId: subadminId || null,
         adminId: adminId || null,
+        phone: phone || null,      // ✅ Return phone if used
         status: row.status,
         timestamp: row.timestamp,
       },
@@ -233,6 +237,7 @@ router.post("/mark-attendance", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // ------------------------------------------------------
 // ✅ ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
