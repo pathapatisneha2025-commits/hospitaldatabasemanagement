@@ -415,30 +415,37 @@ router.post("/assign-doctor", async (req, res) => {
 router.get("/nurse/assigned-doctor/:id", async (req, res) => {
   const nurseId = req.params.id;
 
-  const query = `
-    SELECT 
-      e.id AS nurse_id,
-      e.full_name AS nurse_name,
-      d.id AS doctor_id,
-      d.name AS doctor_name,
-      d.department,
-      d.phone_number,
-      d.email
-    FROM employees e
-    LEFT JOIN doctors d ON e.assigned_doctor = d.id
-    WHERE e.id = $1 AND e.role = 'pune'
-  `;
-
   try {
-    const result = await db.query(query, [nurseId]);
+    // First get the nurse and assigned_doctor array
+    const nurseResult = await db.query(
+      `SELECT id, full_name, assigned_doctor
+       FROM employees
+       WHERE id = $1 AND role = 'pune'`,
+      [nurseId]
+    );
 
-    if (result.rows.length === 0 || !result.rows[0].doctor_id) {
-      return res.json({ success: false, message: "Doctor not assigned" });
+    if (nurseResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Nurse not found" });
     }
+
+    const nurse = nurseResult.rows[0];
+
+    if (!nurse.assigned_doctor || nurse.assigned_doctor.length === 0) {
+      return res.json({ success: false, message: "No doctors assigned" });
+    }
+
+    // Get doctor details for all assigned doctor IDs
+    const doctorsResult = await db.query(
+      `SELECT id, name, department, phone_number, email
+       FROM doctors
+       WHERE id = ANY($1)`,
+      [nurse.assigned_doctor]
+    );
 
     return res.json({
       success: true,
-      doctor: result.rows[0],
+      nurse: { id: nurse.id, name: nurse.full_name },
+      doctors: doctorsResult.rows,
     });
   } catch (err) {
     console.error(err);
