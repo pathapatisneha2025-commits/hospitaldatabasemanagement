@@ -3,7 +3,8 @@ const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary"); // ✅ Your Cloudinary config
 const pool = require("../db"); // ✅ PostgreSQL pool
-
+const csv = require("csv-parser");
+const stream = require("stream");
 const router = express.Router();
 
 // ✅ Test route
@@ -22,6 +23,7 @@ const storage = new CloudinaryStorage({
 });
 
 const upload = multer({ storage });
+const csvUpload = multer({ storage: multer.memoryStorage() });
 
 // ✅ Add medicine with images
 router.post("/add", upload.array("images", 5), async (req, res) => {
@@ -71,6 +73,69 @@ router.get("/all", async (req, res) => {
     console.error("Error fetching medicines:", err.message);
     res.status(500).json({ error: "Failed to fetch medicines" });
   }
+});
+router.post("/bulk-upload", csvUpload.single("csv"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "CSV file required" });
+
+  const medicines = [];
+  const readable = new stream.Readable();
+  readable._read = () => {}; // noop
+  readable.push(req.file.buffer);
+  readable.push(null);
+
+  readable
+    .pipe(csv())
+    .on("data", (row) => {
+      medicines.push({
+        name: row.name || null,
+        category: row.category || null,
+        manufacturer: row.manufacturer || null,
+        batch_number: row.batch_number || null,
+        pack_size: row.pack_size || null,
+        description: row.description || null,
+        price: row.price ? parseFloat(row.price) : null,
+        stock: row.stock ? parseInt(row.stock) : 0,
+        images: row.images ? row.images.split(";") : [], // multiple image URLs separated by semicolon
+      });
+    })
+    .on("end", async () => {
+      try {
+        const insertedMedicines = [];
+
+        for (const med of medicines) {
+          const result = await pool.query(
+            `INSERT INTO medicines 
+             (name, category, manufacturer, batch_number, pack_size, description, price, stock, images, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+             RETURNING *`,
+            [
+              med.name,
+              med.category,
+              med.manufacturer,
+              med.batch_number,
+              med.pack_size,
+              med.description,
+              med.price,
+              med.stock,
+              med.images,
+            ]
+          );
+          insertedMedicines.push(result.rows[0]);
+        }
+
+        res.status(201).json({
+          message: `Successfully inserted ${insertedMedicines.length} medicines`,
+          medicines: insertedMedicines,
+        });
+      } catch (err) {
+        console.error("CSV bulk upload error:", err);
+        res.status(500).json({ error: "Failed to insert CSV data" });
+      }
+    })
+    .on("error", (err) => {
+      console.error("CSV parsing error:", err);
+      res.status(500).json({ error: "Failed to parse CSV" });
+    });
 });
 
 // ✅ Get medicine by ID
