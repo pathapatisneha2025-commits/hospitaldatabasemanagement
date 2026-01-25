@@ -33,6 +33,23 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch inventory" });
   }
 });
+// GET requests by employee ID
+router.get("/employee/:employee_id", async (req, res) => {
+  try {
+    const { employee_id } = req.params;
+
+    const result = await pool.query(
+      "SELECT * FROM inventory_requests WHERE employee_id = $1 ORDER BY created_at DESC",
+      [employee_id]
+    );
+
+    res.json({ requests: result.rows });
+  } catch (error) {
+    console.error("Error fetching requests:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 // ADD item (Admin/Subadmin) with Cloudinary image upload
 router.post("/add", upload.array("images", 5), async (req, res) => {
