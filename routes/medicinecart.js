@@ -23,11 +23,8 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-const csvStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
-});
-const csvUpload = multer({ storage: csvStorage });
+const csvUpload = multer({ storage: multer.memoryStorage() });
+
 
 // -------------------- ADD ITEM TO CART WITH MULTIPLE IMAGES --------------------
 router.post("/add", upload.array("images", 5), async (req, res) => {
@@ -106,75 +103,82 @@ router.get("/all", async (req, res) => {
 });
 
 router.post("/bulk-upload", csvUpload.single("csv"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "CSV file required" });
+  try {
+    if (!req.file) return res.status(400).json({ error: "CSV file required" });
 
-  const items = [];
-  fs.createReadStream(req.file.path)
-    .pipe(csvParser())
-    .on("data", row => {
-      items.push({
-        patient_id: row.patient_id || null,
-        employeeid: row.employeeid || null,
-        subadmin_id: row.subadmin_id || null,
-        name: row.name || null,
-        category: row.category || null,
-        manufacturer: row.manufacturer || null,
-        batch_number: row.batch_number || null,
-        pack_size: row.pack_size || null,
-        description: row.description || null,
-        price: row.price ? parseFloat(row.price) : null,
-        stock: row.stock ? parseInt(row.stock) : 0,
-        quantity: row.quantity ? parseInt(row.quantity) : 1,
-        images: row.images ? row.images.split(";") : [], // optional semicolon-separated URLs
-      });
-    })
-    .on("end", async () => {
-      try {
-        const insertedItems = [];
-        for (const item of items) {
-          const providedIds = [item.patient_id, item.employeeid, item.subadmin_id].filter(id => id);
-          if (providedIds.length !== 1) continue;
+    const items = [];
+    const readable = new stream.Readable();
+    readable._read = () => {};
+    readable.push(req.file.buffer);
+    readable.push(null);
 
-          const result = await pool.query(
-            `INSERT INTO cart
-             (patient_id, employeeid, subadmin_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-             RETURNING *`,
-            [
-              item.patient_id,
-              item.employeeid,
-              item.subadmin_id,
-              item.name,
-              item.category,
-              item.manufacturer,
-              item.batch_number,
-              item.pack_size,
-              item.description,
-              item.price,
-              item.stock,
-              item.quantity,
-              item.images,
-            ]
-          );
-          insertedItems.push(result.rows[0]);
-        }
-
-        // Delete temporary CSV
-        fs.unlinkSync(req.file.path);
-
-        res.status(201).json({
-          message: `Successfully inserted ${insertedItems.length} cart items`,
-          items: insertedItems,
+    readable
+      .pipe(csvParser())
+      .on("data", row => {
+        items.push({
+          patient_id: row.patient_id || null,
+          employeeid: row.employeeid || null,
+          subadmin_id: row.subadmin_id || null,
+          name: row.name || null,
+          category: row.category || null,
+          manufacturer: row.manufacturer || null,
+          batch_number: row.batch_number || null,
+          pack_size: row.pack_size || null,
+          description: row.description || null,
+          price: row.price ? parseFloat(row.price) : null,
+          stock: row.stock ? parseInt(row.stock) : 0,
+          quantity: row.quantity ? parseInt(row.quantity) : 1,
+          images: row.images ? row.images.split(";") : [],
         });
-      } catch (err) {
-        console.error("CSV bulk upload error:", err.message);
-        res.status(500).json({ error: "Failed to upload CSV" });
-      }
-    })
-    .on("error", err => {
-      console.error("CSV parsing error:", err.message);
-      res.status(500).json({ error: "Failed to parse CSV" });
-    });
+      })
+      .on("end", async () => {
+        try {
+          const insertedItems = [];
+          for (const item of items) {
+            const providedIds = [item.patient_id, item.employeeid, item.subadmin_id].filter(Boolean);
+            if (providedIds.length !== 1) continue;
+
+            const result = await pool.query(
+              `INSERT INTO cart
+               (patient_id, employeeid, subadmin_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+               RETURNING *`,
+              [
+                item.patient_id,
+                item.employeeid,
+                item.subadmin_id,
+                item.name,
+                item.category,
+                item.manufacturer,
+                item.batch_number,
+                item.pack_size,
+                item.description,
+                item.price,
+                item.stock,
+                item.quantity,
+                item.images,
+              ]
+            );
+            insertedItems.push(result.rows[0]);
+          }
+
+          res.status(201).json({
+            message: `Successfully inserted ${insertedItems.length} cart items`,
+            items: insertedItems,
+          });
+        } catch (err) {
+          console.error("CSV bulk upload error:", err);
+          res.status(500).json({ error: "Failed to insert CSV data" });
+        }
+      })
+      .on("error", err => {
+        console.error("CSV parsing error:", err);
+        res.status(500).json({ error: "Failed to parse CSV" });
+      });
+  } catch (err) {
+    console.error("CSV upload error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // -------------------- GET CART ITEMS BY PATIENT --------------------
