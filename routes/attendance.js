@@ -83,22 +83,23 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     }
 
     // 2️⃣ PHONE → EMPLOYEE
-    else if (phone) {
-      const empRes = await pool.query(
-        "SELECT id, image FROM employees WHERE phone = $1",
-        [phone]
-      );
+   else if (phone) {
+  const empRes = await pool.query(
+    "SELECT id, image FROM employees WHERE mobile = $1",
+    [phone]
+  );
 
-      if (empRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "No employee registered with this phone",
-        });
-      }
+  if (empRes.rowCount === 0) {
+    return res.status(404).json({
+      success: false,
+      message: "No employee registered with this phone",
+    });
+  }
 
-      registeredUrl = empRes.rows[0].image;
-      resolvedEmployeeId = empRes.rows[0].id;
-    }
+  registeredUrl = empRes.rows[0].image;
+  resolvedEmployeeId = empRes.rows[0].id;
+}
+
 
     // 3️⃣ SUBADMIN
     else if (subadminId) {
