@@ -138,13 +138,24 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
 }
 
 router.post("/verify-location", (req, res) => {
-  const { employeeId, subadminId, adminId, latitude, longitude } = req.body;
+  const {
+    employeeId,
+    subadminId,
+    adminId,
+    phone,          // ✅ ADD PHONE
+    latitude,
+    longitude
+  } = req.body;
 
-  // Require at least ONE ID
-  if ((!employeeId && !subadminId && !adminId) || !latitude || !longitude) {
+  // Require at least ONE identifier
+  if (
+    (!employeeId && !subadminId && !adminId && !phone) ||
+    latitude == null ||
+    longitude == null
+  ) {
     return res.status(400).json({
       success: false,
-      message: "Missing coordinates or ID",
+      message: "Missing coordinates or identifier",
     });
   }
 
@@ -156,7 +167,6 @@ router.post("/verify-location", (req, res) => {
     OFFICE_LNG
   );
 
-  // Within allowed radius
   const isVerified = distance <= RADIUS_IN_METERS;
 
   return res.json({
@@ -165,9 +175,11 @@ router.post("/verify-location", (req, res) => {
     employeeId: employeeId || null,
     subadminId: subadminId || null,
     adminId: adminId || null,
+    phone: phone || null,     // ✅ RETURN PHONE
     distance,
   });
 });
+
 
 
 
