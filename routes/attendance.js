@@ -435,6 +435,26 @@ router.get("/login/all", async (req, res) => {
   }
 });
 
+// GET attendance by phone number
+router.get("/employee/:phone", async (req, res) => {
+  try {
+    const { phone } = req.params;
+
+    const attRes = await pool.query(
+      `SELECT *
+       FROM attendance
+       WHERE phone = $1
+       ORDER BY timestamp DESC
+       LIMIT 1`,
+      [phone]
+    );
+
+    res.json({ success: true, data: attRes.rows });
+  } catch (error) {
+    console.error("Attendance fetch by phone error:", error.message);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 
 
