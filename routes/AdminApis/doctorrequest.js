@@ -160,7 +160,11 @@ router.get("/allrequest", async (req, res) => {
 /* ============================
    Approve or Reject a request
 ============================ */
+/* ============================
+   Approve or Reject a request (with stock deduction)
+============================ */
 router.post("/update-request/:id", async (req, res) => {
+  const client = await pool.connect();
   try {
     const requestId = req.params.id;
     const { status } = req.body; // expects 'approved' or 'rejected'
@@ -169,21 +173,56 @@ router.post("/update-request/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
-    const result = await pool.query(
+    await client.query("BEGIN"); // start transaction
+
+    if (status === "approved") {
+      // 1️⃣ Fetch the request items
+      const { rows } = await client.query(
+        "SELECT items FROM inventory_requests WHERE id = $1 AND status = 'pending'",
+        [requestId]
+      );
+
+      if (!rows[0]) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "Pending request not found" });
+      }
+
+      const items = rows[0].items; // array of { item_id, quantity, name }
+
+      // 2️⃣ Deduct stock for each item
+      for (const item of items) {
+        const stockResult = await client.query(
+          `UPDATE stationaryinventory
+           SET stock = stock - $1
+           WHERE id = $2 AND stock >= $1
+           RETURNING stock`,
+          [item.quantity, item.item_id]
+        );
+
+        if (stockResult.rowCount === 0) {
+          throw new Error(`Insufficient stock for item ID ${item.item_id}`);
+        }
+      }
+    }
+
+    // 3️⃣ Update request status
+    const result = await client.query(
       "UPDATE inventory_requests SET status = $1 WHERE id = $2 RETURNING *",
       [status, requestId]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Request not found" });
-    }
+    await client.query("COMMIT"); // commit transaction
 
     res.json({ message: `Request ${status}`, request: result.rows[0] });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error updating request:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: error.message || "Server error" });
+  } finally {
+    client.release();
   }
 });
+
 
 
 
