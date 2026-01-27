@@ -26,94 +26,159 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-// 🚀 VERIFY FACE ROUTE
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
-    const employeeId = req.body.employeeId ? parseInt(req.body.employeeId, 10) : null;
-    const subadminId = req.body.subadminId ? parseInt(req.body.subadminId, 10) : null;
-    const adminId = req.body.adminId ? parseInt(req.body.adminId, 10) : null;
+    const employeeId = req.body.employeeId
+      ? parseInt(req.body.employeeId, 10)
+      : null;
+    const subadminId = req.body.subadminId
+      ? parseInt(req.body.subadminId, 10)
+      : null;
+    const adminId = req.body.adminId
+      ? parseInt(req.body.adminId, 10)
+      : null;
+    const phone = req.body.phone || null;
     const file = req.file;
 
-    // Require image
+    // ✅ Require image
     if (!file) {
-      return res.status(400).json({ success: false, message: "Image required" });
-    }
-
-    // Require at least ONE ID
-    if (!employeeId && !subadminId && !adminId) {
       return res.status(400).json({
         success: false,
-        message: "Employee ID, Subadmin ID, or Admin ID required"
+        message: "Image required",
+      });
+    }
+
+    // ✅ Require at least ONE identifier
+    if (!employeeId && !subadminId && !adminId && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID or phone required",
       });
     }
 
     const capturedUrl = file.path;
 
-    // ---------------- FETCH REGISTERED IMAGE ----------------
-    let registeredUrl;
-    let tableName = "";
-    let userId = null;
+    // --------------------------------------------------
+    // 🔍 RESOLVE REGISTERED IMAGE
+    // --------------------------------------------------
+    let registeredUrl = null;
+    let resolvedEmployeeId = null;
 
+    // 1️⃣ EMPLOYEE ID
     if (employeeId) {
-      tableName = "employees";
-      userId = employeeId;
-    } else if (subadminId) {
-      tableName = "subadmin";
-      userId = subadminId;
-    } else if (adminId) {
-      tableName = "admin";
-      userId = adminId;
+      const empRes = await pool.query(
+        "SELECT id, image FROM employees WHERE id = $1",
+        [employeeId]
+      );
+
+      if (empRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found",
+        });
+      }
+
+      registeredUrl = empRes.rows[0].image;
+      resolvedEmployeeId = empRes.rows[0].id;
     }
 
-    const result = await pool.query(`SELECT image FROM ${tableName} WHERE id = $1`, [userId]);
+    // 2️⃣ PHONE → EMPLOYEE
+    else if (phone) {
+      const empRes = await pool.query(
+        "SELECT id, image FROM employees WHERE phone = $1",
+        [phone]
+      );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: `${tableName} not found`
-      });
+      if (empRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "No employee registered with this phone",
+        });
+      }
+
+      registeredUrl = empRes.rows[0].image;
+      resolvedEmployeeId = empRes.rows[0].id;
     }
 
-    registeredUrl = result.rows[0].image;
+    // 3️⃣ SUBADMIN
+    else if (subadminId) {
+      const subRes = await pool.query(
+        "SELECT image FROM subadmin WHERE id = $1",
+        [subadminId]
+      );
 
-    // ---------------- DOWNLOAD BOTH IMAGES ----------------
+      if (subRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Subadmin not found",
+        });
+      }
+
+      registeredUrl = subRes.rows[0].image;
+    }
+
+    // 4️⃣ ADMIN
+    else if (adminId) {
+      const adminRes = await pool.query(
+        "SELECT image FROM admin WHERE id = $1",
+        [adminId]
+      );
+
+      if (adminRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found",
+        });
+      }
+
+      registeredUrl = adminRes.rows[0].image;
+    }
+
+    // --------------------------------------------------
+    // ⬇️ DOWNLOAD IMAGES
+    // --------------------------------------------------
     const [registeredImg, capturedImg] = await Promise.all([
       axios.get(registeredUrl, { responseType: "arraybuffer" }),
-      axios.get(capturedUrl, { responseType: "arraybuffer" })
+      axios.get(capturedUrl, { responseType: "arraybuffer" }),
     ]);
 
-    // ---------------- AWS REKOGNITION ----------------
+    // --------------------------------------------------
+    // 🤖 AWS REKOGNITION
+    // --------------------------------------------------
     const params = {
       SourceImage: { Bytes: Buffer.from(registeredImg.data) },
       TargetImage: { Bytes: Buffer.from(capturedImg.data) },
-      SimilarityThreshold: 80
+      SimilarityThreshold: 80,
     };
 
-    const rekognitionResult = await rekognition.compareFaces(params).promise();
+    const rekognitionResult = await rekognition
+      .compareFaces(params)
+      .promise();
 
-    let faceVerified = false;
-    let message = "Face not verified";
+    const faceVerified =
+      rekognitionResult.FaceMatches &&
+      rekognitionResult.FaceMatches.length > 0;
 
-    if (rekognitionResult.FaceMatches && rekognitionResult.FaceMatches.length > 0) {
-      faceVerified = true;
-      message = "Face verified";
-    }
-
+    // --------------------------------------------------
+    // ✅ RESPONSE
+    // --------------------------------------------------
     return res.json({
       success: true,
       faceVerified,
-      message,
+      message: faceVerified ? "Face verified" : "Face not verified",
       capturedUrl,
-      employeeId: employeeId || null,
-      subadminId: subadminId || null,
-      adminId: adminId || null,
+      employeeId: resolvedEmployeeId || employeeId || null,
+      phone: phone || null,
     });
-
   } catch (error) {
     console.error("Face verification error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
+
 
 
 
