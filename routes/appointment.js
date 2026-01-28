@@ -52,6 +52,12 @@ router.get("/export", async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "No appointments found" });
     }
+ const formatPhone = (num) => {
+      if (!num) return "";
+      let cleaned = ("" + num).replace(/\D/g, ""); // remove non-digits
+      if (cleaned.length === 10) return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3"); // format 10-digit
+      return num; // return as-is if not 10 digits
+    };
 
     const fields = [
       { label: "Type", value: "type" },
@@ -66,7 +72,7 @@ router.get("/export", async (req, res) => {
       { label: "Time Slot", value: "timeslot" },
       { label: "Consultant Fees", value: "consultantfees" },
       { label: "Reason", value: "reason" },
-      { label: "Phone", value: "patientphone" },
+      { label: "Phone",  value: row => `"${formatPhone(row.patientphone)}"`},
       { label: "Payment Status", value: "paymentstatus" },
     ];
 
