@@ -48,12 +48,20 @@ router.get("/export", async (req, res) => {
       return res.status(404).json({ message: "No SubAdmins found" });
     }
 
-    // CSV Fields
+    // ===== Add helper function =====
+    const formatPhone = (num) => {
+      if (!num) return "";
+      let cleaned = ("" + num).replace(/\D/g, ""); // remove non-digit characters
+      if (cleaned.length === 10) return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
+      return num; // return as-is if not 10 digits
+    };
+
+    // ===== CSV Fields with formatted phone =====
     const fields = [
       { label: "ID", value: "id" },
       { label: "Name", value: "name" },
       { label: "Email", value: "email" },
-      { label: "Phone", value: "phone" },
+      { label: "Phone", value: row => `"${formatPhone(row.phone)}"` }, // formatted phone wrapped in quotes
       { label: "Joining Date", value: "joining_date" },
       { label: "Status", value: "status" }
     ];
