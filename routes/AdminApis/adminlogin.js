@@ -46,12 +46,21 @@ router.get("/export", async (req, res) => {
       return res.status(404).json({ message: "No admins found" });
     }
 
+    // ===== Add this helper function here =====
+    const formatPhone = (num) => {
+      if (!num) return "";
+      let cleaned = ("" + num).replace(/\D/g, ""); // remove non-digits
+      if (cleaned.length === 10) return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3"); // format 10-digit
+      return num; // return as-is if not 10 digits
+    };
+
+    // ===== Define CSV fields using formatPhone =====
     const fields = [
       { label: "ID", value: "id" },
       { label: "Name", value: "name" },
       { label: "Email", value: "email" },
       { label: "Joining Date", value: "joining_date" },
-      { label: "Phone", value: "phone" }
+      { label: "Phone", value: row => `"${formatPhone(row.phone)}"` } // wrap in quotes
     ];
 
     const parser = new Parser({ fields });
@@ -68,7 +77,6 @@ router.get("/export", async (req, res) => {
     res.status(500).json({ message: "Failed to export CSV" });
   }
 });
-
 router.post("/register", upload.single("image"), async (req, res) => {
   try {
     const { name, email, password, confirm_password, joining_date, phone } = req.body;
