@@ -328,28 +328,38 @@ router.get("/all/pdf", async (req, res) => {
 
 
 
+// routes/payslips.js (or wherever your route is)
 router.post("/status/:employeeId", async (req, res) => {
-  const { employeeId } = req.params;
-  const { status } = req.body; // expects any status value
-
   try {
-    // Use current year and month in Asia/Kolkata timezone
-    const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-    const today = new Date(now);
-    const year = today.getFullYear();
-    const month = today.getMonth() + 1; // JS months are 0-based
+    let { employeeId } = req.params;
+    const { status } = req.body;
 
+    // Convert employeeId to integer to avoid type issues
+    employeeId = parseInt(employeeId, 10);
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ error: "Invalid employeeId" });
+    }
+
+    // Get current IST date safely
+    const now = new Date();
+    const istOffset = 5.5 * 60; // IST is UTC+5:30 in minutes
+    const istTime = new Date(now.getTime() + istOffset * 60000);
+    const year = istTime.getFullYear();
+    const month = istTime.getMonth() + 1; // 0-based in JS
+
+    // Update or insert status
     const query = `
       INSERT INTO payslip_status (employee_id, year, month, status)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (employee_id, year, month)
       DO UPDATE SET status = EXCLUDED.status
+      RETURNING *;
     `;
+    const result = await pool.query(query, [employeeId, year, month, status]);
 
-    await pool.query(query, [employeeId, year, month, status]);
-    res.json({ message: `Status updated to ${status}` });
+    res.json({ message: `Payslip status updated to "${status}"`, updated: result.rows[0] });
   } catch (err) {
-    console.error(err);
+    console.error("Error updating payslip status:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
