@@ -417,8 +417,8 @@ router.delete('/delete/:tokenid', async (req, res) => {
 
 // -------------------- UPDATE STATUS --------------------
 router.put("/update-status", async (req, res) => {
-  const { tokenid, daily_id, status } = req.body;
-console.log("🧾 Incoming:", { tokenid, daily_id, status });
+  const { tokenid, daily_id, status, date } = req.body; // <-- include date
+  console.log("🧾 Incoming:", { tokenid, daily_id, status, date });
 
   if (!status) {
     return res.status(400).json({ error: "Status is required" });
@@ -428,34 +428,35 @@ console.log("🧾 Incoming:", { tokenid, daily_id, status });
     return res.status(400).json({ error: "Either tokenid or daily_id is required" });
   }
 
+  if (!date) {
+    return res.status(400).json({ error: "Date is required to update status" });
+  }
+
   try {
     let result;
 
-   if (tokenid) {
-  result = await db.query(
-    `UPDATE appointments 
-     SET status = $1 
-     WHERE tokenid = $2 AND date = $3
-     RETURNING *;`,
-    [status, tokenid, date]
-  );
-} else if (daily_id) {
-  result = await db.query(
-    `UPDATE doctorbooking 
-     SET status = $1 
-     WHERE daily_id = $2 AND appointment_date = $3
-     RETURNING *;`,
-    [status, daily_id, date]
-  );
-}
+    if (tokenid) {
+      result = await db.query(
+        `UPDATE appointments 
+         SET status = $1 
+         WHERE tokenid = $2 AND date = $3
+         RETURNING *;`,
+        [status, tokenid, date]
+      );
+    } else if (daily_id) {
+      result = await db.query(
+        `UPDATE doctorbooking 
+         SET status = $1 
+         WHERE daily_id = $2 AND appointment_date = $3
+         RETURNING *;`,
+        [status, daily_id, date]
+      );
+    }
 
-
-    // ❌ If no record found
     if (!result || result.rows.length === 0) {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    // ✅ Success
     res.json({
       message: "Appointment status updated successfully",
       appointment: result.rows[0],
@@ -465,6 +466,7 @@ console.log("🧾 Incoming:", { tokenid, daily_id, status });
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 module.exports = router;
