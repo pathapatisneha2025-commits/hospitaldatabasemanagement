@@ -442,17 +442,25 @@ router.get("/login/all", async (req, res) => {
       SELECT 
         a.id,
         a.employee_id,
-        COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
-        COALESCE(e1.image, e2.image, a.image_url) AS image_url,
+        COALESCE(emp.full_name, 'Unknown Employee') AS full_name,
         a.phone,
         a.timestamp,
+        a.image_url,
         a.status
-      FROM attendance a
-      LEFT JOIN employees e1 ON e1.id::text = a.employee_id::text
-      LEFT JOIN employees e2 ON e2.mobile = a.phone
+    FROM attendance a
+      LEFT JOIN employees emp
+        ON emp.id = a.employee_id
+        OR emp.mobile = a.phone
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No 'On Duty' attendance records found",
+      });
+    }
 
     res.json({
       success: true,
@@ -461,10 +469,12 @@ router.get("/login/all", async (req, res) => {
     });
   } catch (error) {
     console.error("Get all On Duty attendance error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
-
 
 
 // GET attendance by phone number
