@@ -398,30 +398,62 @@ router.get("/export", async (req, res) => {
 
 
  // ✅ Fetch all "On Duty" attendance records
+// router.get("/login/all", async (req, res) => {
+//   try {
+//     const result = await pool.query(`
+//       SELECT 
+//         a.id, 
+//         a.employee_id, 
+//         e.full_name, 
+//         a.timestamp, 
+//         a.image_url, 
+//         a.status
+//       FROM attendance a
+//       JOIN employees e ON a.employee_id = e.id
+//       WHERE a.status = 'On Duty'
+//       ORDER BY a.timestamp DESC
+//     `);
+
+//     if (result.rows.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No 'On Duty' attendance records found",
+//       });
+//     }
+
+//     return res.json({
+//       success: true,
+//       count: result.rows.length,
+//       data: result.rows,
+//     });
+//   } catch (error) {
+//     console.error("Get all On Duty attendance error:", error.message);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// });
+
+// ✅ Fetch all On Duty attendance (Login + Phone)
 router.get("/login/all", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        a.id, 
-        a.employee_id, 
-        e.full_name, 
-        a.timestamp, 
-        a.image_url, 
+        a.id,
+        a.employee_id,
+        COALESCE(e.full_name, 'Employee (' || a.phone || ')') AS full_name,
+        a.phone,
+        a.timestamp,
+        a.image_url,
         a.status
       FROM attendance a
-      JOIN employees e ON a.employee_id = e.id
+      LEFT JOIN employees e ON a.employee_id = e.id
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No 'On Duty' attendance records found",
-      });
-    }
-
-    return res.json({
+    res.json({
       success: true,
       count: result.rows.length,
       data: result.rows,
@@ -434,6 +466,7 @@ router.get("/login/all", async (req, res) => {
     });
   }
 });
+
 
 // GET attendance by phone number
 router.get("/employee/:phone", async (req, res) => {
