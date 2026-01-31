@@ -439,21 +439,20 @@ router.get("/export", async (req, res) => {
 router.get("/login/all", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
+    SELECT 
   a.id,
   a.employee_id,
-  COALESCE(e.full_name, emp.full_name) AS full_name,
+  COALESCE(e.full_name, 'Unknown Employee') AS full_name,
   a.phone,
   a.timestamp,
   a.image_url,
   a.status
 FROM attendance a
-LEFT JOIN employees e ON a.employee_id = e.id
-LEFT JOIN employees emp ON a.phone = emp.mobile
+LEFT JOIN employees e 
+  ON e.mobile = a.phone   -- ✅ REAL MATCH
 WHERE a.status = 'On Duty'
 ORDER BY a.timestamp DESC;
-
-    `);
+`);
 
     res.json({
       success: true,
