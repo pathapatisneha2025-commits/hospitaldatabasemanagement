@@ -445,13 +445,13 @@ router.get("/login/all", async (req, res) => {
         COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
         a.phone,
         a.timestamp,
-        COALESCE(e1.image, e2.image, a.image_url) AS image_url,
+        a.image_url,
         a.status
       FROM attendance a
-      -- Join by employee_id first
-      LEFT JOIN employees e1 ON e1.id = a.employee_id
-      -- Join by phone only if employee_id is null
-      LEFT JOIN employees e2 ON e2.mobile = a.phone AND a.employee_id IS NULL
+       JOIN employees e1 
+        ON e1.id = a.employee_id          -- ✅ OLD logic (employee_id = id)
+      LEFT JOIN employees e2 
+        ON e2.mobile = a.phone            -- ✅ NEW logic (phone = mobile)
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
