@@ -449,19 +449,12 @@ router.get("/login/all", async (req, res) => {
         a.status
       FROM attendance a
       LEFT JOIN employees e1 
-        ON e1.id = a.employee_id          -- ✅ OLD logic (employee_id = id)
+        ON e1.id::text = a.employee_id::text   -- ✅ CAST FIX
       LEFT JOIN employees e2 
-        ON e2.mobile = a.phone            -- ✅ NEW logic (phone = mobile)
+        ON e2.mobile = a.phone
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No 'On Duty' attendance records found",
-      });
-    }
 
     res.json({
       success: true,
@@ -470,13 +463,9 @@ router.get("/login/all", async (req, res) => {
     });
   } catch (error) {
     console.error("Get all On Duty attendance error:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 // GET attendance by phone number
