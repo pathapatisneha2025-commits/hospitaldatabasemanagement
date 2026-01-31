@@ -449,7 +449,7 @@ router.get("/login/all", async (req, res) => {
   a.status
 FROM attendance a
 LEFT JOIN employees e ON a.employee_id = e.id
-LEFT JOIN employees emp ON a.phone = emp.phone
+LEFT JOIN employees emp ON a.phone = emp.mobile
 WHERE a.status = 'On Duty'
 ORDER BY a.timestamp DESC;
 
