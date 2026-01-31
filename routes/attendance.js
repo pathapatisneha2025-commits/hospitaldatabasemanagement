@@ -435,24 +435,33 @@ router.get("/export", async (req, res) => {
 //   }
 // });
 
-// ✅ Fetch all On Duty attendance (Login + Phone)
+// ✅ Fetch all "On Duty" attendance records (ID + Phone based)
 router.get("/login/all", async (req, res) => {
   try {
     const result = await pool.query(`
-    SELECT 
-  a.id,
-  a.employee_id,
-  COALESCE(e.full_name, 'Unknown Employee') AS full_name,
-  a.phone,
-  a.timestamp,
-  a.image_url,
-  a.status
-FROM attendance a
-LEFT JOIN employees e 
-  ON e.mobile = a.phone   -- ✅ REAL MATCH
-WHERE a.status = 'On Duty'
-ORDER BY a.timestamp DESC;
-`);
+      SELECT 
+        a.id,
+        a.employee_id,
+        COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
+        a.phone,
+        a.timestamp,
+        a.image_url,
+        a.status
+      FROM attendance a
+      LEFT JOIN employees e1 
+        ON e1.id = a.employee_id          -- ✅ OLD logic (employee_id = id)
+      LEFT JOIN employees e2 
+        ON e2.mobile = a.phone            -- ✅ NEW logic (phone = mobile)
+      WHERE a.status = 'On Duty'
+      ORDER BY a.timestamp DESC
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No 'On Duty' attendance records found",
+      });
+    }
 
     res.json({
       success: true,
@@ -467,6 +476,7 @@ ORDER BY a.timestamp DESC;
     });
   }
 });
+
 
 
 // GET attendance by phone number
