@@ -417,7 +417,7 @@ router.delete('/delete/:tokenid', async (req, res) => {
 
 // -------------------- UPDATE STATUS --------------------
 router.put("/update-status", async (req, res) => {
-  const { tokenid, daily_id, status, date } = req.body; // <-- include date
+  const { tokenid, daily_id, status, date } = req.body; // date in YYYY-MM-DD
   console.log("🧾 Incoming:", { tokenid, daily_id, status, date });
 
   if (!status) {
@@ -436,10 +436,11 @@ router.put("/update-status", async (req, res) => {
     let result;
 
     if (tokenid) {
+      // ✅ Compare only the date part
       result = await db.query(
         `UPDATE appointments 
          SET status = $1 
-         WHERE tokenid = $2 AND date = $3
+         WHERE tokenid = $2 AND date::date = $3
          RETURNING *;`,
         [status, tokenid, date]
       );
@@ -447,7 +448,7 @@ router.put("/update-status", async (req, res) => {
       result = await db.query(
         `UPDATE doctorbooking 
          SET status = $1 
-         WHERE daily_id = $2 AND appointment_date = $3
+         WHERE daily_id = $2 AND appointment_date::date = $3
          RETURNING *;`,
         [status, daily_id, date]
       );
@@ -466,6 +467,7 @@ router.put("/update-status", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
