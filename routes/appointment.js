@@ -431,19 +431,24 @@ console.log("🧾 Incoming:", { tokenid, daily_id, status });
   try {
     let result;
 
-    if (tokenid) {
-      // 🔹 Update in 'appointments' table using tokenid
-      result = await db.query(
-        `UPDATE appointments SET status = $1 WHERE tokenid = $2 RETURNING *;`,
-        [status, tokenid]
-      );
-    } else if (daily_id) {
-      // 🔹 Update in 'doctorbooking' table using daily_id
-      result = await db.query(
-        `UPDATE doctorbooking SET status = $1 WHERE daily_id = $2 RETURNING *;`,
-        [status, daily_id]
-      );
-    }
+   if (tokenid) {
+  result = await db.query(
+    `UPDATE appointments 
+     SET status = $1 
+     WHERE tokenid = $2 AND date = $3
+     RETURNING *;`,
+    [status, tokenid, date]
+  );
+} else if (daily_id) {
+  result = await db.query(
+    `UPDATE doctorbooking 
+     SET status = $1 
+     WHERE daily_id = $2 AND appointment_date = $3
+     RETURNING *;`,
+    [status, daily_id, date]
+  );
+}
+
 
     // ❌ If no record found
     if (!result || result.rows.length === 0) {
