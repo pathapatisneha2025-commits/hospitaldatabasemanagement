@@ -442,16 +442,16 @@ router.get("/login/all", async (req, res) => {
       SELECT 
         a.id,
         a.employee_id,
-        COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
         a.phone,
         a.timestamp,
-        a.image_url,
-        a.status
+        a.status,
+        COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
+        COALESCE(e1.image, e2.image, a.image_url) AS image_url
       FROM attendance a
-       JOIN employees e1 
-        ON e1.id = a.employee_id          -- ✅ OLD logic (employee_id = id)
-      LEFT JOIN employees e2 
-        ON e2.mobile = a.phone            -- ✅ NEW logic (phone = mobile)
+      -- Join by employee_id first
+      LEFT JOIN employees e1 ON e1.id = a.employee_id
+      -- Join by phone if employee_id doesn't match
+      LEFT JOIN employees e2 ON e2.mobile = a.phone
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
@@ -476,7 +476,6 @@ router.get("/login/all", async (req, res) => {
     });
   }
 });
-
 
 
 // GET attendance by phone number
