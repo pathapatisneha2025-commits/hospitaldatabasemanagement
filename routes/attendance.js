@@ -1235,7 +1235,7 @@ router.get("/employee/:id", async (req, res) => {
   }
 });
 
-router.get("/employee/:phone", async (req, res) => {
+router.get("/employee/phone/:phone", async (req, res) => {
   try {
     const { phone } = req.params;
 
