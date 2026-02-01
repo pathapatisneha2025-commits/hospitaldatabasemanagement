@@ -675,12 +675,15 @@ if (employeeId) {
 
   // Overtime
   let overtime = "0h 0m";
-  const empRes = await pool.query(
-    `SELECT schedule_out FROM employees WHERE id = $1`,
-    [employeeId]
-  );
+ const empRes = await pool.query(
+  `SELECT full_name, schedule_out FROM employees WHERE id = $1`,
+  [employeeId]
+);
+
   if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
     const scheduleOut = empRes.rows[0].schedule_out;
+    const employeeName = empRes.rows[0]?.full_name || null;
+
     const overtimeRes = await pool.query(
       `SELECT GREATEST(
         EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Kolkata') 
@@ -738,20 +741,22 @@ if (employeeId) {
   );
 
   return res.json({
-    success: true,
-    message: "Employee logout marked successfully",
-    data: {
-      employee_id: employeeId,
-      status,
-      timestamp: insertResult.rows[0].timestamp,
-      sessionHours,
-      remainingHours,
-      overtime,
-      daily_hours: dailyHoursStr,
-      weekly_hours: weeklyHoursStr,
-      monthly_hours: monthlyHoursStr,
-    },
-  });
+  success: true,
+  message: "Employee logout marked successfully",
+  data: {
+    employee_id: employeeId,
+    full_name: employeeName, // ✅ ADD THIS
+    status,
+    timestamp: insertResult.rows[0].timestamp,
+    sessionHours,
+    remainingHours,
+    overtime,
+    daily_hours: dailyHoursStr,
+    weekly_hours: weeklyHoursStr,
+    monthly_hours: monthlyHoursStr,
+  },
+});
+
 }
 
 
