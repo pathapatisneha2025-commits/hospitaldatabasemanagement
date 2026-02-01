@@ -25,7 +25,11 @@ const storage = new CloudinaryStorage({
 });
 
 const upload = multer({ storage });
-
+const formatHours = (seconds) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  return `${hrs}h ${mins}m`;
+};
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
     const employeeId = req.body.employeeId
@@ -675,15 +679,12 @@ if (employeeId) {
 
   // Overtime
   let overtime = "0h 0m";
- const empRes = await pool.query(
-  `SELECT full_name, schedule_out FROM employees WHERE id = $1`,
-  [employeeId]
-);
-
+  const empRes = await pool.query(
+    `SELECT schedule_out FROM employees WHERE id = $1`,
+    [employeeId]
+  );
   if (empRes.rows.length > 0 && empRes.rows[0].schedule_out) {
     const scheduleOut = empRes.rows[0].schedule_out;
-    const employeeName = empRes.rows[0]?.full_name || null;
-
     const overtimeRes = await pool.query(
       `SELECT GREATEST(
         EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'Asia/Kolkata') 
@@ -741,22 +742,20 @@ if (employeeId) {
   );
 
   return res.json({
-  success: true,
-  message: "Employee logout marked successfully",
-  data: {
-    employee_id: employeeId,
-    full_name: employeeName, // ✅ ADD THIS
-    status,
-    timestamp: insertResult.rows[0].timestamp,
-    sessionHours,
-    remainingHours,
-    overtime,
-    daily_hours: dailyHoursStr,
-    weekly_hours: weeklyHoursStr,
-    monthly_hours: monthlyHoursStr,
-  },
-});
-
+    success: true,
+    message: "Employee logout marked successfully",
+    data: {
+      employee_id: employeeId,
+      status,
+      timestamp: insertResult.rows[0].timestamp,
+      sessionHours,
+      remainingHours,
+      overtime,
+      daily_hours: dailyHoursStr,
+      weekly_hours: weeklyHoursStr,
+      monthly_hours: monthlyHoursStr,
+    },
+  });
 }
 
 
@@ -837,38 +836,67 @@ if (employeeId) {
 
 router.get("/logout/all", async (req, res) => {
   try {
-    // 1️⃣ Fetch all "Off Duty" records
+    // 1️⃣ All Off Duty records (individual)
     const allRes = await pool.query(
-      `SELECT * FROM attendance WHERE status = 'Off Duty' ORDER BY timestamp DESC`
+      `SELECT 
+         a.*,
+         e.full_name
+       FROM attendance a
+       LEFT JOIN employees e ON e.id = a.employee_id
+       WHERE a.status = 'Off Duty'
+       ORDER BY a.timestamp DESC`
     );
 
-    // 2️⃣ Fetch daily records for all employees (today)
+    // 2️⃣ Daily totals
     const dailyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime
-       FROM attendance
-       WHERE status = 'Off Duty' 
-         AND DATE(timestamp) = CURRENT_DATE
-       ORDER BY timestamp`
+      `SELECT
+         a.employee_id,
+         e.full_name,
+         SUM(EXTRACT(EPOCH FROM (a.session_hours::interval))) AS total_seconds
+       FROM attendance a
+       LEFT JOIN employees e ON e.id = a.employee_id
+       WHERE a.status = 'Off Duty'
+         AND DATE(a.timestamp) = CURRENT_DATE
+       GROUP BY a.employee_id, e.full_name
+       ORDER BY e.full_name`
     );
 
-    // 3️⃣ Fetch monthly records for all employees (current month)
+    // 3️⃣ Monthly totals
     const monthlyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime
-       FROM attendance
-       WHERE status = 'Off Duty'
-         AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
-       ORDER BY timestamp`
+      `SELECT
+         a.employee_id,
+         e.full_name,
+         SUM(EXTRACT(EPOCH FROM (a.session_hours::interval))) AS total_seconds
+       FROM attendance a
+       LEFT JOIN employees e ON e.id = a.employee_id
+       WHERE a.status = 'Off Duty'
+         AND DATE_TRUNC('month', a.timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+       GROUP BY a.employee_id, e.full_name
+       ORDER BY e.full_name`
     );
+
+    // Convert seconds to "xh ym" strings
+    const daily = dailyRes.rows.map(r => ({
+      employee_id: r.employee_id,
+      full_name: r.full_name,
+      total_hours: formatHours(r.total_seconds)
+    }));
+
+    const monthly = monthlyRes.rows.map(r => ({
+      employee_id: r.employee_id,
+      full_name: r.full_name,
+      total_hours: formatHours(r.total_seconds)
+    }));
 
     return res.json({
       success: true,
-      message: "Fetched all logout records with daily and monthly summary for all employees",
+      message: "Fetched all logout records with aggregated totals",
       data: {
         status: "Off Duty",
         attendance: {
           all: allRes.rows,
-          daily: dailyRes.rows,      // Includes all employees for today
-          monthly: monthlyRes.rows,  // Includes all employees for the current month
+          daily,
+          monthly,
         },
       },
     });
