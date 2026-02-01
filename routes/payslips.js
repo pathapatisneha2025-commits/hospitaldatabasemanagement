@@ -813,9 +813,14 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 );
 
     const lateRows = lateResult.rows || [];
-    const freeLateDays = 3;
-    const latedays = lateRows.length;
-    const latePenalty = Math.max(0, latedays - freeLateDays) * perLatePenalty;
+const freeLateDays = 3;
+const latedays = lateRows.length;
+
+const latePenalty =
+  latedays > freeLateDays
+    ? (latedays - freeLateDays) * perLatePenalty
+    : 0;
+
 
     // 6️⃣ Break penalty
     const breakResult = await pool.query(
