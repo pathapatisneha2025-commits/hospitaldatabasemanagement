@@ -1234,6 +1234,42 @@ router.get("/employee/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+router.get("/employee/:phone", async (req, res) => {
+  try {
+    const { phone } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        COALESCE(a.employee_id, e.id) AS employee_id,
+        COALESCE(e.full_name, 'Unknown Employee') AS full_name,
+        a.phone,
+        a.status,
+        a.timestamp,
+        COALESCE(e.image, a.image_url) AS image_url
+      FROM attendance a
+      LEFT JOIN employees e 
+        ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
+        OR (a.employee_id IS NULL AND a.phone = e.mobile)
+      WHERE a.phone = $1 OR e.mobile = $1
+      ORDER BY a.timestamp DESC
+      LIMIT 1
+      `,
+      [phone]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "No status found" });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error("Dashboard status error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
