@@ -445,19 +445,13 @@ router.get("/login/all", async (req, res) => {
         a.phone,
         a.timestamp,
         a.status,
-        COALESCE(e1.full_name, e2.full_name) AS full_name,
+        COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
         COALESCE(e1.image, e2.image, a.image_url) AS image_url
       FROM attendance a
-
-      -- 1️⃣ STRICT join for employee_id (old behavior)
-      JOIN employees e1 
-        ON e1.id = a.employee_id
-
-      -- 2️⃣ Phone fallback ONLY when employee_id is NULL
-      LEFT JOIN employees e2 
-        ON a.employee_id IS NULL
-       AND e2.mobile = a.phone
-
+      -- Join by employee_id first
+      LEFT JOIN employees e1 ON e1.id = a.employee_id
+      -- Join by phone if employee_id doesn't match
+      LEFT JOIN employees e2 ON e2.mobile = a.phone
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
@@ -482,7 +476,6 @@ router.get("/login/all", async (req, res) => {
     });
   }
 });
-
 
 
 // GET attendance by phone number
