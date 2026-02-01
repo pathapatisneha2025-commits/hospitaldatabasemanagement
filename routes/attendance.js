@@ -443,25 +443,16 @@ router.get("/login/all", async (req, res) => {
         a.id,
         a.employee_id,
         a.phone,
-        a.timestamp,
+        (a.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS timestamp,
         a.status,
         COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
         COALESCE(e1.image, e2.image, a.image_url) AS image_url
       FROM attendance a
-      -- Join by employee_id first
       LEFT JOIN employees e1 ON e1.id = a.employee_id
-      -- Join by phone if employee_id doesn't match
       LEFT JOIN employees e2 ON e2.mobile = a.phone
       WHERE a.status = 'On Duty'
       ORDER BY a.timestamp DESC
     `);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No 'On Duty' attendance records found",
-      });
-    }
 
     res.json({
       success: true,
@@ -477,27 +468,6 @@ router.get("/login/all", async (req, res) => {
   }
 });
 
-
-// GET attendance by phone number
-router.get("/employee/:phone", async (req, res) => {
-  try {
-    const { phone } = req.params;
-
-    const attRes = await pool.query(
-      `SELECT *
-       FROM attendance
-       WHERE phone = $1
-       ORDER BY timestamp DESC
-       LIMIT 1`,
-      [phone]
-    );
-
-    res.json({ success: true, data: attRes.rows });
-  } catch (error) {
-    console.error("Attendance fetch by phone error:", error.message);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-});
 
 
 
