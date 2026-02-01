@@ -879,126 +879,235 @@ router.get("/logout/all", async (req, res) => {
 
 
 
-router.get("/logout/:employeeId", async (req, res) => {
-  try {
-    const { employeeId } = req.params;
+// router.get("/logout/:employeeId", async (req, res) => {
+//   try {
+//     const { employeeId } = req.params;
 
-    // Helper function: convert seconds → hours + minutes
+//     // Helper function: convert seconds → hours + minutes
+//     const formatHours = (seconds) => {
+//       const hrs = Math.floor(seconds / 3600);
+//       const mins = Math.floor((seconds % 3600) / 60);
+//       return `${hrs} hrs ${mins} mins`;
+//     };
+
+//     // 1️⃣ Fetch all "Off Duty" records for this employee
+//     const allRes = await pool.query(
+//       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+//        FROM attendance
+//        WHERE status = 'Off Duty' AND employee_id = $1
+//        ORDER BY timestamp DESC`,
+//       [employeeId]
+//     );
+
+//     if (allRes.rows.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No logout records found for this employee",
+//       });
+//     }
+
+//     // 2️⃣ Fetch daily "Off Duty" records
+//     const dailyRes = await pool.query(
+//       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+//        FROM attendance
+//        WHERE status = 'Off Duty' AND employee_id = $1
+//          AND DATE(timestamp) = CURRENT_DATE
+//        ORDER BY timestamp`,
+//       [employeeId]
+//     );
+
+//     // 3️⃣ Fetch weekly records
+//     const weeklyRes = await pool.query(
+//       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+//        FROM attendance
+//        WHERE status = 'Off Duty' AND employee_id = $1
+//          AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+//          AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)
+//        ORDER BY timestamp`,
+//       [employeeId]
+//     );
+
+//     // 4️⃣ Fetch monthly records
+//     const monthlyRes = await pool.query(
+//       `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+//        FROM attendance
+//        WHERE status = 'Off Duty' AND employee_id = $1
+//          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
+//        ORDER BY timestamp`,
+//       [employeeId]
+//     );
+
+//     // 5️⃣ Calculate total worked hours (daily / weekly / monthly)
+//     const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
+//       pool.query(
+//         `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+//          FROM attendance
+//          WHERE employee_id = $1
+//            AND status = 'Off Duty'
+//            AND DATE(timestamp) = CURRENT_DATE`,
+//         [employeeId]
+//       ),
+//       pool.query(
+//         `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+//          FROM attendance
+//          WHERE employee_id = $1
+//            AND status = 'Off Duty'
+//            AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+//            AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
+//         [employeeId]
+//       ),
+//       pool.query(
+//         `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
+//          FROM attendance
+//          WHERE employee_id = $1
+//            AND status = 'Off Duty'
+//            AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+//         [employeeId]
+//       ),
+//     ]);
+
+//     const dailySeconds = Math.floor(parseFloat(dailyTotal.rows[0].total_seconds));
+//     const weeklySeconds = Math.floor(parseFloat(weeklyTotal.rows[0].total_seconds));
+//     const monthlySeconds = Math.floor(parseFloat(monthlyTotal.rows[0].total_seconds));
+
+//     const daily_hours = formatHours(dailySeconds);
+//     const weekly_hours = formatHours(weeklySeconds);
+//     const monthly_hours = formatHours(monthlySeconds);
+
+//     // ✅ Final response
+//     return res.json({
+//       success: true,
+//       message: "Fetched logout records with daily, weekly, and monthly summaries",
+//       data: {
+//         status: "Off Duty",
+//         totals: {
+//           daily_hours,
+//           weekly_hours,
+//           monthly_hours,
+//         },
+//         attendance: {
+//           all: allRes.rows,
+//           daily: dailyRes.rows,
+//           weekly: weeklyRes.rows,
+//           monthly: monthlyRes.rows,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Get logout by ID error:", error.message);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// });
+
+router.get("/logout/:identifier", async (req, res) => {
+  try {
+    const { identifier } = req.params;
+
+    // Detect phone vs employeeId
+    const isPhone = /^\d{10}$/.test(identifier);
+
+    const condition = isPhone
+      ? "phone = $1"
+      : "employee_id = $1";
+
+    const value = identifier;
+
+    // Helper: seconds → hrs mins
     const formatHours = (seconds) => {
       const hrs = Math.floor(seconds / 3600);
       const mins = Math.floor((seconds % 3600) / 60);
       return `${hrs} hrs ${mins} mins`;
     };
 
-    // 1️⃣ Fetch all "Off Duty" records for this employee
+    // 🔹 All records
     const allRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
+      `SELECT employee_id, phone, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
+       WHERE status='Off Duty' AND ${condition}
        ORDER BY timestamp DESC`,
-      [employeeId]
+      [value]
     );
 
-    if (allRes.rows.length === 0) {
+    if (!allRes.rows.length) {
       return res.status(404).json({
         success: false,
-        message: "No logout records found for this employee",
+        message: "No logout records found",
       });
     }
 
-    // 2️⃣ Fetch daily "Off Duty" records
-    const dailyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
+    // 🔹 Daily / Weekly / Monthly lists
+    const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+      pool.query(
+        `SELECT * FROM attendance
+         WHERE status='Off Duty' AND ${condition}
          AND DATE(timestamp) = CURRENT_DATE
-       ORDER BY timestamp`,
-      [employeeId]
-    );
-
-    // 3️⃣ Fetch weekly records
-    const weeklyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
+         ORDER BY timestamp`,
+        [value]
+      ),
+      pool.query(
+        `SELECT * FROM attendance
+         WHERE status='Off Duty' AND ${condition}
          AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
          AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)
-       ORDER BY timestamp`,
-      [employeeId]
-    );
-
-    // 4️⃣ Fetch monthly records
-    const monthlyRes = await pool.query(
-      `SELECT employee_id, timestamp, session_hours, remaining_hours, overtime, image_url
-       FROM attendance
-       WHERE status = 'Off Duty' AND employee_id = $1
+         ORDER BY timestamp`,
+        [value]
+      ),
+      pool.query(
+        `SELECT * FROM attendance
+         WHERE status='Off Duty' AND ${condition}
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
-       ORDER BY timestamp`,
-      [employeeId]
-    );
-
-    // 5️⃣ Calculate total worked hours (daily / weekly / monthly)
-    const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
-      pool.query(
-        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND DATE(timestamp) = CURRENT_DATE`,
-        [employeeId]
-      ),
-      pool.query(
-        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
-           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
-        [employeeId]
-      ),
-      pool.query(
-        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)), 0) AS total_seconds
-         FROM attendance
-         WHERE employee_id = $1
-           AND status = 'Off Duty'
-           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
-        [employeeId]
+         ORDER BY timestamp`,
+        [value]
       ),
     ]);
 
-    const dailySeconds = Math.floor(parseFloat(dailyTotal.rows[0].total_seconds));
-    const weeklySeconds = Math.floor(parseFloat(weeklyTotal.rows[0].total_seconds));
-    const monthlySeconds = Math.floor(parseFloat(monthlyTotal.rows[0].total_seconds));
-
-    const daily_hours = formatHours(dailySeconds);
-    const weekly_hours = formatHours(weeklySeconds);
-    const monthly_hours = formatHours(monthlySeconds);
+    // 🔹 Totals
+    const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)),0) total
+         FROM attendance
+         WHERE status='Off Duty' AND ${condition}
+         AND DATE(timestamp)=CURRENT_DATE`,
+        [value]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)),0) total
+         FROM attendance
+         WHERE status='Off Duty' AND ${condition}
+         AND DATE_PART('week', timestamp)=DATE_PART('week', CURRENT_DATE)
+         AND DATE_PART('year', timestamp)=DATE_PART('year', CURRENT_DATE)`,
+        [value]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)),0) total
+         FROM attendance
+         WHERE status='Off Duty' AND ${condition}
+         AND DATE_TRUNC('month', timestamp)=DATE_TRUNC('month', CURRENT_DATE)`,
+        [value]
+      ),
+    ]);
 
     // ✅ Final response
-    return res.json({
+    res.json({
       success: true,
-      message: "Fetched logout records with daily, weekly, and monthly summaries",
-      data: {
-        status: "Off Duty",
-        totals: {
-          daily_hours,
-          weekly_hours,
-          monthly_hours,
-        },
-        attendance: {
-          all: allRes.rows,
-          daily: dailyRes.rows,
-          weekly: weeklyRes.rows,
-          monthly: monthlyRes.rows,
-        },
+      status: "Off Duty",
+      totals: {
+        daily_hours: formatHours(dailyTotal.rows[0].total),
+        weekly_hours: formatHours(weeklyTotal.rows[0].total),
+        monthly_hours: formatHours(monthlyTotal.rows[0].total),
+      },
+      attendance: {
+        all: allRes.rows,
+        daily: dailyRes.rows,
+        weekly: weeklyRes.rows,
+        monthly: monthlyRes.rows,
       },
     });
-  } catch (error) {
-    console.error("Get logout by ID error:", error.message);
+  } catch (err) {
+    console.error("Logout route error:", err.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 
