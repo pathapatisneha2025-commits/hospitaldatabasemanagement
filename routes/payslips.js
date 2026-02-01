@@ -806,7 +806,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
   GROUP BY DATE(a.timestamp)
   HAVING MIN(a.timestamp::time) > e.schedule_in
   `,
-  [employeeId, year, month, employeePhone]
+  [employeeId, year, month]
 );
     const lateRows = lateResult.rows || [];
     const freeLateDays = 0;
