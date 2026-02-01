@@ -813,7 +813,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 );
 
     const lateRows = lateResult.rows || [];
-    const freeLateDays = 0;
+    const freeLateDays = 3;
     const latedays = lateRows.length;
     const latePenalty = Math.max(0, latedays - freeLateDays) * perLatePenalty;
 
@@ -834,8 +834,11 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     breakResult.rows.forEach((row) => {
       if (row.actual_breakout > row.break_out) lateBreakCount++;
     });
-    const breakPenalty = lateBreakCount * perBreakPenalty;
+const FREE_BREAKS = 3;
+lateBreakCount = Math.max(0, lateBreakCount - FREE_BREAKS);
 
+// final penalty
+const breakPenalty = lateBreakCount * perBreakPenalty;
     // 7️⃣ Net Pay
     const netPay = Math.max(0, baseSalary + proportionalIncentive - unauthorizedPenaltyTotal - latePenalty - breakPenalty - deductions);
 
