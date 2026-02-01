@@ -791,16 +791,23 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 
     // 5️⃣ Late penalty
     const lateResult = await pool.query(
-      `SELECT DATE(a.timestamp) AS day
-       FROM attendance a
-       WHERE a.employee_id = $1
-         AND EXTRACT(YEAR FROM a.timestamp) = $2
-         AND EXTRACT(MONTH FROM a.timestamp) = $3
-         AND a.status ILIKE 'On Duty'
-       GROUP BY DATE(a.timestamp)
-       HAVING MIN(a.timestamp::time) > (SELECT schedule_in FROM employees WHERE id = $1);`,
-      [employeeId, year, month]
-    );
+  `
+  SELECT DATE(a.timestamp) AS day
+  FROM attendance a
+  JOIN employees e ON e.id = $1
+  WHERE
+    (
+      a.employee_id = $1
+      OR (a.phone IS NOT NULL AND a.phone = $4)
+    )
+    AND EXTRACT(YEAR FROM a.timestamp) = $2
+    AND EXTRACT(MONTH FROM a.timestamp) = $3
+    AND a.status ILIKE 'On Duty'
+  GROUP BY DATE(a.timestamp)
+  HAVING MIN(a.timestamp::time) > e.schedule_in
+  `,
+  [employeeId, year, month, employeePhone]
+);
     const lateRows = lateResult.rows || [];
     const freeLateDays = 0;
     const latedays = lateRows.length;
