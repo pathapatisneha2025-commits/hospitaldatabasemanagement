@@ -27,7 +27,7 @@ const csvUpload = multer({ storage: multer.memoryStorage() });
 
 
 // -------------------- ADD ITEM TO CART WITH MULTIPLE IMAGES --------------------
-router.post("/add", upload.array("images", 5), async (req, res) => {
+router.post("/add", async (req, res) => {
   const {
     patient_id,
     employeeid,
@@ -41,26 +41,23 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
     price,
     stock,
     quantity,
+    images, // ✅ Cloudinary URLs array
   } = req.body;
 
-  // Validate that exactly one of patient_id, employeeid, or subadmin_id is provided
-  const providedIds = [patient_id, employeeid, subadmin_id].filter(id => id);
+  const providedIds = [patient_id, employeeid, subadmin_id].filter(Boolean);
   if (providedIds.length !== 1) {
     return res.status(400).json({
-      error: "Provide exactly one of patient_id, employeeid, or subadmin_id."
+      error: "Provide exactly one of patient_id, employeeid, or subadmin_id",
     });
   }
 
-  const files = req.files || [];
-
   try {
-    const imageUrls = files.map(file => file.path);
-
     const result = await pool.query(
       `INSERT INTO cart
-       (patient_id, employeeid, subadmin_id, name, category, manufacturer, batch_number, pack_size, description, price, stock, quantity, images)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-       RETURNING *`,
+      (patient_id, employeeid, subadmin_id, name, category, manufacturer,
+       batch_number, pack_size, description, price, stock, quantity, images)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      RETURNING *`,
       [
         patient_id || null,
         employeeid || null,
@@ -71,10 +68,10 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
         batch_number || null,
         pack_size || null,
         description || null,
-        price ? parseFloat(price) : null,
-        stock ? parseInt(stock) : 0,
-        quantity ? parseInt(quantity) : 1,
-        imageUrls,
+        price,
+        stock,
+        quantity,
+        images, // ✅ stored as TEXT[] / JSON
       ]
     );
 
@@ -83,10 +80,11 @@ router.post("/add", upload.array("images", 5), async (req, res) => {
       item: result.rows[0],
     });
   } catch (err) {
-    console.error("Error adding cart item:", err.message);
+    console.error(err);
     res.status(500).json({ error: "Cart item creation failed" });
   }
 });
+
 
 
 
