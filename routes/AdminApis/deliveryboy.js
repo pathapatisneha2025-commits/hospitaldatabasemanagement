@@ -650,6 +650,59 @@ router.get('/:deliveryBoyId/handover/all', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+router.post("/update-location", async (req, res) => {
+  const { deliveryBoyId, latitude, longitude, status } = req.body;
+
+  if (!deliveryBoyId || !latitude || !longitude) {
+    return res.status(400).json({ success: false, message: "Invalid data" });
+  }
+
+  try {
+    await pool.query(
+      `
+      INSERT INTO delivery_boy_locations
+      (delivery_boy_id, latitude, longitude, status)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (delivery_boy_id)
+      DO UPDATE SET
+        latitude = EXCLUDED.latitude,
+        longitude = EXCLUDED.longitude,
+        status = EXCLUDED.status
+      `,
+      [deliveryBoyId, latitude, longitude, status]
+    );
+
+    // 🔥 Real-time push to admin
+    io.emit("location-update", {
+      deliveryBoyId,
+      latitude,
+      longitude,
+      status,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+router.get("/admin/deliveryboy-locations", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM delivery_boy_locations`
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+
+
 
 
 module.exports = router;
