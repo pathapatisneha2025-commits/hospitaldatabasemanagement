@@ -703,6 +703,47 @@ router.get("/admin/deliveryboy-locations", async (req, res) => {
 });
 
 
+router.post('/order/update-location', async (req, res) => {
+  const { orderId, deliveryBoyId, latitude, longitude } = req.body;
+
+  try {
+    // Insert or update location
+    await pool.query(`
+      INSERT INTO deliverylocations_orders(order_id, delivery_boy_id, latitude, longitude)
+      VALUES($1, $2, $3, $4)
+      ON CONFLICT(order_id, delivery_boy_id)
+      DO UPDATE SET latitude = $3, longitude = $4, updated_at = CURRENT_TIMESTAMP
+    `, [orderId, deliveryBoyId, latitude, longitude]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+// 2️⃣ Get location for a specific order
+router.get('/location/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT latitude, longitude, updated_at
+      FROM deliverylocations_orders
+      WHERE order_id = $1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `, [orderId]);
+
+    res.json({ success: true, location: result.rows[0] || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+
+
 
 
 module.exports = router;
