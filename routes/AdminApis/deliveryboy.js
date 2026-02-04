@@ -706,21 +706,23 @@ router.get("/admin/deliveryboy-locations", async (req, res) => {
 router.post('/order/update-location', async (req, res) => {
   const { orderId, deliveryBoyId, latitude, longitude } = req.body;
 
+  if (!orderId || !deliveryBoyId || latitude == null || longitude == null) {
+    return res.status(400).json({ success: false, error: 'Missing parameters' });
+  }
+
   try {
-    // Insert or update location
     await pool.query(`
-      INSERT INTO deliverylocations_orders(order_id, delivery_boy_id, latitude, longitude)
-      VALUES($1, $2, $3, $4)
-      ON CONFLICT(order_id, delivery_boy_id)
-      DO UPDATE SET latitude = $3, longitude = $4, updated_at = CURRENT_TIMESTAMP
+      INSERT INTO deliverylocations_orders(order_id, delivery_boy_id, latitude, longitude, updated_at)
+      VALUES($1, $2, $3, $4, CURRENT_TIMESTAMP)
     `, [orderId, deliveryBoyId, latitude, longitude]);
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error('Database Error:', err);
     res.status(500).json({ success: false, error: 'Database error' });
   }
 });
+
 
 // 2️⃣ Get location for a specific order
 router.get('/location/:orderId', async (req, res) => {
