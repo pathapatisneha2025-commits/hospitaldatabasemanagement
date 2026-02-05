@@ -403,7 +403,7 @@ router.get("/deliveredby-delivryboy", async (req, res) => {
         e.full_name AS deliveryboy_name
       FROM orders o
       LEFT JOIN employees e ON e.id = o.deliveryboy_id
-      WHERE o.deliverytype = 'normal'
+      WHERE o.deliverytype = 'local'
       ORDER BY o.created_at DESC;
     `;
 
