@@ -312,36 +312,196 @@ const result = await pool.query(
 // =========================
 // 5️ Summary: present, absent, on break, late (today)
 // =========================
+// router.get("/totalemployeescount", async (req, res) => {
+//   try {
+//     // 1️⃣ Total employees
+//     const empResult = await pool.query(`
+//       SELECT COUNT(*) AS total_employees
+//       FROM employees
+      
+//     `);
+
+//     // 2️⃣ Present (On Duty today)
+//     const presentResult = await pool.query(`
+//       SELECT COUNT(DISTINCT employee_id) AS total_present
+//       FROM attendance
+//       WHERE DATE(timestamp) = CURRENT_DATE
+//         AND status = 'On Duty'
+//     `);
+
+//     // 3️⃣ On Leave today
+//     const leaveResult = await pool.query(`
+//       SELECT COUNT(DISTINCT employee_id) AS total_on_leave
+//       FROM leaves
+//       WHERE status = 'Approved'
+//         AND CURRENT_DATE BETWEEN start_date AND end_date
+//     `);
+
+//     // 4️⃣ On Break
+//     const breakResult = await pool.query(`
+//       SELECT COUNT(DISTINCT employee_id) AS employees_on_break
+//       FROM break_logs bl
+//       WHERE break_type = 'Break In'
+//         AND bl.status = 'On Break'
+//         AND DATE(bl.timestamp) = CURRENT_DATE
+//         AND NOT EXISTS (
+//           SELECT 1
+//           FROM break_logs bo
+//           WHERE bo.employee_id = bl.employee_id
+//             AND bo.break_type = 'Break Out'
+//             AND DATE(bo.timestamp) = CURRENT_DATE
+//             AND bo.timestamp > bl.timestamp
+//         )
+//     `);
+
+//     const total_employees = Number(empResult.rows[0].total_employees);
+//     const total_present = Number(presentResult.rows[0].total_present);
+//     const total_on_leave = Number(leaveResult.rows[0].total_on_leave);
+
+//     // 5️⃣ NEW LOGIC: ABSENT = (Total − Present − On Leave)
+//     const total_absent = total_employees - total_present ;
+
+//     return res.json({
+//       success: true,
+//       summary: {
+//         total_employees,
+//         total_present,
+//         total_absent,
+//         total_on_leave,
+//         employees_on_break: breakResult.rows[0].employees_on_break
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error("Attendance summary error:", error.message);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error"
+//     });
+//   }
+// });
+
+// router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
+//   try {
+//     const { employeeId } = req.params;
+//     const { filter } = req.body; // now comes from body instead of query
+//     let dateCondition = "";
+
+//     // 🕒 Date range filter logic
+//     if (filter === "weekly") {
+//       dateCondition = `a.timestamp >= date_trunc('week', CURRENT_DATE)`;
+//     } else if (filter === "monthly") {
+//       dateCondition = `a.timestamp >= date_trunc('month', CURRENT_DATE)`;
+//     } else {
+//       dateCondition = `DATE(a.timestamp) = CURRENT_DATE`;
+//     }
+
+//     // 🧮 Total present, absent, and late counts for one employee
+//     const attendanceResult = await pool.query(
+//       `
+//       SELECT 
+//         COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
+//         COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
+//         COUNT(*) FILTER (
+//           WHERE a.status = 'On Duty'
+//             AND a.timestamp > (DATE(a.timestamp) + e.schedule_in)
+//         ) AS total_late
+//       FROM attendance a
+//       JOIN employees e ON a.employee_id = e.id
+//       WHERE e.id = $1
+//         AND ${dateCondition};
+//       `,
+//       [employeeId]
+//     );
+
+//     // 🧘 Employee currently on break (only for daily)
+//     let breakResult = { rows: [{ employees_on_break: 0 }] };
+//     if (filter === "daily" || !filter) {
+//       breakResult = await pool.query(
+//         `
+//         SELECT COUNT(DISTINCT employee_id) AS employees_on_break
+//         FROM break_logs bl
+//         WHERE bl.employee_id = $1
+//           AND break_type = 'Break In'
+//           AND bl.status = 'On Break'
+//           AND DATE(bl.timestamp) = CURRENT_DATE
+//           AND NOT EXISTS (
+//             SELECT 1
+//             FROM break_logs bo
+//             WHERE bo.employee_id = bl.employee_id
+//               AND bo.break_type = 'Break Out'
+//               AND DATE(bo.timestamp) = CURRENT_DATE
+//               AND bo.timestamp > bl.timestamp
+//           )
+//         `,
+//         [employeeId]
+//       );
+//     }
+
+//     // 🧰 Working days info
+//     const workResult = await pool.query(
+//       `
+//       SELECT working_days 
+//       FROM employee_working_days 
+//       WHERE employee_id = $1 
+//       LIMIT 1;
+//       `,
+//       [employeeId]
+//     );
+
+//     // ✅ Format and send final response
+//     return res.json({
+//       success: true,
+//       period: filter || "daily",
+//       summary: {
+//         total_present: attendanceResult.rows[0]?.total_present || 0,
+//         total_absent: attendanceResult.rows[0]?.total_absent || 0,
+//         total_late: attendanceResult.rows[0]?.total_late || 0,
+//         employees_on_break:
+//           filter === "daily" || !filter
+//             ? breakResult.rows[0]?.employees_on_break || 0
+//             : null,
+//         working_days: workResult.rows[0]?.working_days || null
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Employee attendance summary error:", error.message);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// });
+// 🔹 Total Employees Summary (including real-time login/logout)
 router.get("/totalemployeescount", async (req, res) => {
   try {
     // 1️⃣ Total employees
     const empResult = await pool.query(`
       SELECT COUNT(*) AS total_employees
       FROM employees
-      
     `);
+    const total_employees = Number(empResult.rows[0].total_employees);
 
-    // 2️⃣ Present (On Duty today)
+    // 2️⃣ Employees present today (last record On Duty)
     const presentResult = await pool.query(`
-      SELECT COUNT(DISTINCT employee_id) AS total_present
-      FROM attendance
-      WHERE DATE(timestamp) = CURRENT_DATE
-        AND status = 'On Duty'
+      SELECT COUNT(DISTINCT a.employee_id) AS total_present
+      FROM attendance a
+      WHERE DATE(a.timestamp) = CURRENT_DATE
+        AND a.status = 'On Duty'
     `);
+    const total_present = Number(presentResult.rows[0].total_present);
 
-    // 3️⃣ On Leave today
+    // 3️⃣ Employees on leave today
     const leaveResult = await pool.query(`
       SELECT COUNT(DISTINCT employee_id) AS total_on_leave
       FROM leaves
       WHERE status = 'Approved'
         AND CURRENT_DATE BETWEEN start_date AND end_date
     `);
+    const total_on_leave = Number(leaveResult.rows[0].total_on_leave);
 
-    // 4️⃣ On Break
+    // 4️⃣ Employees currently on break
     const breakResult = await pool.query(`
-      SELECT COUNT(DISTINCT employee_id) AS employees_on_break
+      SELECT COUNT(DISTINCT bl.employee_id) AS employees_on_break
       FROM break_logs bl
-      WHERE break_type = 'Break In'
+      WHERE bl.break_type = 'Break In'
         AND bl.status = 'On Break'
         AND DATE(bl.timestamp) = CURRENT_DATE
         AND NOT EXISTS (
@@ -354,12 +514,29 @@ router.get("/totalemployeescount", async (req, res) => {
         )
     `);
 
-    const total_employees = Number(empResult.rows[0].total_employees);
-    const total_present = Number(presentResult.rows[0].total_present);
-    const total_on_leave = Number(leaveResult.rows[0].total_on_leave);
+    // 5️⃣ Employees currently logged in (On Duty but not on break)
+    const loggedInResult = await pool.query(`
+      SELECT COUNT(*) AS logged_in
+      FROM (
+        SELECT DISTINCT a.employee_id
+        FROM attendance a
+        WHERE DATE(a.timestamp) = CURRENT_DATE
+          AND a.status = 'On Duty'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM break_logs bl
+            WHERE bl.employee_id = a.employee_id
+              AND bl.break_type = 'Break In'
+              AND bl.status = 'On Break'
+              AND DATE(bl.timestamp) = CURRENT_DATE
+              AND bl.timestamp > a.timestamp
+          )
+      ) t
+    `);
+    const logged_in = Number(loggedInResult.rows[0].logged_in);
 
-    // 5️⃣ NEW LOGIC: ABSENT = (Total − Present − On Leave)
-    const total_absent = total_employees - total_present ;
+    // 6️⃣ Absents = total_employees − present − on_leave
+    const total_absent = total_employees - total_present - total_on_leave;
 
     return res.json({
       success: true,
@@ -368,61 +545,54 @@ router.get("/totalemployeescount", async (req, res) => {
         total_present,
         total_absent,
         total_on_leave,
-        employees_on_break: breakResult.rows[0].employees_on_break
-      }
+        employees_on_break: Number(breakResult.rows[0].employees_on_break),
+        logged_in,
+        logged_out: total_employees - logged_in - Number(breakResult.rows[0].employees_on_break) - total_on_leave
+      },
     });
-
   } catch (error) {
     console.error("Attendance summary error:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
+// 🔹 Employee Attendance Summary (daily, weekly, monthly) + real-time status
 router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { filter } = req.body; // now comes from body instead of query
+    const { filter } = req.body; // daily / weekly / monthly
     let dateCondition = "";
 
-    // 🕒 Date range filter logic
-    if (filter === "weekly") {
-      dateCondition = `a.timestamp >= date_trunc('week', CURRENT_DATE)`;
-    } else if (filter === "monthly") {
-      dateCondition = `a.timestamp >= date_trunc('month', CURRENT_DATE)`;
-    } else {
-      dateCondition = `DATE(a.timestamp) = CURRENT_DATE`;
-    }
+    if (filter === "weekly") dateCondition = `a.timestamp >= date_trunc('week', CURRENT_DATE)`;
+    else if (filter === "monthly") dateCondition = `a.timestamp >= date_trunc('month', CURRENT_DATE)`;
+    else dateCondition = `DATE(a.timestamp) = CURRENT_DATE`;
 
-    // 🧮 Total present, absent, and late counts for one employee
+    // Total present, absent, late for this employee
     const attendanceResult = await pool.query(
       `
       SELECT 
         COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
         COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
         COUNT(*) FILTER (
-          WHERE a.status = 'On Duty'
+          WHERE a.status = 'On Duty' 
             AND a.timestamp > (DATE(a.timestamp) + e.schedule_in)
         ) AS total_late
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
-      WHERE e.id = $1
-        AND ${dateCondition};
+      WHERE e.id = $1 AND ${dateCondition};
       `,
       [employeeId]
     );
 
-    // 🧘 Employee currently on break (only for daily)
+    // Currently on break (only meaningful for daily)
     let breakResult = { rows: [{ employees_on_break: 0 }] };
     if (filter === "daily" || !filter) {
       breakResult = await pool.query(
         `
-        SELECT COUNT(DISTINCT employee_id) AS employees_on_break
+        SELECT COUNT(*) AS on_break
         FROM break_logs bl
         WHERE bl.employee_id = $1
-          AND break_type = 'Break In'
+          AND bl.break_type = 'Break In'
           AND bl.status = 'On Break'
           AND DATE(bl.timestamp) = CURRENT_DATE
           AND NOT EXISTS (
@@ -438,18 +608,36 @@ router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
       );
     }
 
-    // 🧰 Working days info
-    const workResult = await pool.query(
+    // Currently logged in (not on break)
+    const loggedInResult = await pool.query(
       `
-      SELECT working_days 
-      FROM employee_working_days 
-      WHERE employee_id = $1 
-      LIMIT 1;
+      SELECT COUNT(*) AS logged_in
+      FROM (
+        SELECT DISTINCT a.employee_id
+        FROM attendance a
+        WHERE a.employee_id = $1
+          AND DATE(a.timestamp) = CURRENT_DATE
+          AND a.status = 'On Duty'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM break_logs bl
+            WHERE bl.employee_id = a.employee_id
+              AND bl.break_type = 'Break In'
+              AND bl.status = 'On Break'
+              AND DATE(bl.timestamp) = CURRENT_DATE
+              AND bl.timestamp > a.timestamp
+          )
+      ) t
       `,
       [employeeId]
     );
 
-    // ✅ Format and send final response
+    // Working days info
+    const workResult = await pool.query(
+      `SELECT working_days FROM employee_working_days WHERE employee_id = $1 LIMIT 1`,
+      [employeeId]
+    );
+
     return res.json({
       success: true,
       period: filter || "daily",
@@ -458,11 +646,13 @@ router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
         total_absent: attendanceResult.rows[0]?.total_absent || 0,
         total_late: attendanceResult.rows[0]?.total_late || 0,
         employees_on_break:
-          filter === "daily" || !filter
-            ? breakResult.rows[0]?.employees_on_break || 0
-            : null,
-        working_days: workResult.rows[0]?.working_days || null
-      }
+          filter === "daily" || !filter ? breakResult.rows[0]?.on_break || 0 : null,
+        logged_in: loggedInResult.rows[0]?.logged_in || 0,
+        logged_out:
+          (attendanceResult.rows[0]?.total_present || 0) -
+          (loggedInResult.rows[0]?.logged_in || 0),
+        working_days: workResult.rows[0]?.working_days || null,
+      },
     });
   } catch (error) {
     console.error("Employee attendance summary error:", error.message);
