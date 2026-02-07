@@ -567,38 +567,51 @@ router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
     else if (filter === "monthly") dateCondition = `a.timestamp >= date_trunc('month', CURRENT_DATE)`;
     else dateCondition = `DATE(a.timestamp) = CURRENT_DATE`;
 
-    // Total present, absent, late for this employee
+    // Total present, absent, late for this employee or phone
     const attendanceResult = await pool.query(
       `
       SELECT 
-        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
-        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
+        COUNT(*) FILTER (
+          WHERE a.status = 'On Duty'
+            AND (a.employee_id = $1 OR a.phone = (
+              SELECT phone FROM employees WHERE id = $1 LIMIT 1
+            ))
+        ) AS total_present,
+        COUNT(*) FILTER (
+          WHERE a.status = 'Absent'
+            AND (a.employee_id = $1 OR a.phone = (
+              SELECT phone FROM employees WHERE id = $1 LIMIT 1
+            ))
+        ) AS total_absent,
         COUNT(*) FILTER (
           WHERE a.status = 'On Duty' 
             AND a.timestamp > (DATE(a.timestamp) + e.schedule_in)
+            AND (a.employee_id = $1 OR a.phone = (
+              SELECT phone FROM employees WHERE id = $1 LIMIT 1
+            ))
         ) AS total_late
       FROM attendance a
-      JOIN employees e ON a.employee_id = e.id
-      WHERE e.id = $1 AND ${dateCondition};
+      JOIN employees e ON e.id = $1
+      WHERE ${dateCondition};
       `,
       [employeeId]
     );
 
-    // Currently on break (only meaningful for daily)
+    // Currently on break (only for daily)
     let breakResult = { rows: [{ employees_on_break: 0 }] };
     if (filter === "daily" || !filter) {
       breakResult = await pool.query(
         `
         SELECT COUNT(*) AS on_break
         FROM break_logs bl
-        WHERE bl.employee_id = $1
+        WHERE (bl.employee_id = $1 OR bl.phone = (SELECT phone FROM employees WHERE id = $1 LIMIT 1))
           AND bl.break_type = 'Break In'
           AND bl.status = 'On Break'
           AND DATE(bl.timestamp) = CURRENT_DATE
           AND NOT EXISTS (
             SELECT 1
             FROM break_logs bo
-            WHERE bo.employee_id = bl.employee_id
+            WHERE (bo.employee_id = $1 OR bo.phone = (SELECT phone FROM employees WHERE id = $1 LIMIT 1))
               AND bo.break_type = 'Break Out'
               AND DATE(bo.timestamp) = CURRENT_DATE
               AND bo.timestamp > bl.timestamp
@@ -608,20 +621,20 @@ router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
       );
     }
 
-    // Currently logged in (not on break)
+    // Currently logged in (On Duty but not on break)
     const loggedInResult = await pool.query(
       `
       SELECT COUNT(*) AS logged_in
       FROM (
-        SELECT DISTINCT a.employee_id
+        SELECT DISTINCT COALESCE(a.employee_id, a.phone) AS emp
         FROM attendance a
-        WHERE a.employee_id = $1
+        WHERE (a.employee_id = $1 OR a.phone = (SELECT phone FROM employees WHERE id = $1 LIMIT 1))
           AND DATE(a.timestamp) = CURRENT_DATE
           AND a.status = 'On Duty'
           AND NOT EXISTS (
             SELECT 1
             FROM break_logs bl
-            WHERE bl.employee_id = a.employee_id
+            WHERE COALESCE(bl.employee_id, bl.phone) = COALESCE(a.employee_id, a.phone)
               AND bl.break_type = 'Break In'
               AND bl.status = 'On Break'
               AND DATE(bl.timestamp) = CURRENT_DATE
@@ -649,7 +662,7 @@ router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
           filter === "daily" || !filter ? breakResult.rows[0]?.on_break || 0 : null,
         logged_in: loggedInResult.rows[0]?.logged_in || 0,
         logged_out:
-          (attendanceResult.rows[0]?.total_present || 0) -
+          (attendanceResult.rows[0]?.total_present || 0) - 
           (loggedInResult.rows[0]?.logged_in || 0),
         working_days: workResult.rows[0]?.working_days || null,
       },
@@ -659,6 +672,7 @@ router.post("/employee-attendance-summary/:employeeId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 
