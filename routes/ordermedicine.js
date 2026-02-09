@@ -123,19 +123,21 @@ router.get("/export", async (req, res) => {
         o.total,
         o.expected_delivery,
 
-        '"' || o.address->>'name' || '"' AS name,
-        '"' || o.address->>'mobile' || '"' AS mobile,
-        '"' || o.address->>'flat' || '"' AS flat,
-        '"' || o.address->>'street' || '"' AS street,
-        '"' || o.address->>'landmark' || '"' AS landmark,
-        '"' || o.address->>'city' || '"' AS city,
-        '"' || o.address->>'state' || '"' AS state,
-        '"' || o.address->>'pincode' || '"' AS pincode,
+        o.address->>'name' AS name,
+        o.address->>'mobile' AS mobile,
+        o.address->>'flat' AS flat,
+        o.address->>'street' AS street,
+        o.address->>'landmark' AS landmark,
+        o.address->>'city' AS city,
+        o.address->>'state' AS state,
+        o.address->>'pincode' AS pincode,
 
-        '"' || ARRAY_TO_STRING(ARRAY(
-          SELECT (m->>'name') || 'x' || (m->>'quantity')::text
-          FROM jsonb_array_elements(o.order_summary) AS m
-        ), ', ') || '"' AS medicines
+        ARRAY_TO_STRING(
+          ARRAY(
+            SELECT (m->>'name') || 'x' || (m->>'quantity')::text
+            FROM jsonb_array_elements(o.order_summary) AS m
+          ), ', '
+        ) AS medicines
 
       FROM orders o
       ORDER BY o.id DESC;
@@ -161,7 +163,8 @@ router.get("/export", async (req, res) => {
       { label: "Medicines", value: "medicines" },
     ];
 
-    const parser = new Parser({ fields });
+    // JSON2CSV will automatically wrap values in quotes when needed
+    const parser = new Parser({ fields, quote: '"' });
     const csv = parser.parse(result.rows);
 
     res.header("Content-Type", "text/csv");
@@ -173,7 +176,6 @@ router.get("/export", async (req, res) => {
     res.status(500).json({ message: "Export failed" });
   }
 });
-
 
 router.post("/checkout", async (req, res) => {
   const { patientId, addressId, paymentMethod, expectedDelivery } = req.body;
