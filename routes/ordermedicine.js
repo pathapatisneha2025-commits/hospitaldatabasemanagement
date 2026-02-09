@@ -113,34 +113,32 @@ router.get("/export-deliveryboy", async (req, res) => {
 router.get("/export", async (req, res) => {
   try {
     const result = await pool.query(`
-    SELECT
-  o.id,
-  o.status,
-  o.payment_method,
-  o.subtotal,
-  o.tax,
-  o.delivery_fee,
-  o.total,
-  o.expected_delivery,
+      SELECT
+        o.id,
+        o.status,
+        o.payment_method,
+        o.subtotal,
+        o.tax,
+        o.delivery_fee,
+        o.total,
+        o.expected_delivery,
 
-  o.address->>'name' AS name,
-  o.address->>'mobile' AS mobile,
-  o.address->>'flat' AS flat,
-  o.address->>'street' AS street,
-  o.address->>'landmark' AS landmark,
-  o.address->>'city' AS city,
-  o.address->>'state' AS state,
-  o.address->>'pincode' AS pincode,
+        '"' || o.address->>'name' || '"' AS name,
+        '"' || o.address->>'mobile' || '"' AS mobile,
+        '"' || o.address->>'flat' || '"' AS flat,
+        '"' || o.address->>'street' || '"' AS street,
+        '"' || o.address->>'landmark' || '"' AS landmark,
+        '"' || o.address->>'city' || '"' AS city,
+        '"' || o.address->>'state' || '"' AS state,
+        '"' || o.address->>'pincode' || '"' AS pincode,
 
-  ARRAY_TO_STRING(ARRAY(
-    SELECT (m->>'name') || 'x' || (m->>'quantity')::text
-    FROM jsonb_array_elements(o.order_summary) AS m
-  ), ', ') AS medicines
+        '"' || ARRAY_TO_STRING(ARRAY(
+          SELECT (m->>'name') || 'x' || (m->>'quantity')::text
+          FROM jsonb_array_elements(o.order_summary) AS m
+        ), ', ') || '"' AS medicines
 
-FROM orders o
-ORDER BY o.id DESC;
-
-
+      FROM orders o
+      ORDER BY o.id DESC;
     `);
 
     const fields = [
@@ -175,6 +173,7 @@ ORDER BY o.id DESC;
     res.status(500).json({ message: "Export failed" });
   }
 });
+
 
 router.post("/checkout", async (req, res) => {
   const { patientId, addressId, paymentMethod, expectedDelivery } = req.body;
