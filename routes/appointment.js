@@ -444,7 +444,7 @@ router.put("/update-status", async (req, res) => {
       result = await db.query(
         `UPDATE appointments 
          SET status = $1 
-         WHERE tokenid = $2 AND date::date = $3 AND doctor_id = $4
+         WHERE tokenid = $2 AND date::date = $3 AND doctorid = $4
          RETURNING *;`,
         [status, tokenid, date, doctorId]
       );
