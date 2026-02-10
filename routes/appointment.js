@@ -417,8 +417,8 @@ router.delete('/delete/:tokenid', async (req, res) => {
 
 // -------------------- UPDATE STATUS --------------------
 router.put("/update-status", async (req, res) => {
-  const { tokenid, daily_id, status, date } = req.body; // date in YYYY-MM-DD
-  console.log("🧾 Incoming:", { tokenid, daily_id, status, date });
+  const { tokenid, daily_id, status, date, doctorId } = req.body; // <-- add doctorId
+  console.log("🧾 Incoming:", { tokenid, daily_id, status, date, doctorId });
 
   if (!status) {
     return res.status(400).json({ error: "Status is required" });
@@ -432,25 +432,29 @@ router.put("/update-status", async (req, res) => {
     return res.status(400).json({ error: "Date is required to update status" });
   }
 
+  if (!doctorId) {
+    return res.status(400).json({ error: "Doctor ID is required to update status" });
+  }
+
   try {
     let result;
 
     if (tokenid) {
-      // ✅ Compare only the date part
+      // Add doctor_id filter
       result = await db.query(
         `UPDATE appointments 
          SET status = $1 
-         WHERE tokenid = $2 AND date::date = $3
+         WHERE tokenid = $2 AND date::date = $3 AND doctor_id = $4
          RETURNING *;`,
-        [status, tokenid, date]
+        [status, tokenid, date, doctorId]
       );
     } else if (daily_id) {
       result = await db.query(
         `UPDATE doctorbooking 
          SET status = $1 
-         WHERE daily_id = $2 AND appointment_date::date = $3
+         WHERE daily_id = $2 AND appointment_date::date = $3 AND doctor_id = $4
          RETURNING *;`,
-        [status, daily_id, date]
+        [status, daily_id, date, doctorId]
       );
     }
 
