@@ -276,10 +276,10 @@ router.put("/update/:id", async (req, res) => {
 
       updateQuery = `
         UPDATE subadmin 
-        SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5, password = $6
-        WHERE id = $7 
+        SET name = $1, email = $2, phone = $3, joining_date = $4, password = $5
+        WHERE id = $6
         RETURNING *`;
-      updateValues = [name, email, phone, joining_date, status, hashedPassword, id];
+      updateValues = [name, email, phone, joining_date,  hashedPassword, id];
     } else {
       // ✅ If no password change
       updateQuery = `
