@@ -57,7 +57,7 @@ const Pickersapis = require("./routes/AdminApis/pickerapis");
 const Deptleavelimit = require("./routes/leavelimitdepartment"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
-const DoctorSlots =   require("./routes/slotdoctor"); // Adjust path if needed
+const DoctorSlots =   require("./routes/slotsdoctor"); // Adjust path if needed
 
 
 
