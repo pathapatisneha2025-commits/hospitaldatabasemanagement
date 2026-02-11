@@ -255,7 +255,7 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, joining_date, status, password, confirm_password } = req.body;
+    const { name, email, phone, joining_date, password, confirm_password } = req.body;
 
     // 🧾 Check if subadmin exists
     const existing = await pool.query("SELECT * FROM subadmin WHERE id = $1", [id]);
