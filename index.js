@@ -57,6 +57,8 @@ const Pickersapis = require("./routes/AdminApis/pickerapis");
 const Deptleavelimit = require("./routes/leavelimitdepartment"); 
 
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
+const DoctorSlots =   require("./routes/slotdoctor"); // Adjust path if needed
+
 
 
 
@@ -126,6 +128,7 @@ app.use("/salarydeduction",SalaryDeductions);
 app.use("/employeededuction",EmployeeDeductions); 
 app.use("/picker",Pickersapis); 
 app.use("/leavelimit",Deptleavelimit); 
+app.use("/doctorslots",DoctorSlots); 
 
 
 

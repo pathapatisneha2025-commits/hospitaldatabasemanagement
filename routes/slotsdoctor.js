@@ -1,0 +1,92 @@
+const express = require("express");
+const router = express.Router();
+const pool = require("../db");
+
+
+/*
+-----------------------------------
+GET SLOTS BY DOCTOR ID + DATE
+-----------------------------------
+*/
+router.get("/:doctorId", async (req, res) => {
+  const { doctorId } = req.params;
+  const { date } = req.query;
+
+  try {
+    const result = await pool.query(
+      "SELECT slot_time FROM doctor_slots WHERE doctor_id=$1 AND slot_date=$2 ORDER BY slot_time ASC",
+      [doctorId, date]
+    );
+
+    const slots = result.rows.map((row) => row.slot_time);
+    res.json({ slots });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*
+-----------------------------------
+ADD SLOT
+-----------------------------------
+*/
+router.post("/add-slot", async (req, res) => {
+  const { doctor_id, date, slot } = req.body;
+
+  if (!doctor_id || !date || !slot) {
+    return res.status(400).json({ message: "Missing fields" });
+  }
+
+  try {
+    await pool.query(
+      "INSERT INTO doctor_slots (doctor_id, slot_date, slot_time) VALUES ($1, $2, $3)",
+      [doctor_id, date, slot]
+    );
+
+    res.json({ message: "Slot added successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*
+-----------------------------------
+DELETE SLOT
+-----------------------------------
+*/
+router.delete("/delete-slot", async (req, res) => {
+  const { doctor_id, date, slotText } = req.body;
+
+  try {
+    await pool.query(
+      "DELETE FROM doctor_slots WHERE doctor_id=$1 AND slot_date=$2 AND slot_time=$3",
+      [doctor_id, date, slotText]
+    );
+
+    res.json({ message: "Slot deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*
+-----------------------------------
+EDIT SLOT
+-----------------------------------
+*/
+router.put("/edit-slot", async (req, res) => {
+  const { doctor_id, date, oldSlot, newSlot } = req.body;
+
+  try {
+    await pool.query(
+      "UPDATE doctor_slots SET slot_time=$1 WHERE doctor_id=$2 AND slot_date=$3 AND slot_time=$4",
+      [newSlot, doctor_id, date, oldSlot]
+    );
+
+    res.json({ message: "Slot updated successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;
