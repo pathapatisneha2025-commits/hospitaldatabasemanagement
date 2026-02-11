@@ -3,11 +3,33 @@ const router = express.Router();
 const pool = require("../db");
 
 
+router.get("/all", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        ds.id,
+        ds.doctor_id,
+        d.name AS doctor_name,
+        ds.slot_date,
+        ds.slot_time,
+        ds.created_at
+      FROM doctor_slots ds
+      JOIN doctors d ON ds.doctor_id = d.id
+      ORDER BY ds.slot_date ASC, ds.slot_time ASC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /*
 -----------------------------------
 GET SLOTS BY DOCTOR ID + DATE
 -----------------------------------
 */
+
 router.get("/:doctorId", async (req, res) => {
   const { doctorId } = req.params;
   const { date } = req.query;
@@ -49,30 +71,6 @@ router.post("/add-slot", async (req, res) => {
   }
 });
 /*
------------------------------------
-GET ALL SLOTS (ADMIN)
------------------------------------
-*/
-router.get("/all", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT 
-        ds.id,
-        ds.doctor_id,
-        d.name AS doctor_name,
-        ds.slot_date,
-        ds.slot_time,
-        ds.created_at
-      FROM doctor_slots ds
-      JOIN doctors d ON ds.doctor_id = d.id
-      ORDER BY ds.slot_date ASC, ds.slot_time ASC
-    `);
-
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 /*
 -----------------------------------
