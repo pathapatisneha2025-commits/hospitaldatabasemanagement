@@ -77,20 +77,30 @@ router.post("/add-slot", async (req, res) => {
 DELETE SLOT
 -----------------------------------
 */
-router.delete("/delete-slot", async (req, res) => {
-  const { doctor_id, date, slotText } = req.body;
+/*
+-----------------------------------
+DELETE SLOT BY ID
+-----------------------------------
+*/
+router.delete("/delete-slot/:id", async (req, res) => {
+  const { id } = req.params;
 
   try {
-    await pool.query(
-      "DELETE FROM doctor_slots WHERE doctor_id=$1 AND slot_date=$2 AND slot_time=$3",
-      [doctor_id, date, slotText]
+    const result = await pool.query(
+      "DELETE FROM doctor_slots WHERE id = $1 RETURNING *",
+      [id]
     );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Slot not found" });
+    }
 
     res.json({ message: "Slot deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /*
 -----------------------------------
