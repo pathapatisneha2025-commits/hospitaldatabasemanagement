@@ -107,14 +107,19 @@ router.delete("/delete-slot/:id", async (req, res) => {
 EDIT SLOT
 -----------------------------------
 */
-router.put("/edit-slot", async (req, res) => {
-  const { doctor_id, date, oldSlot, newSlot } = req.body;
+router.put("/edit-slot/:id", async (req, res) => {
+  const { id } = req.params;
+  const { slot } = req.body;
 
   try {
-    await pool.query(
-      "UPDATE doctor_slots SET slot_time=$1 WHERE doctor_id=$2 AND slot_date=$3 AND slot_time=$4",
-      [newSlot, doctor_id, date, oldSlot]
+    const result = await pool.query(
+      "UPDATE doctor_slots SET slot_time=$1 WHERE id=$2",
+      [slot, id]
     );
+
+    if (result.rowCount === 0) {
+      return res.status(400).json({ message: "No slot updated" });
+    }
 
     res.json({ message: "Slot updated successfully" });
   } catch (err) {
