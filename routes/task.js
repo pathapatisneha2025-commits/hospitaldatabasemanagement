@@ -9,7 +9,7 @@ router.post("/add", async (req, res) => {
     const { title, description, assignto, priority, due_date, due_time, created_by } = req.body;
 
     // Validation
-    if (!title || !assignto || !priority || !due_date || !due_time || !created_by) {
+    if (!title || !assignto || !priority || !due_date || !due_time ) {
       return res.status(400).json({ error: "Please fill all required fields" });
     }
 
