@@ -1344,13 +1344,13 @@ router.get("/summary", async (req, res) => {
       FROM employees e
       CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
       LEFT JOIN attendance a 
-        ON (e.id = a.employee_id OR e.phone = a.phone)  -- ✅ Match either ID or phone
+        ON (e.id = a.employee_id OR e.mobile = a.phone)  -- ✅ Match either ID or phone
         AND DATE(a.timestamp) = d
       LEFT JOIN leaves l 
         ON e.id = l.employee_id
         AND l.status IN ('approved')
         AND d BETWEEN l.start_date AND l.end_date
-      GROUP BY e.id, e.full_name, e.department, e.phone, d, l.leaves_duration, l.id
+      GROUP BY e.id, e.full_name, e.department, e.mobile, d, l.leaves_duration, l.id
       ORDER BY e.full_name, d;
     `;
 
