@@ -255,9 +255,9 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, joining_date, password, confirm_password } = req.body;
+    const { name, email, phone, joining_date, password, confirm_password, status } = req.body; // ✅ added status
 
-    // 🧾 Check if subadmin exists
+    // Check if subadmin exists
     const existing = await pool.query("SELECT * FROM subadmin WHERE id = $1", [id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Subadmin not found" });
@@ -266,7 +266,6 @@ router.put("/update/:id", async (req, res) => {
     let updateQuery;
     let updateValues;
 
-    // ✅ If password is provided, validate and hash
     if (password && confirm_password) {
       if (password !== confirm_password) {
         return res.status(400).json({ success: false, message: "Passwords do not match" });
@@ -279,15 +278,14 @@ router.put("/update/:id", async (req, res) => {
         SET name = $1, email = $2, phone = $3, joining_date = $4, password = $5
         WHERE id = $6
         RETURNING *`;
-      updateValues = [name, email, phone, joining_date,  hashedPassword, id];
+      updateValues = [name, email, phone, joining_date, hashedPassword, id];
     } else {
-      // ✅ If no password change
       updateQuery = `
         UPDATE subadmin 
         SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5
-        WHERE id = $6 
+        WHERE id = $6
         RETURNING *`;
-      updateValues = [name, email, phone, joining_date, status, id];
+      updateValues = [name, email, phone, joining_date, status, id]; // ✅ now status is defined
     }
 
     const result = await pool.query(updateQuery, updateValues);
