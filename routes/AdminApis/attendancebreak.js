@@ -479,10 +479,12 @@ router.get("/totalemployeescount", async (req, res) => {
     `);
     const total_employees = Number(empResult.rows[0].total_employees);
 
-    // 2️⃣ Employees present today (last record On Duty)
+    // 2️⃣ Employees present today (last record On Duty) — match by employee_id OR phone
     const presentResult = await pool.query(`
-      SELECT COUNT(DISTINCT a.employee_id) AS total_present
+      SELECT COUNT(DISTINCT e.id) AS total_present
       FROM attendance a
+      JOIN employees e
+        ON a.employee_id = e.id OR a.phone = e.mobile
       WHERE DATE(a.timestamp) = CURRENT_DATE
         AND a.status = 'On Duty'
     `);
@@ -518,14 +520,16 @@ router.get("/totalemployeescount", async (req, res) => {
     const loggedInResult = await pool.query(`
       SELECT COUNT(*) AS logged_in
       FROM (
-        SELECT DISTINCT a.employee_id
+        SELECT DISTINCT e.id
         FROM attendance a
+        JOIN employees e
+          ON a.employee_id = e.id OR a.phone = e.mobile
         WHERE DATE(a.timestamp) = CURRENT_DATE
           AND a.status = 'On Duty'
           AND NOT EXISTS (
             SELECT 1
             FROM break_logs bl
-            WHERE bl.employee_id = a.employee_id
+            WHERE bl.employee_id = e.id
               AND bl.break_type = 'Break In'
               AND bl.status = 'On Break'
               AND DATE(bl.timestamp) = CURRENT_DATE
@@ -547,7 +551,11 @@ router.get("/totalemployeescount", async (req, res) => {
         total_on_leave,
         employees_on_break: Number(breakResult.rows[0].employees_on_break),
         logged_in,
-        logged_out: total_employees - logged_in - Number(breakResult.rows[0].employees_on_break) - total_on_leave
+        logged_out:
+          total_employees -
+          logged_in -
+          Number(breakResult.rows[0].employees_on_break) -
+          total_on_leave,
       },
     });
   } catch (error) {
