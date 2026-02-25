@@ -1308,13 +1308,10 @@ router.get("/summary", async (req, res) => {
     const today = new Date();
     let start, end;
 
-    // 🔹 MONTHLY
     if (view === "monthly") {
       const monthInt = month ? parseInt(month, 10) - 1 : today.getMonth();
       start = new Date(today.getFullYear(), monthInt, 1);
       end = new Date(today.getFullYear(), monthInt + 1, 0);
-
-    // 🔹 WEEKLY
     } else {
       const day = today.getDay();
       const diffToMonday = (day === 0 ? -6 : 1) - day;
@@ -1327,54 +1324,49 @@ router.get("/summary", async (req, res) => {
     const startStr = start.toISOString().split("T")[0];
     const endStr = end.toISOString().split("T")[0];
 
-    // 🔥 UPDATED QUERY WITH leaves_duration & Pending + Approved
+    // ✅ Include phone in SELECT
     const query = `
       SELECT 
         e.id AS employee_id,
         e.full_name AS employee_name,
         e.department,
+        e.mobile AS employee_phone,           -- phone column
         d::date AS date,
-
         MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') AS check_in,
         MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') AS check_out,
-
         CASE 
-          WHEN l.id IS NOT NULL THEN 
-            COALESCE(l.leaves_duration, 'FullDay')  
+          WHEN l.id IS NOT NULL THEN COALESCE(l.leaves_duration, 'FullDay')
           WHEN MIN(a.timestamp) FILTER (WHERE a.status = 'On Duty') IS NOT NULL
             OR MAX(a.timestamp) FILTER (WHERE a.status = 'Off Duty') IS NOT NULL
             THEN 'Present'
           ELSE 'Absent'
         END AS status
-
       FROM employees e
       CROSS JOIN generate_series($1::date, $2::date, interval '1 day') AS d
-
       LEFT JOIN attendance a 
-        ON e.id = a.employee_id 
+        ON (e.id = a.employee_id OR e.phone = a.phone)  -- ✅ Match either ID or phone
         AND DATE(a.timestamp) = d
-
       LEFT JOIN leaves l 
         ON e.id = l.employee_id
-        AND l.status IN ('approved')  -- 🔥 Accept pending leave also
+        AND l.status IN ('approved')
         AND d BETWEEN l.start_date AND l.end_date
-
-      GROUP BY e.id, e.full_name, e.department, d, l.leaves_duration, l.id
+      GROUP BY e.id, e.full_name, e.department, e.phone, d, l.leaves_duration, l.id
       ORDER BY e.full_name, d;
     `;
 
     const result = await pool.query(query, [startStr, endStr]);
 
-    // -------------------------
-    // PROCESS RESULT
-    // -------------------------
     const employeeMap = {};
 
     result.rows.forEach((row) => {
-      if (!employeeMap[row.employee_id]) {
-        employeeMap[row.employee_id] = {
+      // Use phone as key if available, fallback to employee_id
+      const key = row.employee_phone || row.employee_id;
+
+      if (!employeeMap[key]) {
+        employeeMap[key] = {
           employee_id: row.employee_id,
           employee_name: row.employee_name,
+          phone: row.employee_phone,   // store phone
           department: row.department,
           days: [],
           presentDays: 0,
@@ -1393,16 +1385,16 @@ router.get("/summary", async (req, res) => {
         totalHours = `${hours}h ${minutes}m`;
       }
 
-      employeeMap[row.employee_id].days.push({
+      employeeMap[key].days.push({
         date: row.date,
-        status: row.status,  // FullDay / FirstHalf / SecondHalf / Hourly / Present / Absent
+        status: row.status,
         check_in: formatTime(row.check_in),
         check_out: formatTime(row.check_out),
         working_hours: totalHours,
       });
 
-      if (row.status === "Present") employeeMap[row.employee_id].presentDays++;
-      employeeMap[row.employee_id].totalDays++;
+      if (row.status === "Present") employeeMap[key].presentDays++;
+      employeeMap[key].totalDays++;
     });
 
     const summary = Object.values(employeeMap).map((emp) => ({
@@ -1417,7 +1409,6 @@ router.get("/summary", async (req, res) => {
       range: { start: startStr, end: endStr },
       data: summary,
     });
-
   } catch (error) {
     console.error("Error fetching attendance summary:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
