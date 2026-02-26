@@ -33,26 +33,26 @@ router.post("/add", async (req, res) => {
   }
 
   try {
-    // 1. Add to the admin fields table (optional, if you want to track fields)
+    // 1. Add to admin fields table (optional)
     const fieldResult = await pool.query(
       `INSERT INTO medicine_fields (field_name, field_type, required, icon, active, created_at)
        VALUES ($1, $2, $3, $4, true, NOW())
        RETURNING *`,
       [field_name, field_type, required || false, icon || null]
     );
-
     const newField = fieldResult.rows[0];
 
-    // 2. Update all existing medicines to include this new field in custom_fields
-    // We'll set the default value to NULL
+    // 2. Alter medicines table to add new column
+    let pgType = "TEXT"; // default type
+    if (field_type === "number") pgType = "NUMERIC";
+    else if (field_type === "date") pgType = "DATE";
+
     await pool.query(
-      `UPDATE medicines
-       SET custom_fields = custom_fields || $1`,
-      [JSON.stringify({ [field_name]: null })] // adds new key to JSONB column
+      `ALTER TABLE medicines ADD COLUMN "${field_name}" ${pgType}`
     );
 
     res.status(201).json({ 
-      message: "Field added and applied to all medicines",
+      message: "Field added as column in medicines",
       field: newField
     });
   } catch (err) {
@@ -60,7 +60,6 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Failed to add field" });
   }
 });
-
 /**
  * @route   DELETE /medicine/fields/:id
  * @desc    Deactivate a field (soft delete)
