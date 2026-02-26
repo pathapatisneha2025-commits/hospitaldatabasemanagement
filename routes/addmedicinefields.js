@@ -22,7 +22,6 @@ router.get("/all", async (req, res) => {
 });
 
 /**
- * @route   POST /medicine/fields
  * @desc    Add a new field
  * @body    { field_name, field_type, required, icon }
  */
