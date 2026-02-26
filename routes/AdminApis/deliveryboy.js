@@ -117,11 +117,8 @@ router.post("/login", async (req, res) => {
 router.post("/assign-delivery", async (req, res) => {
   const { orderId, employee_id } = req.body;
 
-  // 🔹 Validation
   if (!orderId || !employee_id) {
-    return res
-      .status(400)
-      .json({ error: "Order ID and Employee ID are required." });
+    return res.status(400).json({ error: "Order ID and Employee ID are required." });
   }
 
   const client = await pool.connect();
@@ -129,65 +126,72 @@ router.post("/assign-delivery", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // ✅ Check if order exists
-    const orderCheck = await client.query(
-      "SELECT id FROM orders WHERE id = $1",
+    // ✅ Fetch the order including order_summary
+    const orderRes = await client.query(
+      "SELECT id, order_summary FROM orders WHERE id = $1",
       [orderId]
     );
 
-    if (orderCheck.rows.length === 0) {
+    if (orderRes.rows.length === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "Order not found." });
     }
 
-    // ✅ Check if delivery boy exists
-    const empCheck = await client.query(
-      "SELECT id, full_name, role FROM employees WHERE id = $1",
-      [employee_id]
+    const order = orderRes.rows[0];
+
+    // Parse order_summary if stored as JSON in DB
+    const orderItems = Array.isArray(order.order_summary)
+      ? order.order_summary
+      : JSON.parse(order.order_summary);
+
+    // ✅ Reduce stock for each item
+    for (const item of orderItems) {
+      const stockRes = await client.query(
+        "SELECT id, stock FROM medicines WHERE name = $1 FOR UPDATE",
+        [item.name]
+      );
+
+      if (stockRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: `Medicine not found: ${item.name}` });
+      }
+
+      const medicine = stockRes.rows[0];
+
+      if (medicine.stock < item.quantity) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: `Not enough stock for ${item.name}. Available: ${medicine.stock}, Required: ${item.quantity}`,
+        });
+      }
+
+      // ✅ Reduce stock
+      await client.query(
+        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
+        [item.quantity, medicine.id]
+      );
+    }
+
+    // ✅ Assign delivery boy and mark order as assigned
+    await client.query(
+      "UPDATE orders SET deliveryboy_id = $1, status = 'assigned' WHERE id = $2",
+      [employee_id, orderId]
     );
-
-    if (empCheck.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Employee not found." });
-    }
-
-    const employee = empCheck.rows[0];
-
-    // ✅ Validate role
-    if (employee.role.toLowerCase() !== "hd delivery") {
-      await client.query("ROLLBACK");
-      return res
-        .status(400)
-        .json({ error: "This employee is not a delivery person." });
-    }
-
-    // ✅ Assign delivery boy to the order
-await client.query(
-  `
-  UPDATE orders
-  SET deliveryboy_id = $1
-  WHERE id = $2
-  `,
-  [employee_id, orderId]
-);
-
-
 
     await client.query("COMMIT");
 
     res.json({
       success: true,
-      message: `Delivery assigned to ${employee.full_name}`,
+      message: `Delivery assigned and stock updated successfully.`,
     });
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error("Error assigning delivery:", error);
-    res.status(500).json({ error: "Failed to assign delivery boy." });
+    console.error("Error assigning delivery and reducing stock:", error);
+    res.status(500).json({ error: "Failed to assign delivery or reduce stock." });
   } finally {
     client.release();
   }
 });
-
 
 
 // -------------------- GET ALL DELIVERY BOYS --------------------
