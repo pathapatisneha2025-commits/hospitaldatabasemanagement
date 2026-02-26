@@ -7,20 +7,39 @@ router.post("/add", async (req, res) => {
   try {
     const {
       supplier,
-      purchase_no,
       delivery_type,
       received_date,
       status,
       assignedto,
       receivedby,
-      purchaseentry
+      items // array of purchase order items
     } = req.body;
 
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: "Purchase items are required" });
+    }
+
+    // Generate purchase_no automatically
+    const date = new Date();
+    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+    const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+    const purchase_no = `PO-${dateStr}-${randomNum}`;
+
+    // Insert into database
     const result = await pool.query(
       `INSERT INTO purchase_orders 
-      (supplier, purchase_no, delivery_type, received_date, status, assignedto, receivedby, purchaseentry) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [supplier, purchase_no, delivery_type, received_date, status, assignedto, receivedby, purchaseentry]
+       (supplier, purchase_no, delivery_type, received_date, status, assignedto, receivedby, purchaseentry) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        supplier,
+        purchase_no,
+        delivery_type,
+        received_date,
+        status,
+        assignedto,
+        receivedby,
+        JSON.stringify(items) // store as JSON
+      ]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
