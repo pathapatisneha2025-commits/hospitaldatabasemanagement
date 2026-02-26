@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require("../../db");
 
 // -------------------- CREATE Purchase Order --------------------
-router.post("/add", async (req, res) => {
+router.post("/add", async (req, res) => { 
   try {
     const {
       supplier,
@@ -28,7 +28,7 @@ router.post("/add", async (req, res) => {
     // Insert into database
     const result = await pool.query(
       `INSERT INTO purchase_orders 
-       (supplier, purchase_no, delivery_type, received_date, status, assignedto, receivedby, purchaseentry) 
+       (supplier, purchase_no, delivery_type, received_date, status, assignedto, receivedby, purchase_items) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         supplier,
@@ -38,7 +38,7 @@ router.post("/add", async (req, res) => {
         status,
         assignedto,
         receivedby,
-        JSON.stringify(items) // store as JSON
+        JSON.stringify(items) // now stored in purchase_items
       ]
     );
 
