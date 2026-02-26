@@ -33,13 +33,28 @@ router.post("/add", async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
+    // 1. Add to the admin fields table (optional, if you want to track fields)
+    const fieldResult = await pool.query(
       `INSERT INTO medicine_fields (field_name, field_type, required, icon, active, created_at)
        VALUES ($1, $2, $3, $4, true, NOW())
        RETURNING *`,
       [field_name, field_type, required || false, icon || null]
     );
-    res.status(201).json({ message: "Field added", field: result.rows[0] });
+
+    const newField = fieldResult.rows[0];
+
+    // 2. Update all existing medicines to include this new field in custom_fields
+    // We'll set the default value to NULL
+    await pool.query(
+      `UPDATE medicines
+       SET custom_fields = custom_fields || $1`,
+      [JSON.stringify({ [field_name]: null })] // adds new key to JSONB column
+    );
+
+    res.status(201).json({ 
+      message: "Field added and applied to all medicines",
+      field: newField
+    });
   } catch (err) {
     console.error("Error adding field:", err);
     res.status(500).json({ error: "Failed to add field" });
