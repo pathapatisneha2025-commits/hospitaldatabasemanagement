@@ -302,7 +302,7 @@ router.post("/bulk-add", async (req, res) => {
       for (const po of purchaseOrders) {
         // Insert PO
         const poInsertQuery = `
-          INSERT INTO purchase_orders (supplier, delivery_type, received_date, assignedto, status, items)
+          INSERT INTO purchase_orders (supplier, delivery_type, received_date, assignedto, status, purchase_items)
           VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING id
         `;
