@@ -19,15 +19,29 @@ router.post("/add", async (req, res) => {
   try {
     const { field_name, field_type, is_required } = req.body;
 
+    // 1. Insert into the custom fields table
     await pool.query(
-      `INSERT INTO purchase_order_custom_fields 
-       (field_name, field_type, is_required)
-       VALUES ($1,$2,$3)`,
+      `INSERT INTO purchase_order_custom_fields (field_name, field_type, is_required)
+       VALUES ($1, $2, $3)`,
       [field_name, field_type, is_required]
     );
 
-    res.json({ success: true, message: "Field added successfully" });
+    // 2. Dynamically alter the purchase_orders table
+    // Map field_type to PostgreSQL types
+    let pgType = "TEXT";
+    if (field_type === "number") pgType = "NUMERIC";
+    else if (field_type === "date") pgType = "DATE";
+
+    // Make a safe column name (replace spaces with _ and lowercase)
+    const safeColumn = field_name.trim().toLowerCase().replace(/\s+/g, "_");
+
+    await pool.query(
+      `ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS "${safeColumn}" ${pgType}`
+    );
+
+    res.json({ success: true, message: "Field added and column created successfully" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
