@@ -286,5 +286,63 @@ router.post('/payment/collect', async (req, res) => {
     client.release();
   }
 });
+router.post("/bulk-add", async (req, res) => {
+  const { purchaseOrders } = req.body;
+
+  if (!purchaseOrders || !Array.isArray(purchaseOrders) || purchaseOrders.length === 0) {
+    return res.status(400).json({ success: false, message: "No purchase orders provided" });
+  }
+
+  try {
+    // Start a transaction
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      for (const po of purchaseOrders) {
+        // Insert PO
+        const poInsertQuery = `
+          INSERT INTO purchase_orders (supplier, delivery_type, received_date, assignedto, status, items)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING id
+        `;
+
+        const poValues = [
+          po.supplier,
+          po.delivery_type,
+          po.received_date,
+          po.assignedto || null,
+          po.status || "Pending",
+          JSON.stringify(po.items || []),
+        ];
+
+        const poResult = await client.query(poInsertQuery, poValues);
+        const poId = poResult.rows[0].id;
+
+        // Optionally, update stock immediately if status = Received
+        if (po.status === "Received" && po.items && po.items.length > 0) {
+          for (const item of po.items) {
+            await client.query(
+              `UPDATE medicines SET stock = stock + $1 WHERE id = $2`,
+              [item.stock, item.medicine_id]
+            );
+          }
+        }
+      }
+
+      await client.query("COMMIT");
+      res.json({ success: true, message: "Bulk purchase orders inserted successfully" });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("Bulk Insert Error:", err);
+      res.status(500).json({ success: false, message: "Failed to insert purchase orders" });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("DB Connection Error:", err);
+    res.status(500).json({ success: false, message: "Database connection error" });
+  }
+});
 
 module.exports = router;
