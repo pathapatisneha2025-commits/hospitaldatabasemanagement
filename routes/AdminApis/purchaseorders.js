@@ -129,4 +129,31 @@ router.delete("/delete/:id", async (req, res) => {
   }
 });
 
+
+router.post("/receive/:poId", async (req, res) => {
+  const { poId } = req.params;
+  const { received_date, items } = req.body;
+
+  try {
+    // 1. Update purchase order status
+    await pool.query(
+      `UPDATE purchase_orders SET status='Received', received_date=$1 WHERE id=$2`,
+      [received_date, poId]
+    );
+
+    // 2. Update stock for each medicine
+    for (let item of items) {
+      await pool.query(
+        `UPDATE medicine SET stock = stock + $1 WHERE id = $2`,
+        [item.stock, item.medicine_id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
