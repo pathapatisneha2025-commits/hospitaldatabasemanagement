@@ -194,12 +194,10 @@ router.post('/payment/collect', async (req, res) => {
     remarks
   } = req.body;
 
-  // 1️⃣ Validate required fields
   if (!purchase_order_id || !collected_by || !amount_collected || !payment_mode_collected) {
     return res.status(400).json({ success: false, message: "Missing required fields" });
   }
 
-  // Ensure amount_collected is numeric
   const amountCollected = parseFloat(amount_collected);
   if (isNaN(amountCollected) || amountCollected <= 0) {
     return res.status(400).json({ success: false, message: "Invalid amount_collected" });
@@ -209,7 +207,6 @@ router.post('/payment/collect', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 2️⃣ Fetch purchase order
     const poResult = await client.query(
       'SELECT * FROM purchase_orders WHERE id = $1',
       [purchase_order_id]
@@ -222,17 +219,13 @@ router.post('/payment/collect', async (req, res) => {
 
     const po = poResult.rows[0];
 
-    // 3️⃣ Calculate totalAmount if missing
+    // Calculate totalAmount from JSON if not already stored
     let totalAmount = po.total_amount;
     if (!totalAmount) {
-      const itemsResult = await client.query(
-        'SELECT SUM(stock * unit_price) AS total_amount FROM purchase_items WHERE purchase_order_id = $1',
-        [purchase_order_id]
-      );
-      totalAmount = parseFloat(itemsResult.rows[0].total_amount) || 0;
+      const items = Array.isArray(po.purchase_items) ? po.purchase_items : [];
+      totalAmount = items.reduce((sum, item) => sum + (item.stock * item.unitPrice), 0);
     }
 
-    // 4️⃣ Validate collected amount
     const existingPayments = Array.isArray(po.payments) ? po.payments : [];
     const totalCollectedSoFar = existingPayments.reduce(
       (sum, p) => sum + parseFloat(p.amount_collected || 0),
@@ -244,7 +237,6 @@ router.post('/payment/collect', async (req, res) => {
       return res.status(400).json({ success: false, message: "Collected amount cannot exceed total amount" });
     }
 
-    // 5️⃣ Prepare payment entry
     const paymentEntry = {
       collected_by,
       delivery_type,
@@ -254,16 +246,13 @@ router.post('/payment/collect', async (req, res) => {
       remarks: remarks || null
     };
 
-    // 6️⃣ Append to payments array
     const updatedPayments = [...existingPayments, paymentEntry];
 
-    // 7️⃣ Determine new status
     const newTotalCollected = updatedPayments.reduce((sum, p) => sum + parseFloat(p.amount_collected || 0), 0);
     let newStatus = "Partial";
     if (newTotalCollected >= totalAmount) newStatus = "Paid";
     else if (newTotalCollected === 0) newStatus = "Received";
 
-    // 8️⃣ Update purchase order
     const updateQuery = `
       UPDATE purchase_orders
       SET payments = $1, status = $2, amount_paid = $3
