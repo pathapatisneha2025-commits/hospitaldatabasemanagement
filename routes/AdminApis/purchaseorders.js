@@ -167,4 +167,21 @@ router.post("/receive/:poId", async (req, res) => {
   }
 });
 
+// Node.js / Express example
+router.get("/by-delivery-boy/:id", async (req, res) => {
+  const deliveryBoyId = req.params.id;
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM purchase_orders WHERE assignedto = $1",
+      [deliveryBoyId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
