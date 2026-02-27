@@ -75,51 +75,62 @@ router.get("/all", async (req, res) => {
   }
 });
 router.post("/bulk-upload", csvUpload.single("csv"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "CSV file required" });
+  if (!req.file) {
+    return res.status(400).json({ error: "CSV file required" });
+  }
 
   const medicines = [];
   const readable = new stream.Readable();
-  readable._read = () => {}; // noop
+  readable._read = () => {};
   readable.push(req.file.buffer);
   readable.push(null);
 
   readable
     .pipe(csv())
     .on("data", (row) => {
-      medicines.push({
-        name: row.name || null,
-        category: row.category || null,
-        manufacturer: row.manufacturer || null,
-        batch_number: row.batch_number || null,
-        pack_size: row.pack_size || null,
-        description: row.description || null,
-        price: row.price ? parseFloat(row.price) : null,
-        stock: row.stock ? parseInt(row.stock) : 0,
-        images: row.images ? row.images.split(";") : [], // multiple image URLs separated by semicolon
+      const formattedRow = {};
+
+      // Loop through all CSV columns dynamically
+      Object.keys(row).forEach((key) => {
+        let value = row[key];
+
+        if (value === "") {
+          formattedRow[key] = null;
+        } 
+        else if (key === "price") {
+          formattedRow[key] = parseFloat(value);
+        } 
+        else if (key === "stock") {
+          formattedRow[key] = parseInt(value);
+        } 
+        else if (key === "images") {
+          formattedRow[key] = value.split(";");
+        } 
+        else {
+          formattedRow[key] = value;
+        }
       });
+
+      medicines.push(formattedRow);
     })
     .on("end", async () => {
       try {
         const insertedMedicines = [];
 
         for (const med of medicines) {
-          const result = await pool.query(
-            `INSERT INTO medicines 
-             (name, category, manufacturer, batch_number, pack_size, description, price, stock, images, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
-             RETURNING *`,
-            [
-              med.name,
-              med.category,
-              med.manufacturer,
-              med.batch_number,
-              med.pack_size,
-              med.description,
-              med.price,
-              med.stock,
-              med.images,
-            ]
-          );
+          const keys = Object.keys(med);
+
+          const columns = keys.join(",");
+          const placeholders = keys.map((_, i) => `$${i + 1}`).join(",");
+          const values = keys.map((k) => med[k]);
+
+          const query = `
+            INSERT INTO medicines (${columns}, created_at)
+            VALUES (${placeholders}, NOW())
+            RETURNING *
+          `;
+
+          const result = await pool.query(query, values);
           insertedMedicines.push(result.rows[0]);
         }
 
