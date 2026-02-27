@@ -294,32 +294,42 @@ router.post("/bulk-add", async (req, res) => {
   }
 
   try {
-    // Start a transaction
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
       for (const po of purchaseOrders) {
-        // Insert PO
-        const poInsertQuery = `
-          INSERT INTO purchase_orders (supplier, delivery_type, received_date, assignedto, status, purchase_items)
-          VALUES ($1, $2, $3, $4, $5, $6)
+        // Prepare columns and values dynamically
+        const columns = [];
+        const placeholders = [];
+        const values = [];
+
+        let idx = 1; // placeholder index ($1, $2, ...)
+
+        for (const key in po) {
+          // For items array, store as JSON
+          if (key === "items") {
+            columns.push("purchase_items");
+            placeholders.push(`$${idx}`);
+            values.push(JSON.stringify(po[key]));
+          } else {
+            columns.push(key);
+            placeholders.push(`$${idx}`);
+            values.push(po[key]);
+          }
+          idx++;
+        }
+
+        const query = `
+          INSERT INTO purchase_orders (${columns.join(", ")})
+          VALUES (${placeholders.join(", ")})
           RETURNING id
         `;
 
-        const poValues = [
-          po.supplier,
-          po.delivery_type,
-          po.received_date,
-          po.assignedto || null,
-          po.status || "Pending",
-          JSON.stringify(po.items || []),
-        ];
+        const result = await client.query(query, values);
+        const poId = result.rows[0].id;
 
-        const poResult = await client.query(poInsertQuery, poValues);
-        const poId = poResult.rows[0].id;
-
-        // Optionally, update stock immediately if status = Received
+        // Automatically update stock if status = Received
         if (po.status === "Received" && po.items && po.items.length > 0) {
           for (const item of po.items) {
             await client.query(
