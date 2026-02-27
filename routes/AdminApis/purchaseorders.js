@@ -184,4 +184,99 @@ router.get("/by-delivery-boy/:id", async (req, res) => {
   }
 });
 
+router.post('/payment/collect', async (req, res) => {
+  const {
+    purchase_order_id,
+    collected_by,
+    delivery_type,
+    amount_collected,
+    payment_mode_collected,
+    remarks
+  } = req.body;
+
+  if (!purchase_order_id || !collected_by || !amount_collected || !payment_mode_collected) {
+    return res.status(400).json({ success: false, message: "Missing required fields" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Fetch purchase order
+    const poResult = await client.query(
+      'SELECT * FROM purchase_orders WHERE id = $1',
+      [purchase_order_id]
+    );
+
+    if (poResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: "Purchase order not found" });
+    }
+
+    const po = poResult.rows[0];
+
+    // Calculate total if not present
+    let totalAmount = po.total_amount;
+    if (!totalAmount) {
+      const itemsResult = await client.query(
+        'SELECT SUM(stock * unit_price) AS total_amount FROM purchase_items WHERE purchase_order_id = $1',
+        [purchase_order_id]
+      );
+      totalAmount = parseFloat(itemsResult.rows[0].total_amount) || 0;
+    }
+
+    // Validate collected amount
+    if (amount_collected > totalAmount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: "Collected amount cannot exceed total amount" });
+    }
+
+    // Prepare payment object
+    const paymentEntry = {
+      collected_by,
+      delivery_type,
+      amount_collected,
+      payment_mode_collected,
+      collected_at: new Date(),
+      remarks: remarks || null
+    };
+
+    // Append payment to existing payments array
+    const updatedPayments = po.payments ? [...po.payments, paymentEntry] : [paymentEntry];
+
+    // Calculate total collected so far
+    const totalCollected = updatedPayments.reduce((sum, p) => sum + p.amount_collected, 0);
+
+    // Determine new status
+    let newStatus = "Partial";
+    if (totalCollected >= totalAmount) newStatus = "Paid";
+    else if (totalCollected === 0) newStatus = "Received";
+
+    // Update purchase order with new payments and status
+    const updateQuery = `
+      UPDATE purchase_orders
+      SET payments = $1, status = $2
+      WHERE id = $3
+      RETURNING *
+    `;
+    const updatedPoResult = await client.query(updateQuery, [JSON.stringify(updatedPayments), newStatus, purchase_order_id]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: "Payment collected successfully",
+      purchase_order: updatedPoResult.rows[0]
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  } finally {
+    client.release();
+  }
+});
+
+
 module.exports = router;
