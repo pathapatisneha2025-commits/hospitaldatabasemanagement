@@ -207,6 +207,7 @@ router.post('/payment/collect', async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    // Fetch the purchase order
     const poResult = await client.query(
       'SELECT * FROM purchase_orders WHERE id = $1',
       [purchase_order_id]
@@ -237,6 +238,7 @@ router.post('/payment/collect', async (req, res) => {
       return res.status(400).json({ success: false, message: "Collected amount cannot exceed total amount" });
     }
 
+    // Create new payment entry
     const paymentEntry = {
       collected_by,
       delivery_type,
@@ -248,21 +250,23 @@ router.post('/payment/collect', async (req, res) => {
 
     const updatedPayments = [...existingPayments, paymentEntry];
 
+    // Update purchase order status
     const newTotalCollected = updatedPayments.reduce((sum, p) => sum + parseFloat(p.amount_collected || 0), 0);
     let newStatus = "Partial";
     if (newTotalCollected >= totalAmount) newStatus = "Paid";
     else if (newTotalCollected === 0) newStatus = "Received";
 
+    // Update only payments and status (no amount_paid column needed)
     const updateQuery = `
       UPDATE purchase_orders
-      SET payments = $1, status = $2, amount_paid = $3
-      WHERE id = $4
+      SET payments = $1, status = $2
+      WHERE id = $3
       RETURNING *
     `;
+
     const updatedPoResult = await client.query(updateQuery, [
       JSON.stringify(updatedPayments),
       newStatus,
-      newTotalCollected,
       purchase_order_id
     ]);
 
