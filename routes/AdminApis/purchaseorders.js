@@ -143,10 +143,21 @@ router.post("/receive/:poId", async (req, res) => {
 
     // 2. Update stock for each medicine
     for (let item of items) {
-      await pool.query(
-        `UPDATE medicines SET stock = stock + $1 WHERE id = $2`,
-        [item.stock, item.medicine_id]
+      const stockToAdd = parseInt(item.stock, 10); // Ensure it's a number
+      if (isNaN(stockToAdd)) continue; // Skip invalid entries
+
+      const result = await pool.query(
+        `UPDATE medicines SET stock = stock + $1 WHERE id = $2 RETURNING id, name, stock`,
+        [stockToAdd, item.medicine_id]
       );
+
+      if (result.rowCount === 0) {
+        console.warn(`Medicine with id ${item.medicine_id} not found`);
+      } else {
+        console.log(
+          `Updated medicine ${result.rows[0].name} (ID: ${result.rows[0].id}) new stock: ${result.rows[0].stock}`
+        );
+      }
     }
 
     res.json({ success: true });
