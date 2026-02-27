@@ -144,7 +144,7 @@ router.post("/receive/:poId", async (req, res) => {
     // 2. Update stock for each medicine
     for (let item of items) {
       await pool.query(
-        `UPDATE medicine SET stock = stock + $1 WHERE id = $2`,
+        `UPDATE medicines SET stock = stock + $1 WHERE id = $2`,
         [item.stock, item.medicine_id]
       );
     }
