@@ -59,6 +59,7 @@ const Deptleavelimit = require("./routes/leavelimitdepartment");
 const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
 const DoctorSlots =   require("./routes/slotsdoctor"); // Adjust path if needed
 const MedicineAddFileds =   require("./routes/addmedicinefields"); // Adjust path if needed
+const AddpurchsaeorderFields =   require("./routes/Adminaddpurchasefield"); // Adjust path if needed
 
 
 
@@ -131,6 +132,7 @@ app.use("/picker",Pickersapis);
 app.use("/leavelimit",Deptleavelimit); 
 app.use("/doctorslots",DoctorSlots); 
 app.use("/addfields",MedicineAddFileds); 
+app.use("/purchaseorderfields",AddpurchsaeorderFields); 
 
 
 
