@@ -172,10 +172,9 @@ router.post("/assign-deliveryboy", async (req, res) => {
     }
 
     // ✅ Reduce stock for each checked item
-    for (const item of checkedItems) {
-  const { medicine_id, picked_qty } = item; // use medicine_id, not item_name
+   for (const item of order.items) {
+  const { medicine_id, quantity } = item; // use quantity instead of picked_qty if needed
 
-  // Get current stock
   const medRes = await client.query(
     "SELECT stock, name FROM medicines WHERE id = $1",
     [medicine_id]
@@ -189,18 +188,16 @@ router.post("/assign-deliveryboy", async (req, res) => {
   const currentStock = medRes.rows[0].stock;
   const medName = medRes.rows[0].name;
 
-  if (currentStock < picked_qty) {
+  if (currentStock < quantity) {
     await client.query("ROLLBACK");
     return res.status(400).json({ error: `Insufficient stock for ${medName}.` });
   }
 
-  // Reduce stock
   await client.query(
     "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
-    [picked_qty, medicine_id]
+    [quantity, medicine_id]
   );
 }
-
     // ✅ Assign delivery boy
     await client.query(
       "UPDATE sales_orders SET deliveryboy_id = $1, status = 'Assigned' WHERE id = $2",
