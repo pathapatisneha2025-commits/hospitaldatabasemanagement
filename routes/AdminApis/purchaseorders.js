@@ -382,4 +382,56 @@ router.put("/mark-delivered/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+
+router.get("/all/fields", async (req, res) => {
+  try {
+    // Fetch one purchase order to detect all keys
+    const result = await pool.query("SELECT * FROM purchase_orders LIMIT 1");
+    const purchaseOrder = result.rows[0] || {};
+
+    // Default fields from table columns
+    const defaultFields = Object.keys(purchaseOrder).map((field) => ({
+      name: field,
+      display_name: field.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      type: typeof purchaseOrder[field],
+      source: "default",
+    }));
+
+    // Optional: fetch custom fields from your custom fields table
+    const customResult = await pool.query("SELECT field_name, field_type FROM purchaseorderfields");
+    const customFields = customResult.rows.map((f) => ({
+      name: f.field_name,
+      display_name: f.field_name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      type: f.field_type,
+      source: "custom",
+    }));
+
+    res.json({
+      success: true,
+      fields: [...defaultFields, ...customFields],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to fetch fields" });
+  }
+});
+
+// 2️⃣ Toggle hide/show field (default or custom)
+router.post("/toggle-hide", async (req, res) => {
+  const { field_name, hide } = req.body;
+  try {
+    // Store hidden status in DB
+    await pool.query(
+      `INSERT INTO hidden_fields(field_name, hidden)
+       VALUES($1, $2)
+       ON CONFLICT (field_name) DO UPDATE SET hidden = $2`,
+      [field_name, hide]
+    );
+    res.json({ success: true, field_name, hidden: hide });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to update field visibility" });
+  }
+});
 module.exports = router;
