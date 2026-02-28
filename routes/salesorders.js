@@ -173,32 +173,33 @@ router.post("/assign-deliveryboy", async (req, res) => {
 
     // ✅ Reduce stock for each checked item
     for (const item of checkedItems) {
-      const { item_name, picked_qty } = item;
+  const { medicine_id, picked_qty } = item; // use medicine_id, not item_name
 
-      // Get current stock
-      const medRes = await client.query(
-        "SELECT stock FROM medicines WHERE id = $1",
-        [item_name]
-      );
+  // Get current stock
+  const medRes = await client.query(
+    "SELECT stock, name FROM medicines WHERE id = $1",
+    [medicine_id]
+  );
 
-      if (medRes.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ error: `Medicine ${item_name} not found.` });
-      }
+  if (medRes.rows.length === 0) {
+    await client.query("ROLLBACK");
+    return res.status(404).json({ error: `Medicine with ID ${medicine_id} not found.` });
+  }
 
-      const currentStock = medRes.rows[0].stock;
+  const currentStock = medRes.rows[0].stock;
+  const medName = medRes.rows[0].name;
 
-      if (currentStock < picked_qty) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ error: `Insufficient stock for ${item_name}.` });
-      }
+  if (currentStock < picked_qty) {
+    await client.query("ROLLBACK");
+    return res.status(400).json({ error: `Insufficient stock for ${medName}.` });
+  }
 
-      // Reduce stock
-      await client.query(
-        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
-        [picked_qty, item_name]
-      );
-    }
+  // Reduce stock
+  await client.query(
+    "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
+    [picked_qty, medicine_id]
+  );
+}
 
     // ✅ Assign delivery boy
     await client.query(
