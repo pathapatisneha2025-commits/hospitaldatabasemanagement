@@ -48,15 +48,19 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
       });
     }
 
-    const insertQuery = `
-      INSERT INTO sales_orders (
-        customer_name, mobile, address, landmark, pincode,
-        payment_mode, delivery_type, prescription_required,
-        prescription_image, items
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      RETURNING id
-    `;
+    // ✅ Fetch all active custom sales order fields
+    const fieldRes = await pool.query(
+      "SELECT field_key FROM sales_order_fields WHERE active = true"
+    );
+    const dynamicFields = fieldRes.rows.map(f => f.field_key); // e.g., ['customer_code', 'gst_number']
+
+    // ✅ Build columns and values dynamically
+    const columns = [
+      "customer_name", "mobile", "address", "landmark", "pincode",
+      "payment_mode", "delivery_type", "prescription_required",
+      "prescription_image", "items",
+      ...dynamicFields
+    ];
 
     const values = [
       customer_name,
@@ -68,8 +72,13 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
       delivery_type,
       prescription_required === "true",
       prescription_image,
-      JSON.stringify(parsedItems)    // ← REQUIRED
+      JSON.stringify(parsedItems),
+      ...dynamicFields.map(key => req.body[key] || null) // get value from request body
     ];
+
+    const placeholders = columns.map((_, i) => `$${i + 1}`).join(",");
+
+    const insertQuery = `INSERT INTO sales_orders (${columns.join(",")}) VALUES (${placeholders}) RETURNING id`;
 
     const result = await pool.query(insertQuery, values);
 
@@ -84,7 +93,6 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
     res.status(500).json({ success: false, error: "Server Error" });
   }
 });
-
 
 
 // -------------------------------------------------------------------
