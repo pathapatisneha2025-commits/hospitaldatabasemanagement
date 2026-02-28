@@ -16,13 +16,38 @@ router.get("/all", async (req, res) => {
 // POST /admin/form-fields
 router.post("/add", async (req, res) => {
   const { field_key, label, type, required, options } = req.body;
+
   try {
+    // 1️⃣ Insert into order_form_fields metadata table
     const { rows } = await pool.query(
       `INSERT INTO order_form_fields (field_key, label, type, required, options)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [field_key, label, type || "text", required || false, options || []]
     );
-    res.json({ success: true, field: rows[0] });
+
+    const newField = rows[0];
+
+    // 2️⃣ Determine SQL data type for sales_orders table
+    let sqlType;
+    switch ((type || "text").toLowerCase()) {
+      case "number":
+        sqlType = "NUMERIC";
+        break;
+      case "date":
+        sqlType = "TIMESTAMP";
+        break;
+      default:
+        sqlType = "TEXT";
+    }
+
+    // 3️⃣ ALTER sales_orders table to add the new column
+    // Use IF NOT EXISTS to prevent errors if the column already exists
+    await pool.query(
+      `ALTER TABLE sales_orders
+       ADD COLUMN IF NOT EXISTS ${field_key} ${sqlType}`
+    );
+
+    res.json({ success: true, field: newField });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: "Server error" });
