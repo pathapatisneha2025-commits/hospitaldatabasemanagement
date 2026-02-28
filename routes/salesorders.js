@@ -126,11 +126,8 @@ router.get("/:id", async (req, res) => {
 router.post("/assign-deliveryboy", async (req, res) => {
   const { orderId, employee_id } = req.body;
 
-  // 🔹 Validation
   if (!orderId || !employee_id) {
-    return res
-      .status(400)
-      .json({ error: "Order ID and Employee ID are required." });
+    return res.status(400).json({ error: "Order ID and Employee ID are required." });
   }
 
   const client = await pool.connect();
@@ -138,18 +135,26 @@ router.post("/assign-deliveryboy", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // ✅ Check if order exists
-    const orderCheck = await client.query(
-      "SELECT id FROM sales_orders WHERE id = $1",
+    // Check if order exists
+    const orderRes = await client.query(
+      "SELECT id, checked_items FROM sales_orders WHERE id = $1",
       [orderId]
     );
 
-    if (orderCheck.rows.length === 0) {
+    if (orderRes.rows.length === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "Order not found." });
     }
 
-    // ✅ Check if delivery boy exists
+    const order = orderRes.rows[0];
+    const checkedItems = order.checked_items; // array of items with picked_qty
+
+    if (!checkedItems || checkedItems.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "No checked items found to assign." });
+    }
+
+    // Check if delivery boy exists
     const empCheck = await client.query(
       "SELECT id, full_name, role FROM employees WHERE id = $1",
       [employee_id]
@@ -161,32 +166,51 @@ router.post("/assign-deliveryboy", async (req, res) => {
     }
 
     const employee = empCheck.rows[0];
-
-    // ✅ Validate role
     if (employee.role.toLowerCase() !== "hd delivery") {
       await client.query("ROLLBACK");
-      return res
-        .status(400)
-        .json({ error: "This employee is not a delivery person." });
+      return res.status(400).json({ error: "This employee is not a delivery person." });
     }
 
-    // ✅ Assign delivery boy to the order
-await client.query(
-  `
-  UPDATE sales_orders
-  SET deliveryboy_id = $1
-  WHERE id = $2
-  `,
-  [employee_id, orderId]
-);
+    // ✅ Reduce stock for each checked item
+    for (const item of checkedItems) {
+      const { item_name, picked_qty } = item;
 
+      // Get current stock
+      const medRes = await client.query(
+        "SELECT stock FROM medicines WHERE name = $1",
+        [item_name]
+      );
 
+      if (medRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: `Medicine ${item_name} not found.` });
+      }
+
+      const currentStock = medRes.rows[0].stock;
+
+      if (currentStock < picked_qty) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: `Insufficient stock for ${item_name}.` });
+      }
+
+      // Reduce stock
+      await client.query(
+        "UPDATE medicines SET stock = stock - $1 WHERE name = $2",
+        [picked_qty, item_name]
+      );
+    }
+
+    // ✅ Assign delivery boy
+    await client.query(
+      "UPDATE sales_orders SET deliveryboy_id = $1, status = 'Assigned' WHERE id = $2",
+      [employee_id, orderId]
+    );
 
     await client.query("COMMIT");
 
     res.json({
       success: true,
-      message: `Delivery assigned to ${employee.full_name}`,
+      message: `Delivery assigned to ${employee.full_name} and stock updated successfully.`,
     });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -196,7 +220,6 @@ await client.query(
     client.release();
   }
 });
-
 
 // -------------------------------------------------------------------
 // GET SALES ORDERS by deliveryboy_id
