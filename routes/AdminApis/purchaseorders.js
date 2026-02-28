@@ -299,26 +299,28 @@ router.post("/bulk-add", async (req, res) => {
       await client.query("BEGIN");
 
       for (const po of purchaseOrders) {
-        // Prepare columns and values dynamically
         const columns = [];
         const placeholders = [];
         const values = [];
+        let idx = 1;
 
-        let idx = 1; // placeholder index ($1, $2, ...)
+        // Use the items from whichever key is present
+        const itemsToProcess = po.purchase_items || po.items || [];
 
         for (const key in po) {
-          // For items array, store as JSON
-          if (key === "items") {
-            columns.push("purchase_items");
-            placeholders.push(`$${idx}`);
-            values.push(JSON.stringify(po[key]));
-          } else {
-            columns.push(key);
-            placeholders.push(`$${idx}`);
-            values.push(po[key]);
-          }
+          // Skip the items key here; we handle it explicitly below to ensure column name matches DB
+          if (key === "items" || key === "purchase_items") continue;
+
+          columns.push(key);
+          placeholders.push(`$${idx}`);
+          values.push(po[key]);
           idx++;
         }
+
+        // Explicitly add purchase_items as a JSON string
+        columns.push("purchase_items");
+        placeholders.push(`$${idx}`);
+        values.push(JSON.stringify(itemsToProcess));
 
         const query = `
           INSERT INTO purchase_orders (${columns.join(", ")})
@@ -329,9 +331,9 @@ router.post("/bulk-add", async (req, res) => {
         const result = await client.query(query, values);
         const poId = result.rows[0].id;
 
-        // Automatically update stock if status = Received
-        if (po.status === "Received" && po.items && po.items.length > 0) {
-          for (const item of po.items) {
+        // Update stock logic
+        if (po.status === "Received" && itemsToProcess.length > 0) {
+          for (const item of itemsToProcess) {
             await client.query(
               `UPDATE medicines SET stock = stock + $1 WHERE id = $2`,
               [item.stock, item.medicine_id]
@@ -345,12 +347,12 @@ router.post("/bulk-add", async (req, res) => {
     } catch (err) {
       await client.query("ROLLBACK");
       console.error("Bulk Insert Error:", err);
-      res.status(500).json({ success: false, message: "Failed to insert purchase orders" });
+      // Send the actual error detail to help debugging
+      res.status(500).json({ success: false, message: err.message, detail: err.detail });
     } finally {
       client.release();
     }
   } catch (err) {
-    console.error("DB Connection Error:", err);
     res.status(500).json({ success: false, message: "Database connection error" });
   }
 });
