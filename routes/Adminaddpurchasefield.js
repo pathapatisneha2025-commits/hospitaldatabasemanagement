@@ -65,17 +65,28 @@ router.put("/update/:id", async (req, res) => {
 });
 
 // 🔹 Delete field
+// DELETE /purchaseorderfields/delete-field/:fieldName
 router.delete("/delete-field/:fieldName", async (req, res) => {
   const fieldName = req.params.fieldName; // exact DB column name
 
   try {
-    // Delete from custom fields table if it exists (no-op for default fields)
+    // Check if the field exists in custom fields
+    const check = await pool.query(
+      "SELECT * FROM purchase_order_custom_fields WHERE field_name=$1",
+      [fieldName]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(400).json({ success: false, error: "Field not found or default field" });
+    }
+
+    // 1. Delete from custom fields table
     await pool.query(
       "DELETE FROM purchase_order_custom_fields WHERE field_name=$1",
       [fieldName]
     );
 
-    // Drop the column from purchase_orders
+    // 2. Drop column from purchase_orders table
     await pool.query(
       `ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "${fieldName}" CASCADE`
     );
