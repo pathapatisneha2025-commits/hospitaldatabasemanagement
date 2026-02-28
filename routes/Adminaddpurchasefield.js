@@ -66,43 +66,21 @@ router.put("/update/:id", async (req, res) => {
 
 // 🔹 Delete field
 router.delete("/delete-field/:fieldName", async (req, res) => {
-  const fieldName = req.params.fieldName;
-  const safeColumn = fieldName.trim().toLowerCase().replace(/\s+/g, "_");
-
-  // List of columns you NEVER want to delete
-  const protectedColumns = ["id", "purchase_no", "supplier"]; // add more if needed
-
-  if (protectedColumns.includes(safeColumn)) {
-    return res.status(400).json({
-      success: false,
-      error: `"${fieldName}" is a protected field and cannot be deleted.`,
-    });
-  }
+  const fieldName = req.params.fieldName; // exact DB column name
 
   try {
-    // 1️⃣ Delete from custom fields table if exists
-    const customCheck = await pool.query(
-      "SELECT * FROM purchase_order_custom_fields WHERE field_name=$1",
+    // Delete from custom fields table if it exists (no-op for default fields)
+    await pool.query(
+      "DELETE FROM purchase_order_custom_fields WHERE field_name=$1",
       [fieldName]
     );
 
-    if (customCheck.rowCount > 0) {
-      await pool.query(
-        "DELETE FROM purchase_order_custom_fields WHERE field_name=$1",
-        [fieldName]
-      );
-    }
-
-    // 2️⃣ Drop the column from purchase_orders table (works for both default & custom)
-    // Using CASCADE to remove dependent constraints if any
+    // Drop the column from purchase_orders
     await pool.query(
-      `ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "${safeColumn}" CASCADE`
+      `ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "${fieldName}" CASCADE`
     );
 
-    res.json({
-      success: true,
-      message: `Field "${fieldName}" deleted successfully.`,
-    });
+    res.json({ success: true, message: `Field "${fieldName}" deleted successfully.` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
