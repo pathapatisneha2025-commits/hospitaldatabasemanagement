@@ -177,7 +177,7 @@ router.post("/assign-deliveryboy", async (req, res) => {
 
       // Get current stock
       const medRes = await client.query(
-        "SELECT stock FROM medicines WHERE name = $1",
+        "SELECT stock FROM medicines WHERE id = $1",
         [item_name]
       );
 
