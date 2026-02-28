@@ -355,4 +355,23 @@ router.post("/bulk-add", async (req, res) => {
   }
 });
 
+router.put("/mark-delivered/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await pool.query(
+      `UPDATE purchase_orders
+       SET status = 'Delivered',
+           delivered_date = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+
 module.exports = router;
