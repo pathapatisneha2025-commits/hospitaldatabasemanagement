@@ -66,22 +66,35 @@ router.put("/update/:id", async (req, res) => {
 
 // 🔹 Delete field
 // DELETE /purchaseorderfields/delete-field/:fieldName
-router.delete("/delete-field/:fieldName", async (req, res) => {
-  const fieldName = req.params.fieldName; // exact DB column name
-
+router.delete("/delete/:id", async (req, res) => {
   try {
-    // Optional: Delete from custom fields table if it exists (no-op for default fields)
-    await pool.query(
-      "DELETE FROM purchase_order_custom_fields WHERE field_name=$1",
-      [fieldName]
+    const { id } = req.params;
+
+    // 1️⃣ Get field_name first
+    const fieldResult = await pool.query(
+      "SELECT field_name FROM purchase_order_custom_fields WHERE id=$1",
+      [id]
     );
 
-    // Drop column from purchase_orders table (works for custom and default fields)
+    if (fieldResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Field not found" });
+    }
+
+    const fieldName = fieldResult.rows[0].field_name;
+    const safeColumn = fieldName.trim().toLowerCase().replace(/\s+/g, "_");
+
+    // 2️⃣ Delete from custom fields table
     await pool.query(
-      `ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "${fieldName}" CASCADE`
+      "DELETE FROM purchase_order_custom_fields WHERE id=$1",
+      [id]
     );
 
-    res.json({ success: true, message: `Field "${fieldName}" deleted successfully.` });
+    // 3️⃣ Drop column from purchase_orders table
+    await pool.query(
+      `ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "${safeColumn}" CASCADE`
+    );
+
+    res.json({ success: true, message: "Field deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
