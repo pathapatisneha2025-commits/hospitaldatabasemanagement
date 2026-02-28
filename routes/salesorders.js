@@ -195,7 +195,7 @@ router.post("/assign-deliveryboy", async (req, res) => {
 
       // Reduce stock
       await client.query(
-        "UPDATE medicines SET stock = stock - $1 WHERE name = $2",
+        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
         [picked_qty, item_name]
       );
     }
