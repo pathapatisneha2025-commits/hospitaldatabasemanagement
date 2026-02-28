@@ -136,10 +136,10 @@ router.post("/assign-deliveryboy", async (req, res) => {
     await client.query("BEGIN");
 
     // Check if order exists
-    const orderRes = await client.query(
-      "SELECT id, checked_items FROM sales_orders WHERE id = $1",
-      [orderId]
-    );
+   const orderRes = await client.query(
+  "SELECT id, checked_items, items FROM sales_orders WHERE id = $1",
+  [orderId]
+);
 
     if (orderRes.rows.length === 0) {
       await client.query("ROLLBACK");
