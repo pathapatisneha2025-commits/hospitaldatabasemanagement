@@ -399,7 +399,7 @@ router.get("/all/fields", async (req, res) => {
     }));
 
     // Optional: fetch custom fields from your custom fields table
-    const customResult = await pool.query("SELECT field_name, field_type FROM purchaseorderfields");
+    const customResult = await pool.query("SELECT field_name, field_type FROM purchase_order_custom_fields");
     const customFields = customResult.rows.map((f) => ({
       name: f.field_name,
       display_name: f.field_name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
