@@ -65,16 +65,32 @@ router.put("/update/:id", async (req, res) => {
 });
 
 // 🔹 Delete field
-router.delete("/delete/:id", async (req, res) => {
+router.delete("/delete-field/:fieldName", async (req, res) => {
+  const fieldName = req.params.fieldName;
+  const safeColumn = fieldName.trim().toLowerCase().replace(/\s+/g, "_");
+
   try {
-    await pool.query(
-      "DELETE FROM purchase_order_custom_fields WHERE id=$1",
-      [req.params.id]
+    // 1️⃣ Check if it's a custom field
+    const customCheck = await pool.query(
+      "SELECT * FROM purchase_order_custom_fields WHERE field_name=$1",
+      [fieldName]
     );
-    res.json({ success: true, message: "Field deleted" });
+
+    if (customCheck.rowCount > 0) {
+      // Delete custom field record
+      await pool.query(
+        "DELETE FROM purchase_order_custom_fields WHERE field_name=$1",
+        [fieldName]
+      );
+    }
+
+    // 2️⃣ Drop the column from purchase_orders (works for both default & custom)
+    await pool.query(`ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "${safeColumn}"`);
+
+    res.json({ success: true, message: `Field "${fieldName}" deleted successfully` });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 module.exports = router;
