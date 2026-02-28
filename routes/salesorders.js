@@ -40,21 +40,18 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
     // Parse items safely
     let parsedItems = [];
     try {
-      parsedItems = JSON.parse(items);   // array of { item_name, quantity }
+      parsedItems = JSON.parse(items);
     } catch (err) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid JSON format for items"
-      });
+      return res.status(400).json({ success: false, error: "Invalid JSON format for items" });
     }
 
-    // ✅ Fetch all active custom sales order fields
-    const fieldRes = await pool.query(
-      "SELECT field_key FROM sales_order_fields WHERE active = true"
-    );
-    const dynamicFields = fieldRes.rows.map(f => f.field_key); // e.g., ['customer_code', 'gst_number']
+    // Fetch active dynamic fields
+    const fieldRes = await pool.query("SELECT field_key FROM order_form_fields WHERE active = true");
+    const dynamicFields = fieldRes.rows.map(f => f.field_key);
 
-    // ✅ Build columns and values dynamically
+    // Parse custom field values
+    const customValues = req.body.custom_fields ? JSON.parse(req.body.custom_fields) : {};
+
     const columns = [
       "customer_name", "mobile", "address", "landmark", "pincode",
       "payment_mode", "delivery_type", "prescription_required",
@@ -73,7 +70,7 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
       prescription_required === "true",
       prescription_image,
       JSON.stringify(parsedItems),
-      ...dynamicFields.map(key => req.body[key] || null) // get value from request body
+      ...dynamicFields.map(key => customValues[key] || null)
     ];
 
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(",");
@@ -82,18 +79,13 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
 
     const result = await pool.query(insertQuery, values);
 
-    res.json({
-      success: true,
-      message: "Sales order created successfully!",
-      order_id: result.rows[0].id
-    });
+    res.json({ success: true, message: "Sales order created successfully!", order_id: result.rows[0].id });
 
   } catch (error) {
     console.error("Create Order Error:", error);
     res.status(500).json({ success: false, error: "Server Error" });
   }
 });
-
 
 // -------------------------------------------------------------------
 // GET ALL ORDERS
