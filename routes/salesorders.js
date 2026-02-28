@@ -37,7 +37,7 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
 
     const prescription_image = req.file ? req.file.path : null;
 
-    // Parse items safely
+    // 1️⃣ Parse items safely
     let parsedItems = [];
     try {
       parsedItems = JSON.parse(items);
@@ -45,17 +45,27 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid JSON format for items" });
     }
 
-    // Fetch active dynamic fields
-    const fieldRes = await pool.query("SELECT field_key FROM order_form_fields WHERE active = true");
-    const dynamicFields = fieldRes.rows.map(f => f.field_key);
+    // 2️⃣ Fetch all custom fields (ignore 'active' if column missing)
+    const fieldRes = await pool.query("SELECT field_key FROM order_form_fields");
+    const dynamicFields = fieldRes.rows.map(f => f.field_key); // e.g., ['customercode', ...]
 
-    // Parse custom field values
-    const customValues = req.body.custom_fields ? JSON.parse(req.body.custom_fields) : {};
+    // 3️⃣ Parse custom field values
+    const customValues = req.body.custom_fields
+      ? JSON.parse(req.body.custom_fields)
+      : {};
 
+    // 4️⃣ Prepare columns and values dynamically
     const columns = [
-      "customer_name", "mobile", "address", "landmark", "pincode",
-      "payment_mode", "delivery_type", "prescription_required",
-      "prescription_image", "items",
+      "customer_name",
+      "mobile",
+      "address",
+      "landmark",
+      "pincode",
+      "payment_mode",
+      "delivery_type",
+      "prescription_required",
+      "prescription_image",
+      "items",
       ...dynamicFields
     ];
 
@@ -75,11 +85,15 @@ router.post("/create", upload.single("prescription"), async (req, res) => {
 
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(",");
 
+    // 5️⃣ Execute INSERT
     const insertQuery = `INSERT INTO sales_orders (${columns.join(",")}) VALUES (${placeholders}) RETURNING id`;
-
     const result = await pool.query(insertQuery, values);
 
-    res.json({ success: true, message: "Sales order created successfully!", order_id: result.rows[0].id });
+    res.json({
+      success: true,
+      message: "Sales order created successfully!",
+      order_id: result.rows[0].id
+    });
 
   } catch (error) {
     console.error("Create Order Error:", error);
