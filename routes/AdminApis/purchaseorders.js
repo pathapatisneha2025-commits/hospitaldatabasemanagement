@@ -356,22 +356,28 @@ router.post("/bulk-add", async (req, res) => {
 });
 
 router.put("/mark-delivered/:id", async (req, res) => {
-  const { id } = req.params;
+  const orderId = parseInt(req.params.id);
+  const { receivedby } = req.body; // receive employeeId as receivedby
 
   try {
-    await pool.query(
+    const result = await pool.query(
       `UPDATE purchase_orders
        SET status = 'Delivered',
+           receivedby = $2,
            delivered_date = NOW()
-       WHERE id = $1`,
-      [id]
+       WHERE id = $1
+       RETURNING *`,
+      [orderId, receivedby]
     );
 
-    res.json({ success: true });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, order: result.rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 module.exports = router;
