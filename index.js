@@ -146,6 +146,8 @@ app.use("/cron", cronRoutes);
 // Start HTTP server
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🌐 Token API: ${process.env.TOKEN_API_URL}`);
+  console.log(`🌐 Stock API: ${process.env.STOCK_API_URL}`);
 });
 
 // Attach WebSocket server to the same HTTP server
