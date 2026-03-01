@@ -24,7 +24,7 @@ router.get("/ws_c2_services_generate_token", (req, res) => {
 
 
 // 🔹 2️⃣ Get Stock Data API
-router.post("/ ws_c2_services_get_stock_data ", (req, res) => {
+router.post("/ws_c2_services_get_stock_data", (req, res) => {
   try {
     const { c2Code, storeId, prodCode, itemCodes } = req.body;
 
