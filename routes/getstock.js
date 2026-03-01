@@ -62,22 +62,15 @@ const allStockData = [
 // 🔹 Push Stock Data API
 // Method: GET
 // URL: /ws_c2_services_get_stock_data
-router.get("/ws_c2_services_get_stock_data", (req, res) => {
-  // Extract query parameters
-  const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.query;
+router.post("/ws_c2_services_get_stock_data", (req, res) => {
+  const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.body;
 
-  if (!c2Code || !storeId || !prodCode || !itemCodes || !apiKey) {
+  if (!c2Code || !storeId || !prodCode || !itemCodes || !apiKey || !Array.isArray(itemCodes)) {
     return res.status(400).json({ code: "400", message: "Missing or invalid fields" });
   }
 
-  // Convert itemCodes to array if sent as comma-separated string
-  let itemCodesArray = Array.isArray(itemCodes)
-    ? itemCodes
-    : itemCodes.split(",");
-
-  // Filter stock data based on requested item codes
   const filteredStock = allStockData.filter(stock =>
-    itemCodesArray.includes(stock.c_item_code)
+    itemCodes.includes(stock.c_item_code)
   );
 
   return res.json({
