@@ -24,42 +24,33 @@ router.get("/ws_c2_services_generate_token", (req, res) => {
 
 
 // 🔹 2️⃣ Get Stock Data API
-router.get("/get-stock", async (req, res) => {
+router.post("/ ws_c2_services_get_stock_data ", (req, res) => {
   try {
-    const { apiKey } = req.query;
+    const { c2Code, storeId, prodCode, itemCodes } = req.body;
 
-    if (!apiKey) {
-      return res.status(400).json({ error: "apiKey is required" });
+    if (!c2Code || !storeId || !prodCode || !itemCodes || !Array.isArray(itemCodes)) {
+      return res.status(400).json({ error: "Missing or invalid fields" });
     }
 
-    const response = await fetch(
-      "http://localhost:45000/ws_c2_services_get_stock_data",
-      {
-        method: "POST", // ✅ changed to POST
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          c2Code: "03B000",
-          storeId: "001",
-          prodCode: "02",
-          itemCodes: ["711291", "254229"],
-          apiKey: apiKey,
-        }),
-      }
-    );
+    // Here you can generate your API key dynamically if needed
+    const apiKey = "MDNCMDAwMDAxXjIwMjYtMDItMTIgMTE6NTI="; // static example
 
-    if (!response.ok) {
-      throw new Error(`Stock API returned ${response.status}`);
-    }
+    // Build the payload
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      itemCodes,
+      apiKey,
+    };
 
-    const data = await response.json();
-    res.json(data);
-
+    // Directly return payload (no external request)
+    return res.status(200).json(payload);
   } catch (error) {
-    console.error("Error fetching stock:", error.message);
-    res.status(500).json({ error: "Stock API Failed" });
+    console.error("Error generating stock payload:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 module.exports = router;
