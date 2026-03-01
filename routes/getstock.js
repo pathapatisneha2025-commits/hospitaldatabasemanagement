@@ -1,14 +1,13 @@
 const express = require("express");
 const router = express.Router();
 
-
 // 🔹 1️⃣ Generate Token API
 router.get("/generate-token", async (req, res) => {
   try {
     const response = await fetch(
       "http://localhost:44000/ws_c2_services_generate_token",
       {
-        method: "GET",
+        method: "POST", // ✅ changed to POST
         headers: {
           "Content-Type": "application/json",
         },
@@ -21,6 +20,10 @@ router.get("/generate-token", async (req, res) => {
       }
     );
 
+    if (!response.ok) {
+      throw new Error(`Token API returned ${response.status}`);
+    }
+
     const data = await response.json();
     res.json(data);
 
@@ -30,16 +33,19 @@ router.get("/generate-token", async (req, res) => {
   }
 });
 
-
 // 🔹 2️⃣ Get Stock Data API
 router.get("/get-stock", async (req, res) => {
   try {
     const { apiKey } = req.query;
 
+    if (!apiKey) {
+      return res.status(400).json({ error: "apiKey is required" });
+    }
+
     const response = await fetch(
       "http://localhost:45000/ws_c2_services_get_stock_data",
       {
-        method: "GET",
+        method: "POST", // ✅ changed to POST
         headers: {
           "Content-Type": "application/json",
         },
@@ -52,6 +58,10 @@ router.get("/get-stock", async (req, res) => {
         }),
       }
     );
+
+    if (!response.ok) {
+      throw new Error(`Stock API returned ${response.status}`);
+    }
 
     const data = await response.json();
     res.json(data);
