@@ -1,5 +1,5 @@
-require("dotenv").config(); // Load env vars
-
+// Load environment variables based on NODE_ENV (default to 'local')
+require("dotenv").config({ path: `.env.${process.env.NODE_ENV || 'local'}` });
 const express = require("express");
 const cors = require("cors");
 
