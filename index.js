@@ -56,11 +56,13 @@ const EmployeeDeductions = require("./routes/employeedeductions");
 const Pickersapis = require("./routes/AdminApis/pickerapis"); 
 const Deptleavelimit = require("./routes/leavelimitdepartment"); 
 
-const cronRoutes = require("./routes/AdminApis/cron"); // Adjust path if needed
-const DoctorSlots =   require("./routes/slotsdoctor"); // Adjust path if needed
-const MedicineAddFileds =   require("./routes/addmedicinefields"); // Adjust path if needed
-const AddpurchsaeorderFields =   require("./routes/Adminaddpurchasefield"); // Adjust path if needed
-const CreateSalesorderfields =   require("./routes/Createsalesorderfieldsadd"); // Adjust path if needed
+const cronRoutes = require("./routes/AdminApis/cron");
+const DoctorSlots =   require("./routes/slotsdoctor"); 
+const MedicineAddFileds =   require("./routes/addmedicinefields"); 
+const AddpurchsaeorderFields =   require("./routes/Adminaddpurchasefield"); 
+const CreateSalesorderfields =   require("./routes/Createsalesorderfieldsadd"); 
+const GetStock =   require("./routes/getstock"); 
+
 
 
 
@@ -135,6 +137,7 @@ app.use("/doctorslots",DoctorSlots);
 app.use("/addfields",MedicineAddFileds); 
 app.use("/purchaseorderfields",AddpurchsaeorderFields); 
 app.use("/CreateSalesorderfields",CreateSalesorderfields); 
+app.use("/Getstock",GetStock); 
 
 
 
