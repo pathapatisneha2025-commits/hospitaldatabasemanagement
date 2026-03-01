@@ -24,33 +24,69 @@ router.get("/ws_c2_services_generate_token", (req, res) => {
 
 
 // 🔹 2️⃣ Get Stock Data API
-router.post("/ws_c2_services_get_stock_data", (req, res) => {
-  try {
-    const { c2Code, storeId, prodCode, itemCodes } = req.body;
-
-    if (!c2Code || !storeId || !prodCode || !itemCodes || !Array.isArray(itemCodes)) {
-      return res.status(400).json({ error: "Missing or invalid fields" });
-    }
-
-    // Here you can generate your API key dynamically if needed
-    const apiKey = "MDNCMDAwMDAxXjIwMjYtMDItMTIgMTE6NTI="; // static example
-
-    // Build the payload
-    const payload = {
-      c2Code,
-      storeId,
-      prodCode,
-      itemCodes,
-      apiKey,
-    };
-
-    // Directly return payload (no external request)
-    return res.status(200).json(payload);
-  } catch (error) {
-    console.error("Error generating stock payload:", error);
-    return res.status(500).json({ error: "Internal server error" });
+const allStockData = [
+  {
+    c_item_code: "711291",
+    itemName: "ME BEAUTY WATERMELON DRINK",
+    itemQtyPerBox: 1,
+    batchNo: "66E67E78E",
+    stockBalQty: 40,
+    expiryDate: "2029-09-01"
+  },
+  {
+    c_item_code: "711291",
+    itemName: "ME BEAUTY WATERMELON DRINK",
+    itemQtyPerBox: 1,
+    batchNo: "8927308273091802OI3U2OU380289730297",
+    stockBalQty: 10,
+    expiryDate: "2029-09-01"
+  },
+  {
+    c_item_code: "711291",
+    itemName: "ME BEAUTY WATERMELON DRINK",
+    itemQtyPerBox: 1,
+    batchNo: "2020",
+    stockBalQty: 1631,
+    expiryDate: "2029-08-01"
+  },
+  {
+    c_item_code: "254229",
+    itemName: "1 AL 10MG TAB",
+    itemQtyPerBox: 10,
+    batchNo: "89898",
+    stockBalQty: 19099,
+    expiryDate: "2029-09-01"
   }
+];
+
+// 🔹 Push Stock Data API
+// Method: GET
+// URL: /ws_c2_services_get_stock_data
+router.get("/ws_c2_services_get_stock_data", (req, res) => {
+  // Extract query parameters
+  const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.query;
+
+  if (!c2Code || !storeId || !prodCode || !itemCodes || !apiKey) {
+    return res.status(400).json({ code: "400", message: "Missing or invalid fields" });
+  }
+
+  // Convert itemCodes to array if sent as comma-separated string
+  let itemCodesArray = Array.isArray(itemCodes)
+    ? itemCodes
+    : itemCodes.split(",");
+
+  // Filter stock data based on requested item codes
+  const filteredStock = allStockData.filter(stock =>
+    itemCodesArray.includes(stock.c_item_code)
+  );
+
+  return res.json({
+    code: "200",
+    type: "getMasterData",
+    data: filteredStock
+  });
 });
+
 
 
 module.exports = router;
