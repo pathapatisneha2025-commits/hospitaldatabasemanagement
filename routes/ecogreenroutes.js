@@ -39,16 +39,7 @@ router.post("/sales-order", async (req, res) => {
   const data = req.body;
 
   try {
-    const query = `
-      INSERT INTO ecogreensales_orders
-      (c2_code, store_id, prod_code, api_key, ip_no, mobile_no, patient_name, patient_address, patient_email, counter_sale,
-       ord_date, ord_time, user_id, act_code, act_name, dr_code, dr_name, dr_address, dr_reg_no, dr_office_code,
-       dman_code, order_total, order_disc_per, ref_no, order_id, remark, urgent_flag, ord_conversion_flag, dc_conversion_flag,
-       ord_ref_no, sys_name, sys_ip, sys_user, material_info)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
-      RETURNING id
-    `;
-
+    // Check values length
     const values = [
       data.c2Code,
       data.storeId,
@@ -83,11 +74,28 @@ router.post("/sales-order", async (req, res) => {
       data.sysName,
       data.sysIp,
       data.sysUser,
-      JSON.stringify(data.materialInfo)
+      JSON.stringify(data.materialInfo) // 33rd value ✅
     ];
 
+    console.log("Values length:", values.length); // Should log 33
+
+    const query = `
+      INSERT INTO ecogreensales_orders
+      (c2_code, store_id, prod_code, api_key, ip_no, mobile_no, patient_name, patient_address, patient_email, counter_sale,
+       ord_date, ord_time, user_id, act_code, act_name, dr_code, dr_name, dr_address, dr_reg_no, dr_office_code,
+       dman_code, order_total, order_disc_per, ref_no, order_id, remark, urgent_flag, ord_conversion_flag, dc_conversion_flag,
+       ord_ref_no, sys_name, sys_ip, sys_user, material_info)
+      VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
+      RETURNING id
+    `;
+
     const result = await pool.query(query, values);
-    res.status(200).json({ message: "Sales order saved successfully", id: result.rows[0].id });
+
+    res.status(200).json({
+      message: "Sales order saved successfully",
+      id: result.rows[0].id,
+    });
+
   } catch (err) {
     console.error("Error saving sales order:", err);
     res.status(500).json({ error: "Internal Server Error" });
