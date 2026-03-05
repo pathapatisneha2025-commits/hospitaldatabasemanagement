@@ -62,6 +62,7 @@ const MedicineAddFileds =   require("./routes/addmedicinefields");
 const AddpurchsaeorderFields =   require("./routes/Adminaddpurchasefield"); 
 const CreateSalesorderfields =   require("./routes/Createsalesorderfieldsadd"); 
 const GetStock =   require("./routes/getstock"); 
+const EcogreenRoutes =   require("./routes/ecogreenroutes"); 
 
 
 
@@ -138,6 +139,8 @@ app.use("/addfields",MedicineAddFileds);
 app.use("/purchaseorderfields",AddpurchsaeorderFields); 
 app.use("/CreateSalesorderfields",CreateSalesorderfields); 
 app.use("/Getstock",GetStock); 
+app.use("/ecogreen",EcogreenRoutes); 
+
 
 
 
