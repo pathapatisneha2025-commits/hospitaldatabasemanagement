@@ -277,6 +277,36 @@ router.post('/patient/add', async (req, res) => {
   }
 });
 
+// GET /api/patient/:patientId
+router.get('/patientdetailed/:patientId', async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    if (!patientId) {
+      return res.status(400).json({ message: 'Patient ID is required' });
+    }
+
+    const query = `
+      SELECT *
+      FROM patient_detailed_form
+      WHERE patient_id = $1
+      ORDER BY created_at DESC;
+    `;
+
+    const result = await db.query(query, [patientId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'No patient found with this ID' });
+    }
+
+    res.status(200).json({ patient: result.rows[0], allAppointments: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
 
 // -------------------- READ (GET) --------------------
 // Get all appointments
@@ -290,7 +320,6 @@ router.get('/all', async (req, res) => {
   }
 });
 
-// Get appointments by patientId
 // Get appointments by patientId
 router.get('/patient/:patientId', async (req, res) => {
   try {
