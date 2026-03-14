@@ -613,7 +613,7 @@ router.post('/cashhandover/add', async (req, res) => {
     `;
     const values = [handedBy, receiver, amount, date || new Date()];
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
 
     return res.status(201).json({ success: true, handover: result.rows[0] });
   } catch (err) {
@@ -629,7 +629,7 @@ router.get('/cashhandover/all', async (req, res) => {
       SELECT * FROM dailybookingscash_handover
       ORDER BY handover_date DESC
     `;
-    const result = await pool.query(query);
+    const result = await db.query(query);
     return res.status(200).json({ success: true, handovers: result.rows });
   } catch (err) {
     console.error('Fetch cash handovers error:', err);
