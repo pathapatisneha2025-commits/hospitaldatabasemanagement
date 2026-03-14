@@ -264,7 +264,7 @@ router.post('/patient/add', async (req, res) => {
 
     const values = [patientId, fullName, age, gender, phone, email, bloodGroup, city, pin, parentName];
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
 
     res.status(201).json({ message: 'Patient added successfully', patient: result.rows[0] });
 
