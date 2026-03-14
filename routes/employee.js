@@ -597,6 +597,46 @@ router.delete('/delete/:id', async (req, res) => {
   }
 });
 
+router.post('/cashhandover/add', async (req, res) => {
+  try {
+    const { handedBy, receiver, amount, date } = req.body;
+
+    // Basic validation
+    if (!handedBy || !receiver || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid data provided' });
+    }
+
+    const query = `
+      INSERT INTO dailybookingscash_handover (handed_by, receiver, amount, handover_date)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    const values = [handedBy, receiver, amount, date || new Date()];
+
+    const result = await pool.query(query, values);
+
+    return res.status(201).json({ success: true, handover: result.rows[0] });
+  } catch (err) {
+    console.error('Cash handover error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// GET /cashhandover - Fetch all handovers (for admin)
+router.get('/cashhandover/all', async (req, res) => {
+  try {
+    const query = `
+      SELECT * FROM dailybookingscash_handover
+      ORDER BY handover_date DESC
+    `;
+    const result = await pool.query(query);
+    return res.status(200).json({ success: true, handovers: result.rows });
+  } catch (err) {
+    console.error('Fetch cash handovers error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ⭐ EXPORT EMPLOYEES AS CSV
   
 
