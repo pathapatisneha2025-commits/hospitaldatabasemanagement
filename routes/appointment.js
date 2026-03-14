@@ -235,6 +235,47 @@ if (lastToken.rows[0].last_token) {
 
 
 
+router.post('/patient/add', async (req, res) => {
+  try {
+    const {
+      patientId,  // frontend must provide this
+      fullName,
+      age,
+      gender,
+      phone,
+      email,
+      bloodGroup,
+      city,
+      pin,
+      parentName,
+    } = req.body;
+
+    // Validate required fields
+    if (!patientId || !fullName || !age || !phone || !gender) {
+      return res.status(400).json({ message: 'patientId, fullName, age, phone, and gender are required.' });
+    }
+
+    const query = `
+      INSERT INTO patient_detailed_form
+      (patient_id, full_name, age, gender, phone, email, blood_group, city, pin, parent_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING *;
+    `;
+
+    const values = [patientId, fullName, age, gender, phone, email, bloodGroup, city, pin, parentName];
+
+    const result = await pool.query(query, values);
+
+    res.status(201).json({ message: 'Patient added successfully', patient: result.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    if (err.code === '23505') {  // unique violation on patient_id
+      return res.status(409).json({ message: 'Patient ID already exists' });
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 
 // -------------------- READ (GET) --------------------
