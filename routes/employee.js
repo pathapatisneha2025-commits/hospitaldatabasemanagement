@@ -637,6 +637,35 @@ router.get('/cashhandover/all', async (req, res) => {
   }
 });
 
+router.get('/cashhandover/:employeeId', async (req, res) => {
+  const { employeeId } = req.params;
+
+  try {
+    const query = `
+      SELECT 
+        id,
+        handed_by,
+        receiver,
+        amount,
+        handover_date,
+        receiver_name
+      FROM dailybookingscash_handover
+      WHERE handed_by = $1
+      ORDER BY handover_date DESC
+    `;
+
+    const { rows } = await pool.query(query, [employeeId]);
+
+    return res.json({
+      success: true,
+      handovers: rows,
+    });
+  } catch (err) {
+    console.error('Error fetching handovers by employee:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ⭐ EXPORT EMPLOYEES AS CSV
   
 
