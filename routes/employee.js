@@ -665,6 +665,27 @@ router.get('/cashhandover/:employeeId', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+router.post('/complete/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Option 1: For now, just respond as success
+    const result = await pool.query(
+      'SELECT * FROM dailybookingscash_handover WHERE id = $1',
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Handover not found' });
+    }
+
+    // You could add a "completed" column if you want to mark it instead of just returning
+    res.json({ success: true, message: 'Handover marked as complete' });
+  } catch (err) {
+    console.error('Error marking handover complete:', err);
+    res.status(500).json({ success: false, message: 'Failed to update handover' });
+  }
+});
+
 
 // ⭐ EXPORT EMPLOYEES AS CSV
   
