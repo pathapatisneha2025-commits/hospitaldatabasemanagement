@@ -648,7 +648,8 @@ router.get('/cashhandover/:employeeId', async (req, res) => {
         receiver,
         amount,
         handover_date,
-        receiver_name
+        receiver_name,
+        status
       FROM dailybookingscash_handover
       WHERE handed_by = $1
       ORDER BY handover_date DESC
