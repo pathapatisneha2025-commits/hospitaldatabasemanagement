@@ -599,19 +599,20 @@ router.delete('/delete/:id', async (req, res) => {
 
 router.post('/cashhandover/add', async (req, res) => {
   try {
-    const { handedBy, receiver, amount, date } = req.body;
+    const { handedBy, receiver, receiverName, amount, date } = req.body;
 
     // Basic validation
-    if (!handedBy || !receiver || !amount || amount <= 0) {
+    if (!handedBy || !receiver || !receiverName || !amount || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid data provided' });
     }
 
     const query = `
-      INSERT INTO dailybookingscash_handover (handed_by, receiver, amount, handover_date)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO dailybookingscash_handover 
+      (handed_by, receiver, receiver_name, amount, handover_date)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
-    const values = [handedBy, receiver, amount, date || new Date()];
+    const values = [handedBy, receiver, receiverName, amount, date || new Date()];
 
     const result = await pool.query(query, values);
 
@@ -621,7 +622,6 @@ router.post('/cashhandover/add', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
 // GET /cashhandover - Fetch all handovers (for admin)
 router.get('/cashhandover/all', async (req, res) => {
   try {
