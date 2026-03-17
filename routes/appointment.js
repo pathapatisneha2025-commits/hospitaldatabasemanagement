@@ -472,7 +472,7 @@ router.put("/upcomingvisits/update/:id", async (req, res) => {
 
   try {
     const result = await db.query(
-      "UPDATE book_appointment SET date = $1 WHERE id = $2 RETURNING *",
+      "UPDATE appointments SET date = $1 WHERE id = $2 RETURNING *",
       [date, id]
     );
 
