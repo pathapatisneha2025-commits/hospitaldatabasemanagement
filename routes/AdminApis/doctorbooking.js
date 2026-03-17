@@ -304,7 +304,7 @@ router.put("/upcomingvisits/update/:id", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "UPDATE doctor_booking SET appointment_date = $1 WHERE id = $2 RETURNING *",
+      "UPDATE doctorbooking SET appointment_date = $1 WHERE id = $2 RETURNING *",
       [appointment_date, id]
     );
 
