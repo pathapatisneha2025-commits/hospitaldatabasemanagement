@@ -464,7 +464,28 @@ router.put('/update/:id', async (req, res) => {
 
 
 
+router.put("/upcomingvisits/update/:id", async (req, res) => {
+  const { id } = req.params;
+  const { date } = req.body;
 
+  if (!date) return res.status(400).json({ success: false, message: "Date is required" });
+
+  try {
+    const result = await pool.query(
+      "UPDATE book_appointment SET date = $1 WHERE id = $2 RETURNING *",
+      [date, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Appointment not found" });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 // -------------------- DELETE --------------------
 router.delete('/delete/:tokenid', async (req, res) => {

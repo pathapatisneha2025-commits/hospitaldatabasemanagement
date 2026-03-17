@@ -294,6 +294,30 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
+
+// Update appointment_date for doctorbooking
+router.put("/upcomingvisits/update/:id", async (req, res) => {
+  const { id } = req.params;
+  const { appointment_date } = req.body;
+
+  if (!appointment_date) return res.status(400).json({ success: false, message: "Date is required" });
+
+  try {
+    const result = await pool.query(
+      "UPDATE doctor_booking SET appointment_date = $1 WHERE id = $2 RETURNING *",
+      [appointment_date, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 /* =========================================================
     6️⃣ DELETE APPOINTMENT
 ========================================================= */
