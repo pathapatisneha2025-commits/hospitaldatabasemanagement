@@ -471,7 +471,7 @@ router.put("/upcomingvisits/update/:id", async (req, res) => {
   if (!date) return res.status(400).json({ success: false, message: "Date is required" });
 
   try {
-    const result = await pool.query(
+    const result = await db.query(
       "UPDATE book_appointment SET date = $1 WHERE id = $2 RETURNING *",
       [date, id]
     );
