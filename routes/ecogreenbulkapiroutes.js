@@ -104,44 +104,71 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
 });
 
 // Bulk stock upload
-router.post('/stockbulk-upload-csv', async (req, res) => {
-  const results = req.body.stocks;
-  if (!results || !Array.isArray(results)) return res.status(400).json({ success: false, error: 'No data sent' });
-
-  const client = await pool.connect();
+router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => {
   try {
-    await client.query('BEGIN');
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-    const query = `
-      INSERT INTO stock_batches
-      (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `;
+    // Read Excel / CSV
+    const workbook = XLSX.read(file.buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(sheet);
 
-    const insertedStocks = [];
-    for (const stock of results) {
-      const values = [
-        stock.c_item_code,
-        stock.item_name,
-        stock.item_qty_per_box,
-        stock.batch_no,
-        stock.stock_bal_qty,
-        stock.expiry_date
-      ];
+    if (!data || data.length === 0)
+      return res.status(400).json({ error: "Empty file" });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const placeholders = [];
+      const values = [];
+
+      data.forEach((row, index) => {
+        const i = index * 6; // 6 columns
+        placeholders.push(
+          `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6})`
+        );
+
+        values.push(
+          row.c_item_code,
+          row.item_name,
+          row.item_qty_per_box,
+          row.batch_no,
+          row.stock_bal_qty,
+          row.expiry_date
+        );
+      });
+
+      const query = `
+        INSERT INTO stock_batches
+          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
+        VALUES ${placeholders.join(",")}
+        ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
+          stock_bal_qty = EXCLUDED.stock_bal_qty,
+          expiry_date = EXCLUDED.expiry_date
+        RETURNING *;
+      `;
+
       const result = await client.query(query, values);
-      insertedStocks.push(result.rows[0]);
-    }
 
-    await client.query('COMMIT');
-    res.status(201).json({ success: true, insertedStocks });
+      await client.query("COMMIT");
+
+      res.status(201).json({
+        success: true,
+        insertedStocks: result.rows,
+        totalStocks: result.rows.length,
+      });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("DB Error:", err);
+      res.status(500).json({ success: false, error: "Database error", details: err.message });
+    } finally {
+      client.release();
+    }
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ success: false, error: 'Server error' });
-  } finally {
-    client.release();
+    console.error("Bulk Upload Error:", err);
+    res.status(500).json({ success: false, error: "Failed to process file", details: err.message });
   }
 });
-
 module.exports = router;
