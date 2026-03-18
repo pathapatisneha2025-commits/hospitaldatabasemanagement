@@ -230,21 +230,6 @@ async function insertBulk(rows) {
        city, pin, mobile_no, mail_id, parent_code, parent_name)
     VALUES
       ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-    ON CONFLICT (lc_code) DO UPDATE SET
-      brcode = EXCLUDED.brcode,
-      lc_name = EXCLUDED.lc_name,
-      added_date = EXCLUDED.added_date,
-      age = EXCLUDED.age,
-      gender = EXCLUDED.gender,
-      address1 = EXCLUDED.address1,
-      address2 = EXCLUDED.address2,
-      address3 = EXCLUDED.address3,
-      city = EXCLUDED.city,
-      pin = EXCLUDED.pin,
-      mobile_no = EXCLUDED.mobile_no,
-      mail_id = EXCLUDED.mail_id,
-      parent_code = EXCLUDED.parent_code,
-      parent_name = EXCLUDED.parent_name
   `;
 
   let count = 0;
@@ -274,7 +259,7 @@ async function insertBulk(rows) {
       row.parent_name || "",
     ];
 
-    await pool.query(query, values);
+    await pool.query(query, values); // simple insert without ON CONFLICT
     count++;
   }
 
