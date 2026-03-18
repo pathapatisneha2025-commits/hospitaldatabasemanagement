@@ -108,7 +108,7 @@ router.post('/local-customer/add', async (req, res) => {
     `;
     const values = [brcode, lc_code, lc_name, added_date, age, gender, address1, address2, address3, city, pin, mobile_no, mail_id, parent_code, parent_name];
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error(error);
