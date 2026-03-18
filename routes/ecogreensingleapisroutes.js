@@ -82,7 +82,7 @@ router.post('/add-stock', async (req, res) => {
       RETURNING *
     `;
     const values = [c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date];
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
 
     res.status(201).json({ success: true, stock: result.rows[0] });
   } catch (err) {
