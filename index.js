@@ -63,6 +63,10 @@ const AddpurchsaeorderFields =   require("./routes/Adminaddpurchasefield");
 const CreateSalesorderfields =   require("./routes/Createsalesorderfieldsadd"); 
 const GetStock =   require("./routes/getstock"); 
 const EcogreenRoutes =   require("./routes/ecogreenroutes"); 
+const EcogreenBulkupload =   require("./routes/ecogreenbulkapiroutes"); 
+const EcogreenSingleapi =   require("./routes/ecogreensingleapiroutes"); 
+
+
 
 
 
@@ -140,6 +144,10 @@ app.use("/purchaseorderfields",AddpurchsaeorderFields);
 app.use("/CreateSalesorderfields",CreateSalesorderfields); 
 app.use("/Getstock",GetStock); 
 app.use("/ecogreen",EcogreenRoutes); 
+app.use("/ecogreenbulkupload",EcogreenBulkupload); 
+app.use("/ecogreensingleapis",EcogreenSingleapi); 
+
+
 
 
 
