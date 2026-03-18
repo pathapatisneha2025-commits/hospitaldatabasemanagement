@@ -70,4 +70,25 @@ router.post("/add-item", async (req, res) => {
   }
 });
 
+
+router.post('/add-stock', async (req, res) => {
+  const { c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date } = req.body;
+
+  try {
+    const query = `
+      INSERT INTO  stock_batches
+      (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `;
+    const values = [c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date];
+    const result = await pool.query(query, values);
+
+    res.status(201).json({ success: true, stock: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
 module.exports = router;
