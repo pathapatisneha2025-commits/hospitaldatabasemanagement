@@ -104,47 +104,53 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
 });
 
 // Bulk stock upload
-router.post('/stockbulk-upload', async (req, res) => {
-  const stocks = req.body.stocks; // expect [{c_item_code, item_name, ...}, ...]
+router.post('/stockbulk-upload-csv', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
 
-  if (!Array.isArray(stocks) || stocks.length === 0) {
-    return res.status(400).json({ success: false, error: 'No stock data provided' });
-  }
+  const results = [];
+  fs.createReadStream(req.file.path)
+    .pipe(csv())
+    .on('data', (row) => {
+      results.push(row);
+    })
+    .on('end', async () => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+        const query = `
+          INSERT INTO stock_batches
+          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING *
+        `;
 
-    const query = `
-      INSERT INTO  stock_batches
-      (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `;
+        const insertedStocks = [];
+        for (const stock of results) {
+          const values = [
+            stock.c_item_code,
+            stock.item_name,
+            stock.item_qty_per_box,
+            stock.batch_no,
+            stock.stock_bal_qty,
+            stock.expiry_date
+          ];
+          const result = await client.query(query, values);
+          insertedStocks.push(result.rows[0]);
+        }
 
-    const insertedStocks = [];
-    for (const stock of stocks) {
-      const values = [
-        stock.c_item_code,
-        stock.item_name,
-        stock.item_qty_per_box,
-        stock.batch_no,
-        stock.stock_bal_qty,
-        stock.expiry_date
-      ];
-      const result = await client.query(query, values);
-      insertedStocks.push(result.rows[0]);
-    }
-
-    await client.query('COMMIT');
-    res.status(201).json({ success: true, insertedStocks });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ success: false, error: 'Server error' });
-  } finally {
-    client.release();
-  }
+        await client.query('COMMIT');
+        fs.unlinkSync(req.file.path); // remove uploaded file
+        res.status(201).json({ success: true, insertedStocks });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        fs.unlinkSync(req.file.path);
+        console.error(err);
+        res.status(500).json({ success: false, error: 'Server error' });
+      } finally {
+        client.release();
+      }
+    });
 });
 
 module.exports = router;
