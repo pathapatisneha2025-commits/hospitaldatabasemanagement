@@ -169,43 +169,46 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
 });
 
 
-router.post('/local-customer/bulk', upload.single('file'), async (req, res) => {
+router.post("/local-customer/bulk", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+    const file = req.file;
+    if (!file) return res.status(400).json({ success: false, error: "No file uploaded" });
 
-    const ext = path.extname(req.file.originalname).toLowerCase();
+    const ext = file.originalname.split(".").pop().toLowerCase();
     let data = [];
 
-    if (ext === '.csv') {
-      // Parse CSV
-      const buffer = req.file.buffer;
-      const tempPath = path.join(__dirname, 'temp.csv');
-      fs.writeFileSync(tempPath, buffer);
-
-      fs.createReadStream(tempPath)
-        .pipe(csv())
-        .on('data', (row) => {
-          data.push(row);
-        })
-        .on('end', async () => {
-          await insertBulk(data);
-          fs.unlinkSync(tempPath);
-          res.json({ success: true, inserted: data.length });
-        });
-    } else if (ext === '.xls' || ext === '.xlsx') {
-      // Parse Excel
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    // --- CSV File ---
+    if (ext === "csv") {
+      const csvString = file.buffer.toString("utf-8");
+      data = parse(csvString, {
+        columns: true,       // first row as header
+        skip_empty_lines: true,
+      });
+    } 
+    // --- Excel File ---
+    else if (ext === "xls" || ext === "xlsx") {
+      const workbook = XLSX.read(file.buffer, { type: "buffer" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       data = XLSX.utils.sheet_to_json(sheet);
-      await insertBulk(data);
-      res.json({ success: true, inserted: data.length });
-    } else {
-      return res.status(400).json({ success: false, error: 'Invalid file type' });
+    } 
+    else {
+      return res.status(400).json({ success: false, error: "Invalid file type" });
     }
 
+    if (!data || data.length === 0)
+      return res.status(400).json({ success: false, error: "Empty file" });
+
+    // Insert into database
+    const insertedCount = await insertBulk(data);
+
+    res.status(200).json({
+      success: true,
+      inserted: insertedCount,
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: 'Server Error' });
+    console.error("Local Customer Bulk Upload Error:", error);
+    res.status(500).json({ success: false, error: "Server Error", details: error.message });
   }
 });
 
@@ -213,17 +216,51 @@ router.post('/local-customer/bulk', upload.single('file'), async (req, res) => {
 async function insertBulk(rows) {
   const query = `
     INSERT INTO local_customers
-    (brcode, lc_code, lc_name, added_date, age, gender, address1, address2, address3, city, pin, mobile_no, mail_id, parent_code, parent_name)
+      (brcode, lc_code, lc_name, added_date, age, gender, address1, address2, address3,
+       city, pin, mobile_no, mail_id, parent_code, parent_name)
     VALUES
-    ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+    ON CONFLICT (lc_code) DO UPDATE SET
+      brcode = EXCLUDED.brcode,
+      lc_name = EXCLUDED.lc_name,
+      added_date = EXCLUDED.added_date,
+      age = EXCLUDED.age,
+      gender = EXCLUDED.gender,
+      address1 = EXCLUDED.address1,
+      address2 = EXCLUDED.address2,
+      address3 = EXCLUDED.address3,
+      city = EXCLUDED.city,
+      pin = EXCLUDED.pin,
+      mobile_no = EXCLUDED.mobile_no,
+      mail_id = EXCLUDED.mail_id,
+      parent_code = EXCLUDED.parent_code,
+      parent_name = EXCLUDED.parent_name
   `;
+
+  let count = 0;
   for (const row of rows) {
     const values = [
-      row.brcode, row.lc_code, row.lc_name, row.added_date, row.age, row.gender,
-      row.address1, row.address2, row.address3, row.city, row.pin, row.mobile_no,
-      row.mail_id, row.parent_code, row.parent_name
+      row.brcode || "",
+      row.lc_code || "",
+      row.lc_name || "",
+      row.added_date || "",
+      row.age || "",
+      row.gender || "",
+      row.address1 || "",
+      row.address2 || "",
+      row.address3 || "",
+      row.city || "",
+      row.pin || "",
+      row.mobile_no || "",
+      row.mail_id || "",
+      row.parent_code || "",
+      row.parent_name || "",
     ];
+
     await pool.query(query, values);
+    count++;
   }
+
+  return count;
 }
 module.exports = router;
