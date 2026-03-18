@@ -91,4 +91,30 @@ router.post('/add-stock', async (req, res) => {
   }
 });
 
+router.post('/local-customer/add', async (req, res) => {
+  const {
+    brcode, lc_code, lc_name, added_date, age, gender,
+    address1, address2, address3, city, pin, mobile_no, mail_id,
+    parent_code, parent_name
+  } = req.body;
+
+  try {
+    const query = `
+      INSERT INTO  local_customers
+      (brcode, lc_code, lc_name, added_date, age, gender, address1, address2, address3, city, pin, mobile_no, mail_id, parent_code, parent_name)
+      VALUES
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      RETURNING *;
+    `;
+    const values = [brcode, lc_code, lc_name, added_date, age, gender, address1, address2, address3, city, pin, mobile_no, mail_id, parent_code, parent_name];
+
+    const result = await pool.query(query, values);
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Database Error' });
+  }
+});
+
+
 module.exports = router;

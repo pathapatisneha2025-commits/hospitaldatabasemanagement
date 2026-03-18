@@ -167,4 +167,63 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
     res.status(500).json({ success: false, error: "Failed to process file", details: err.message });
   }
 });
+
+
+router.post('/local-customer/bulk', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let data = [];
+
+    if (ext === '.csv') {
+      // Parse CSV
+      const buffer = req.file.buffer;
+      const tempPath = path.join(__dirname, 'temp.csv');
+      fs.writeFileSync(tempPath, buffer);
+
+      fs.createReadStream(tempPath)
+        .pipe(csv())
+        .on('data', (row) => {
+          data.push(row);
+        })
+        .on('end', async () => {
+          await insertBulk(data);
+          fs.unlinkSync(tempPath);
+          res.json({ success: true, inserted: data.length });
+        });
+    } else if (ext === '.xls' || ext === '.xlsx') {
+      // Parse Excel
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      data = XLSX.utils.sheet_to_json(sheet);
+      await insertBulk(data);
+      res.json({ success: true, inserted: data.length });
+    } else {
+      return res.status(400).json({ success: false, error: 'Invalid file type' });
+    }
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+});
+
+// ---------------------- INSERT BULK FUNCTION ----------------------
+async function insertBulk(rows) {
+  const query = `
+    INSERT INTO local_customers
+    (brcode, lc_code, lc_name, added_date, age, gender, address1, address2, address3, city, pin, mobile_no, mail_id, parent_code, parent_name)
+    VALUES
+    ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+  `;
+  for (const row of rows) {
+    const values = [
+      row.brcode, row.lc_code, row.lc_name, row.added_date, row.age, row.gender,
+      row.address1, row.address2, row.address3, row.city, row.pin, row.mobile_no,
+      row.mail_id, row.parent_code, row.parent_name
+    ];
+    await pool.query(query, values);
+  }
+}
 module.exports = router;
