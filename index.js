@@ -64,7 +64,7 @@ const CreateSalesorderfields =   require("./routes/Createsalesorderfieldsadd");
 const GetStock =   require("./routes/getstock"); 
 const EcogreenRoutes =   require("./routes/ecogreenroutes"); 
 const EcogreenBulkupload =   require("./routes/ecogreenbulkapiroutes"); 
-const EcogreenSingleapi =   require("./routes/ecogreensingleapiroutes"); 
+const EcogreenSingleapi =   require("./routes/ecogreensingleapisroutes"); 
 
 
 
