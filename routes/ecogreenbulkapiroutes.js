@@ -143,11 +143,7 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
       const query = `
         INSERT INTO stock_batches
           (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
-        VALUES ${placeholders.join(",")}
-        ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
-          stock_bal_qty = EXCLUDED.stock_bal_qty,
-          expiry_date = EXCLUDED.expiry_date
-        RETURNING *;
+        VALUES ${placeholders.join(",")};
       `;
 
       const result = await client.query(query, values);
@@ -157,7 +153,7 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
       res.status(201).json({
         success: true,
         insertedStocks: result.rows,
-        totalStocks: result.rows.length,
+        totalStocks: result.rowCount,
       });
     } catch (err) {
       await client.query("ROLLBACK");
