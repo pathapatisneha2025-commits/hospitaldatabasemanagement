@@ -61,7 +61,7 @@ router.post("/add-item", async (req, res) => {
       hsn_sac_code, hsn_sac_name
     ];
 
-    await pool.query(query, values);
+    await db.query(query, values);
 
     res.status(200).json({ message: "Item added/updated successfully" });
   } catch (err) {
