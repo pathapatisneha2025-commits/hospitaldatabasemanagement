@@ -213,6 +213,16 @@ router.post("/local-customer/bulk", upload.single("file"), async (req, res) => {
 });
 
 // ---------------------- INSERT BULK FUNCTION ----------------------
+// Helper: Convert Excel date serial to YYYY-MM-DD
+function excelDateToJSDate(serial) {
+  if (!serial) return null;
+  // Excel's day 1 is 1900-01-01
+  const utc_days = Math.floor(serial - 25569); 
+  const utc_value = utc_days * 86400; 
+  const date_info = new Date(utc_value * 1000);
+  return date_info.toISOString().split("T")[0]; // YYYY-MM-DD
+}
+
 async function insertBulk(rows) {
   const query = `
     INSERT INTO local_customers
@@ -239,11 +249,18 @@ async function insertBulk(rows) {
 
   let count = 0;
   for (const row of rows) {
+    let addedDate = row.added_date;
+
+    // Convert Excel serial number to date string if needed
+    if (typeof addedDate === "number") {
+      addedDate = excelDateToJSDate(addedDate);
+    }
+
     const values = [
       row.brcode || "",
       row.lc_code || "",
       row.lc_name || "",
-      row.added_date || "",
+      addedDate || null,
       row.age || "",
       row.gender || "",
       row.address1 || "",
