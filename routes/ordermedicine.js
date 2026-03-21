@@ -307,10 +307,7 @@ router.get("/delivery/report", async (req, res) => {
     res.json({
       totalOrders: rows[0].total_orders,
       totalRevenue: rows[0].total_revenue,
-      location: {
-        lat: 17.3850,   // Replace with live location table later
-        lng: 78.4867
-      }
+    
     });
   } catch (err) {
     console.error(err);
