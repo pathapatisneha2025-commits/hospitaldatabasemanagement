@@ -713,6 +713,28 @@ for (let [id, ws] of clients.entries()) {
     res.status(500).json({ success: false });
   }
 });
+
+router.get("/location/live", async (req, res) => {
+  const { boyId } = req.query;
+  if (!boyId) return res.status(400).json({ success: false, message: "boyId is required" });
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT latitude, longitude, status, updated_at
+      FROM delivery_boy_locations
+      WHERE delivery_boy_id = $1
+      LIMIT 1
+    `, [boyId]);
+
+    if (rows.length === 0) return res.json({ success: false, location: null });
+
+    res.json({ success: true, location: rows[0] });
+  } catch (err) {
+    console.error("Fetch live location error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 router.get("/admin/deliveryboy-locations", async (req, res) => {
   try {
     const { rows } = await pool.query(`
