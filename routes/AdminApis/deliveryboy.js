@@ -692,9 +692,18 @@ router.post("/update-location", async (req, res) => {
 });
 router.get("/admin/deliveryboy-locations", async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM delivery_boy_locations`
-    );
+    const { rows } = await pool.query(`
+      SELECT 
+        loc.delivery_boy_id,
+        emp.full_name,
+        loc.latitude,
+        loc.longitude,
+        loc.status,
+        loc.updated_at
+      FROM delivery_boy_locations loc
+      JOIN employees emp 
+        ON emp.id = loc.delivery_boy_id
+    `);
 
     res.json({
       success: true,
