@@ -281,37 +281,62 @@ router.post("/checkout", async (req, res) => {
 });
 
 router.get("/delivery/report", async (req, res) => {
-  const { boyId, month } = req.query; // month = "02" for February
+  const { boyId, month } = req.query; // e.g., month = "03" for March
 
   try {
     const query = `
       SELECT
-        COUNT(*) AS total_orders,
-        COALESCE(SUM(item_total), 0) AS total_revenue
+        COALESCE(SUM(total_orders),0) AS total_orders,
+        COALESCE(SUM(total_revenue),0) AS total_revenue
       FROM (
+        -- Orders table
         SELECT
-          o.id,
-          (
-            SELECT SUM((item->>'total')::NUMERIC)
-            FROM jsonb_array_elements(o.order_summary) AS item
-          ) AS item_total
-        FROM orders o
-        WHERE o.deliveryboy_id = $1
-          AND o.status = 'Delivered'
-          AND TO_CHAR(o.created_at, 'MM') = $2
-      ) sub;
+          COUNT(*) AS total_orders,
+          COALESCE(SUM(item_total), 0) AS total_revenue
+        FROM (
+          SELECT
+            o.id,
+            (
+              SELECT SUM((item->>'total')::NUMERIC)
+              FROM jsonb_array_elements(o.order_summary) AS item
+            ) AS item_total
+          FROM orders o
+          WHERE o.deliveryboy_id = $1
+            AND o.status = 'Delivered'
+            AND TO_CHAR(o.created_at, 'MM') = $2
+        ) sub_orders
+
+        UNION ALL
+
+        -- Sales_order table
+        SELECT
+          COUNT(*) AS total_orders,
+          COALESCE(SUM(item_total), 0) AS total_revenue
+        FROM (
+          SELECT
+            s.id,
+            (
+              SELECT SUM((item->>'total')::NUMERIC)
+              FROM jsonb_array_elements(s.items) AS item
+            ) AS item_total
+          FROM sales_orders s
+          WHERE s.deliveryboy_id = $1
+            AND s.status = 'Delivered'
+            AND TO_CHAR(s.created_at, 'MM') = $2
+        ) sub_sales
+      ) combined;
     `;
 
     const { rows } = await pool.query(query, [boyId, month]);
 
     res.json({
-      totalOrders: rows[0].total_orders,
-      totalRevenue: rows[0].total_revenue,
-    
+      success: true,
+      totalOrders: parseInt(rows[0].total_orders),
+      totalRevenue: parseFloat(rows[0].total_revenue),
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 // POST: Collect Payment (store directly in orders table)
