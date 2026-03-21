@@ -298,7 +298,7 @@ router.get("/delivery/report", async (req, res) => {
         FROM orders o
         WHERE o.deliveryboy_id = $1
           AND o.status = 'Delivered'
-          AND TO_CHAR(o.created_at, 'MM') = $2
+          AND TO_CHAR(o.payment_collected_at, 'MM') = $2
       ) sub;
     `;
 
