@@ -256,7 +256,7 @@ router.get("/availability/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-router.get('/deliveryboy/monthly-stats', async (req, res) => {
+router.get("/deliveryboy/monthly-stats", async (req, res) => {
   try {
     const query = `
       SELECT
