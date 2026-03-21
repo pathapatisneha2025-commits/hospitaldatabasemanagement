@@ -657,15 +657,16 @@ router.get('/:deliveryBoyId/handover/all', async (req, res) => {
 router.post("/update-location", async (req, res) => {
   const { deliveryBoyId, latitude, longitude, status } = req.body;
 
-  if (!deliveryBoyId || !latitude || !longitude) {
+  if (!deliveryBoyId || latitude == null || longitude == null) {
     return res.status(400).json({ success: false, message: "Invalid data" });
   }
 
   try {
+    // 1️⃣ Insert or update location in DB
     await pool.query(
       `
       INSERT INTO delivery_boy_locations
-      (delivery_boy_id, latitude, longitude, status)
+        (delivery_boy_id, latitude, longitude, status)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (delivery_boy_id)
       DO UPDATE SET
@@ -676,23 +677,25 @@ router.post("/update-location", async (req, res) => {
       [deliveryBoyId, latitude, longitude, status]
     );
 
-    // 🔥 Real-time push to admin
-// Broadcast to all connected clients
-for (let [id, ws] of clients.entries()) {
-  if (ws.readyState === ws.OPEN) {
-    ws.send(JSON.stringify({
-      type: "location-update",
-      deliveryBoyId,
-      latitude,
-      longitude,
-      status
-    }));
-  }
-}
+    // 2️⃣ Broadcast to all connected WebSocket clients
+    const clients = global.clients; // your ws clients map
+
+    for (let [id, ws] of clients.entries()) {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({
+          type: "location-update",
+          deliveryBoyId,
+          latitude,
+          longitude,
+          status,
+        }));
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
+    console.error("Update location error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 router.get("/admin/deliveryboy-locations", async (req, res) => {
