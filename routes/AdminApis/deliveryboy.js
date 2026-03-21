@@ -601,7 +601,25 @@ router.get('/handover/all', async (req, res) => {
 });
 
 
+router.get("/deliveryboy/handover", async (req, res) => {
+  const { boyId, month } = req.query;
 
+  try {
+    const query = `
+      SELECT *
+      FROM cash_handovers
+      WHERE deliveryboy_id = $1
+        AND TO_CHAR(date, 'MM') = $2
+      ORDER BY date DESC
+    `;
+
+    const { rows } = await pool.query(query, [boyId, month]);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // 3️⃣ Fetch existing handover (optional)
 router.get('/:deliveryBoyId/handover', async (req, res) => {
   const { deliveryBoyId } = req.params;
