@@ -677,13 +677,18 @@ router.post("/update-location", async (req, res) => {
     );
 
     // 🔥 Real-time push to admin
-    io.emit("location-update", {
+// Broadcast to all connected clients
+for (let [id, ws] of clients.entries()) {
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({
+      type: "location-update",
       deliveryBoyId,
       latitude,
       longitude,
-      status,
-    });
-
+      status
+    }));
+  }
+}
     res.json({ success: true });
   } catch (err) {
     console.error(err);
