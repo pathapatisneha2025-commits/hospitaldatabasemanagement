@@ -523,6 +523,30 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
   }
 });
 
+router.get('/deliveryboy/monthly-stats', async (req, res) => {
+  try {
+    const query = `
+      SELECT
+          deliveryboy_id,
+          TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+          COUNT(*) AS total_orders,
+          SUM(
+              (SELECT SUM((item->>'total')::NUMERIC)
+               FROM jsonb_array_elements(order_summary) AS item)
+          ) AS total_revenue
+      FROM orders
+      WHERE deliveryboy_id IS NOT NULL
+        AND status = 'Delivered'
+      GROUP BY deliveryboy_id, DATE_TRUNC('month', created_at)
+      ORDER BY deliveryboy_id, month;
+    `;
+    const { rows } = await pool.query(query);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 
 // 2️⃣ Submit cash handover
