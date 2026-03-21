@@ -281,44 +281,37 @@ router.post("/checkout", async (req, res) => {
 });
 
 router.get("/delivery/report", async (req, res) => {
-  const { boyId, month } = req.query; // e.g., month = "03" for March
+  const { boyId, month } = req.query; // month = "02" for February
 
   try {
-    // ----------------- Revenue grouped by payment mode -----------------
-    const paymentsQuery = `
+    const query = `
       SELECT
-        payment_mode,
-        COALESCE(SUM(CAST(amount_received AS NUMERIC)), 0) AS total_revenue
-      FROM orders
-      WHERE deliveryboy_id = $1
-        AND payment_status = 'Paid'
-        AND TO_CHAR(payment_collected_at, 'MM') = $2
-      GROUP BY payment_mode;
+        COUNT(*) AS total_orders,
+        COALESCE(SUM(item_total), 0) AS total_revenue
+      FROM (
+        SELECT
+          o.id,
+          (
+            SELECT SUM((item->>'total')::NUMERIC)
+            FROM jsonb_array_elements(o.order_summary) AS item
+          ) AS item_total
+        FROM orders o
+        WHERE o.deliveryboy_id = $1
+          AND o.status = 'Delivered'
+          AND TO_CHAR(o.created_at, 'MM') = $2
+      ) sub;
     `;
 
-    const paymentsResult = await pool.query(paymentsQuery, [boyId, month]);
+    const { rows } = await pool.query(query, [boyId, month]);
 
-    // ----------------- Total delivered orders in the month -----------------
-    const ordersQuery = `
-      SELECT COUNT(*) AS total_orders
-      FROM orders
-      WHERE deliveryboy_id = $1
-        AND status = 'Delivered'
-        AND TO_CHAR(created_at, 'MM') = $2;
-    `;
-
-    const ordersResult = await pool.query(ordersQuery, [boyId, month]);
-
-    // ----------------- Response -----------------
     res.json({
-      success: true,
-      totalOrders: parseInt(ordersResult.rows[0].total_orders),
-      revenueByPaymentMode: paymentsResult.rows, 
-      // Example: [{ payment_mode: 'Cash Only', total_revenue: 180 }, { payment_mode: 'upi_payment', total_revenue: 500 }]
+      totalOrders: rows[0].total_orders,
+      totalRevenue: rows[0].total_revenue,
+    
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Server error" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 // POST: Collect Payment (store directly in orders table)
