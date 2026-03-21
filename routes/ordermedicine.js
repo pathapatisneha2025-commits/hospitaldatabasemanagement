@@ -279,6 +279,44 @@ router.post("/checkout", async (req, res) => {
     client.release();
   }
 });
+
+router.get("/delivery/report", async (req, res) => {
+  const { boyId, month } = req.query; // month = "02" for February
+
+  try {
+    const query = `
+      SELECT
+        COUNT(*) AS total_orders,
+        COALESCE(SUM(item_total), 0) AS total_revenue
+      FROM (
+        SELECT
+          o.id,
+          (
+            SELECT SUM((item->>'total')::NUMERIC)
+            FROM jsonb_array_elements(o.order_summary) AS item
+          ) AS item_total
+        FROM orders o
+        WHERE o.deliveryboy_id = $1
+          AND o.status = 'Delivered'
+          AND TO_CHAR(o.created_at, 'MM') = $2
+      ) sub;
+    `;
+
+    const { rows } = await pool.query(query, [boyId, month]);
+
+    res.json({
+      totalOrders: rows[0].total_orders,
+      totalRevenue: rows[0].total_revenue,
+      location: {
+        lat: 17.3850,   // Replace with live location table later
+        lng: 78.4867
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // POST: Collect Payment (store directly in orders table)
 router.post("/collect-payment", async (req, res) => {
   try {
