@@ -130,7 +130,7 @@ router.post('/purchase-order/add', async (req, res) => {
     `;
     const values = [br_code, year, prefix, srno, custcode, custname, refcode, refname, total, JSON.stringify(details)];
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
     res.json({ success: true, order: result.rows[0] });
   } catch (err) {
     console.error(err);
