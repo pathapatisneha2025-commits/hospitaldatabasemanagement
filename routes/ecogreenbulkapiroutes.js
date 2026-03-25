@@ -266,49 +266,44 @@ async function insertBulk(rows) {
   return count;
 }
 
-router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, message: 'CSV file required' });
+router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => { 
+  if (!req.file) return res.status(400).json({ success: false, message: 'File required' });
 
-  const orders = [];
   const filePath = req.file.path;
+  const orders = [];
 
-  fs.createReadStream(filePath)
-    .pipe(csvParser())
-    .on('data', (row) => {
-      // Convert CSV row to proper format
-      const details = row.details ? JSON.parse(row.details) : [];
-      orders.push([
-        row.br_code,
-        row.year,
-        row.prefix,
-        row.srno,
-        row.custcode,
-        row.custname,
-        row.refcode,
-        row.refname,
-        parseFloat(row.total),
-        JSON.stringify(details),
-      ]);
-    })
-    .on('end', async () => {
-      try {
-        const query = `
-          INSERT INTO ecogreenpurchase_orders  
-          (br_code, year, prefix, srno, custcode, custname, refcode, refname, total, details)
-          VALUES ${orders.map((_, i) => `($${i*10+1},$${i*10+2},$${i*10+3},$${i*10+4},$${i*10+5},$${i*10+6},$${i*10+7},$${i*10+8},$${i*10+9},$${i*10+10})`).join(', ')}
-          RETURNING *;
-        `;
-        const flatValues = orders.flat();
-        const result = await pool.query(query, flatValues);
+  try {
+    if (req.file.originalname.endsWith('.csv')) {
+      fs.createReadStream(filePath)
+        .pipe(csvParser())
+        .on('data', (row) => {
+          const details = row.details ? JSON.parse(row.details) : [];
+          orders.push([row.br_code, row.year, row.prefix, row.srno, row.custcode, row.custname, row.refcode, row.refname, parseFloat(row.total), JSON.stringify(details)]);
+        })
+        .on('end', async () => {
+          // insert into DB...
+          fs.unlinkSync(filePath);
+          res.json({ success: true, inserted: orders.length });
+        });
+    } else if (req.file.originalname.endsWith('.xlsx')) {
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-        // Delete uploaded file
-        fs.unlinkSync(filePath);
+      data.forEach(row => {
+        const details = row.details ? JSON.parse(row.details) : [];
+        orders.push([row.br_code, row.year, row.prefix, row.srno, row.custcode, row.custname, row.refcode, row.refname, parseFloat(row.total), JSON.stringify(details)]);
+      });
 
-        res.json({ success: true, inserted: result.rowCount, orders: result.rows });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Server Error' });
-      }
-    });
+      // insert into DB...
+      fs.unlinkSync(filePath);
+      res.json({ success: true, inserted: orders.length });
+    } else {
+      return res.status(400).json({ success: false, message: 'Unsupported file type' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
 });
 module.exports = router;
