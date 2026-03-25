@@ -269,36 +269,65 @@ async function insertBulk(rows) {
 router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => { 
   if (!req.file) return res.status(400).json({ success: false, message: 'File required' });
 
-  const filePath = req.file.path;
+  const file = req.file;
   const orders = [];
 
   try {
-    if (req.file.originalname.endsWith('.csv')) {
-      fs.createReadStream(filePath)
+    const ext = file.originalname.split('.').pop().toLowerCase();
+
+    // --- CSV ---
+    if (ext === 'csv') {
+      const bufferStream = new stream.PassThrough();
+      bufferStream.end(file.buffer);
+
+      bufferStream
         .pipe(csvParser())
         .on('data', (row) => {
           const details = row.details ? JSON.parse(row.details) : [];
-          orders.push([row.br_code, row.year, row.prefix, row.srno, row.custcode, row.custname, row.refcode, row.refname, parseFloat(row.total), JSON.stringify(details)]);
+          orders.push([
+            row.br_code,
+            row.year,
+            row.prefix,
+            row.srno,
+            row.custcode,
+            row.custname,
+            row.refcode,
+            row.refname,
+            parseFloat(row.total),
+            JSON.stringify(details)
+          ]);
         })
         .on('end', async () => {
-          // insert into DB...
-          fs.unlinkSync(filePath);
+          // TODO: Insert into DB here
           res.json({ success: true, inserted: orders.length });
         });
-    } else if (req.file.originalname.endsWith('.xlsx')) {
-      const workbook = XLSX.readFile(filePath);
+    } 
+    // --- XLS/XLSX ---
+    else if (ext === 'xls' || ext === 'xlsx') {
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
       const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
       data.forEach(row => {
         const details = row.details ? JSON.parse(row.details) : [];
-        orders.push([row.br_code, row.year, row.prefix, row.srno, row.custcode, row.custname, row.refcode, row.refname, parseFloat(row.total), JSON.stringify(details)]);
+        orders.push([
+          row.br_code,
+          row.year,
+          row.prefix,
+          row.srno,
+          row.custcode,
+          row.custname,
+          row.refcode,
+          row.refname,
+          parseFloat(row.total),
+          JSON.stringify(details)
+        ]);
       });
 
-      // insert into DB...
-      fs.unlinkSync(filePath);
+      // TODO: Insert into DB here
       res.json({ success: true, inserted: orders.length });
-    } else {
+    } 
+    else {
       return res.status(400).json({ success: false, message: 'Unsupported file type' });
     }
   } catch (err) {
