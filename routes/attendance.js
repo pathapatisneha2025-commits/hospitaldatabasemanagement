@@ -1006,11 +1006,26 @@ router.get("/logout/:identifier", async (req, res) => {
     // Detect phone vs employeeId
     const isPhone = /^\d{10}$/.test(identifier);
 
-    const condition = isPhone
-      ? "phone = $1"
-      : "employee_id = $1";
+    let condition;
+    let values;
 
-    const value = identifier;
+    if (isPhone) {
+      // If phone is passed → get employee_id from employees table
+      condition = `
+        (phone = $1 OR employee_id = (
+          SELECT employee_id FROM employees WHERE mobile = $1
+        ))
+      `;
+      values = [identifier];
+    } else {
+      // If employee_id is passed → get phone from employees table
+      condition = `
+        (employee_id = $1 OR phone = (
+          SELECT mobile FROM employees WHERE employee_id = $1
+        ))
+      `;
+      values = [identifier];
+    }
 
     // Helper: seconds → hrs mins
     const formatHours = (seconds) => {
@@ -1019,13 +1034,13 @@ router.get("/logout/:identifier", async (req, res) => {
       return `${hrs} hrs ${mins} mins`;
     };
 
-    // 🔹 All records
+    // 🔹 All records (combined)
     const allRes = await pool.query(
       `SELECT employee_id, phone, timestamp, session_hours, remaining_hours, overtime, image_url
        FROM attendance
        WHERE status='Off Duty' AND ${condition}
        ORDER BY timestamp DESC`,
-      [value]
+      values
     );
 
     if (!allRes.rows.length) {
@@ -1042,7 +1057,7 @@ router.get("/logout/:identifier", async (req, res) => {
          WHERE status='Off Duty' AND ${condition}
          AND DATE(timestamp) = CURRENT_DATE
          ORDER BY timestamp`,
-        [value]
+        values
       ),
       pool.query(
         `SELECT * FROM attendance
@@ -1050,25 +1065,25 @@ router.get("/logout/:identifier", async (req, res) => {
          AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
          AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)
          ORDER BY timestamp`,
-        [value]
+        values
       ),
       pool.query(
         `SELECT * FROM attendance
          WHERE status='Off Duty' AND ${condition}
          AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)
          ORDER BY timestamp`,
-        [value]
+        values
       ),
     ]);
 
-    // 🔹 Totals
+    // 🔹 Totals (combined phone + employee_id)
     const [dailyTotal, weeklyTotal, monthlyTotal] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)),0) total
          FROM attendance
          WHERE status='Off Duty' AND ${condition}
          AND DATE(timestamp)=CURRENT_DATE`,
-        [value]
+        values
       ),
       pool.query(
         `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)),0) total
@@ -1076,14 +1091,14 @@ router.get("/logout/:identifier", async (req, res) => {
          WHERE status='Off Duty' AND ${condition}
          AND DATE_PART('week', timestamp)=DATE_PART('week', CURRENT_DATE)
          AND DATE_PART('year', timestamp)=DATE_PART('year', CURRENT_DATE)`,
-        [value]
+        values
       ),
       pool.query(
         `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM session_hours)),0) total
          FROM attendance
          WHERE status='Off Duty' AND ${condition}
          AND DATE_TRUNC('month', timestamp)=DATE_TRUNC('month', CURRENT_DATE)`,
-        [value]
+        values
       ),
     ]);
 
@@ -1103,6 +1118,7 @@ router.get("/logout/:identifier", async (req, res) => {
         monthly: monthlyRes.rows,
       },
     });
+
   } catch (err) {
     console.error("Logout route error:", err.message);
     res.status(500).json({ success: false, message: "Server error" });
