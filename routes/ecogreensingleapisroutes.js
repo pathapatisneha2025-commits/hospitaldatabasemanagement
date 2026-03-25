@@ -115,6 +115,27 @@ router.post('/local-customer/add', async (req, res) => {
     res.status(500).json({ success: false, error: 'Database Error' });
   }
 });
+router.post('/purchase-order/add', async (req, res) => {
+  const { br_code, year, prefix, srno, custcode, custname, refcode, refname, total, details } = req.body;
 
+  if (!br_code || !srno || !custname) {
+    return res.status(400).json({ success: false, message: 'Required fields missing' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO ecogreenpurchase_orders 
+      (br_code, year, prefix, srno, custcode, custname, refcode, refname, total, details)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *;
+    `;
+    const values = [br_code, year, prefix, srno, custcode, custname, refcode, refname, total, JSON.stringify(details)];
+
+    const result = await pool.query(query, values);
+    res.json({ success: true, order: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
 
 module.exports = router;

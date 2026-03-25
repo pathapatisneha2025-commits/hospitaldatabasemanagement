@@ -265,4 +265,50 @@ async function insertBulk(rows) {
 
   return count;
 }
+
+router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'CSV file required' });
+
+  const orders = [];
+  const filePath = req.file.path;
+
+  fs.createReadStream(filePath)
+    .pipe(csvParser())
+    .on('data', (row) => {
+      // Convert CSV row to proper format
+      const details = row.details ? JSON.parse(row.details) : [];
+      orders.push([
+        row.br_code,
+        row.year,
+        row.prefix,
+        row.srno,
+        row.custcode,
+        row.custname,
+        row.refcode,
+        row.refname,
+        parseFloat(row.total),
+        JSON.stringify(details),
+      ]);
+    })
+    .on('end', async () => {
+      try {
+        const query = `
+          INSERT INTO ecogreenpurchase_orders  
+          (br_code, year, prefix, srno, custcode, custname, refcode, refname, total, details)
+          VALUES ${orders.map((_, i) => `($${i*10+1},$${i*10+2},$${i*10+3},$${i*10+4},$${i*10+5},$${i*10+6},$${i*10+7},$${i*10+8},$${i*10+9},$${i*10+10})`).join(', ')}
+          RETURNING *;
+        `;
+        const flatValues = orders.flat();
+        const result = await pool.query(query, flatValues);
+
+        // Delete uploaded file
+        fs.unlinkSync(filePath);
+
+        res.json({ success: true, inserted: result.rowCount, orders: result.rows });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server Error' });
+      }
+    });
+});
 module.exports = router;
