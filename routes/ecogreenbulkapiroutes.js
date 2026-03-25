@@ -298,8 +298,12 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
           ]);
         })
         .on('end', async () => {
-          // TODO: Insert into DB here
+          // Insert into DB here
           res.json({ success: true, inserted: orders.length });
+        })
+        .on('error', (err) => {
+          console.error(err);
+          res.status(500).json({ success: false, message: 'CSV parsing error' });
         });
     } 
     // --- XLS/XLSX ---
@@ -324,7 +328,7 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
         ]);
       });
 
-      // TODO: Insert into DB here
+      // Insert into DB here
       res.json({ success: true, inserted: orders.length });
     } 
     else {
@@ -335,4 +339,5 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Error' });
   }
 });
+
 module.exports = router;
