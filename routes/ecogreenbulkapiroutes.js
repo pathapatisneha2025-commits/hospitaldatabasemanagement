@@ -266,7 +266,7 @@ async function insertBulk(rows) {
   return count;
 }
 
-router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => { 
+router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'File required' });
 
   const file = req.file;
@@ -283,7 +283,7 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
       bufferStream
         .pipe(csvParser())
         .on('data', (row) => {
-          const details = row.details ? JSON.parse(row.details) : [];
+          const details = row.details ? JSON.stringify(JSON.parse(row.details)) : '[]';
           orders.push([
             row.br_code,
             row.year,
@@ -294,11 +294,20 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
             row.refcode,
             row.refname,
             parseFloat(row.total),
-            JSON.stringify(details)
+            details,
           ]);
         })
         .on('end', async () => {
-          // Insert into DB here
+          if (orders.length > 0) {
+            const query = `
+              INSERT INTO  ecogreenpurchase_orders
+                (br_code, year, prefix, srno, custcode, custname, refcode, refname, total, details)
+              VALUES
+                ${orders.map((_, i) => `($${i * 10 + 1}, $${i * 10 + 2}, $${i * 10 + 3}, $${i * 10 + 4}, $${i * 10 + 5}, $${i * 10 + 6}, $${i * 10 + 7}, $${i * 10 + 8}, $${i * 10 + 9}, $${i * 10 + 10})`).join(',')}
+            `;
+            const flatValues = orders.flat();
+            await pool.query(query, flatValues);
+          }
           res.json({ success: true, inserted: orders.length });
         })
         .on('error', (err) => {
@@ -313,7 +322,7 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
       const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
       data.forEach(row => {
-        const details = row.details ? JSON.parse(row.details) : [];
+        const details = row.details ? JSON.stringify(JSON.parse(row.details)) : '[]';
         orders.push([
           row.br_code,
           row.year,
@@ -324,11 +333,21 @@ router.post('/purchase-order/bulk', upload.single('file'), async (req, res) => {
           row.refcode,
           row.refname,
           parseFloat(row.total),
-          JSON.stringify(details)
+          details
         ]);
       });
 
-      // Insert into DB here
+      if (orders.length > 0) {
+        const query = `
+          INSERT INTO  ecogreenpurchase_orders
+            (br_code, year, prefix, srno, custcode, custname, refcode, refname, total, details)
+          VALUES
+            ${orders.map((_, i) => `($${i * 10 + 1}, $${i * 10 + 2}, $${i * 10 + 3}, $${i * 10 + 4}, $${i * 10 + 5}, $${i * 10 + 6}, $${i * 10 + 7}, $${i * 10 + 8}, $${i * 10 + 9}, $${i * 10 + 10})`).join(',')}
+        `;
+        const flatValues = orders.flat();
+        await pool.query(query, flatValues);
+      }
+
       res.json({ success: true, inserted: orders.length });
     } 
     else {
