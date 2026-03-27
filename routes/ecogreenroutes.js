@@ -58,21 +58,36 @@ router.get("/item-master", async (req, res) => {
   }
 
   try {
-    // Format inputDateTime for vendor (remove extra spaces)
-    const formattedDateTime = inputDateTime.replace(/\s+/g, " ").trim();
+    // Format inputDateTime: remove spaces around colons and trim
+    const formattedDateTime = inputDateTime.replace(/\s*:\s*/g, ":").trim();
 
     // Build vendor URL
-    const params = new URLSearchParams({ c2Code, storeId, prodCode, inputDateTime: formattedDateTime, apiKey });
+    const params = new URLSearchParams({ 
+      c2Code, 
+      storeId, 
+      prodCode, 
+      inputDateTime: formattedDateTime, 
+      apiKey 
+    });
     const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
 
     // Fetch data from vendor
-    const response = await fetch(vendorUrl, { method: "GET", headers: { "Content-Type": "application/json" } });
-    if (!response.ok) throw new Error(`Vendor API failed with status ${response.status}`);
+    const response = await fetch(vendorUrl, { 
+      method: "GET", 
+      headers: { "Content-Type": "application/json" } 
+    });
 
-    const vendorData = await response.json();
+    const text = await response.text(); // read raw text first
+    let vendorData;
+    try {
+      vendorData = JSON.parse(text); // parse JSON safely
+    } catch (parseErr) {
+      console.error("Failed to parse vendor response as JSON:", text);
+      return res.status(500).json({ error: "Vendor returned invalid JSON" });
+    }
 
-    // Validate vendor response
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
+      console.error("Vendor response invalid format:", vendorData);
       return res.status(500).json({ error: "Invalid data format received from vendor" });
     }
 
@@ -131,7 +146,6 @@ router.get("/item-master", async (req, res) => {
         insertedItems.push({ code: item.itemCode, name: item.itemName });
       } catch (itemErr) {
         console.error(`Failed to insert/update item ${item.itemCode}:`, itemErr.message);
-        // continue with other items
       }
     }
 
