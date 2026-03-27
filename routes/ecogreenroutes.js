@@ -238,9 +238,11 @@ router.get("/stock-details", async (req, res) => {
 });
 
 
-router.get("/local-customers", async (req, res) => {
-  const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.query;
+// POST /local-customers
+router.post("/local-customers", async (req, res) => {
+  const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.body;
 
+  // Validate request body
   if (!c2Code || !storeId || !prodCode || !apiKey || !fromDate || !toDate) {
     return res.status(400).json({ error: "All fields are required" });
   }
@@ -248,7 +250,7 @@ router.get("/local-customers", async (req, res) => {
   try {
     const url = "http://117.211.64.158:41000/ws_c2_services_fetch_local_customer";
 
-    // Send GET request with JSON body
+    // Send GET request to external API with JSON body
     const response = await fetch(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
