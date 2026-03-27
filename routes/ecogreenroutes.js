@@ -249,7 +249,7 @@ router.post("/local-customers", async (req, res) => {
   try {
     const url = "http://117.211.64.158:41000/ws_c2_services_fetch_local_customer";
 
-    // Use POST instead of GET
+    // Use POST for external API
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -263,6 +263,21 @@ router.post("/local-customers", async (req, res) => {
 
     const customers = await response.json();
 
+    // 1️⃣ Ensure lc_code has a UNIQUE constraint
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_indexes
+          WHERE tablename='local_customers' AND indexname='unique_lc_code'
+        ) THEN
+          ALTER TABLE local_customers ADD CONSTRAINT unique_lc_code UNIQUE (lc_code);
+        END IF;
+      END$$;
+    `);
+
+    // 2️⃣ Insert or update customers
     for (const cust of customers) {
       const query = `
         INSERT INTO local_customers (
@@ -308,12 +323,12 @@ router.post("/local-customers", async (req, res) => {
     }
 
     res.status(200).json({ message: "Local customers synced successfully", total: customers.length });
+
   } catch (err) {
     console.error("Local Customers Error:", err.message);
     res.status(500).json({ error: "Failed to fetch or save local customers" });
   }
 });
-
 /* =========================================================
    5.5 Push Purchase Orders
 ========================================================= */
