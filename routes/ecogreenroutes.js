@@ -58,10 +58,10 @@ router.post("/item-master", async (req, res) => {
   }
 
   try {
-    // Format inputDateTime: remove extra spaces around colons
+    // Clean up inputDateTime
     const formattedDateTime = inputDateTime.replace(/\s+/g, ' ').replace(/\s*:\s*/g, ':').trim();
 
-    // Build vendor URL with query params
+    // Build vendor URL
     const params = new URLSearchParams({ 
       c2Code, 
       storeId, 
@@ -71,13 +71,14 @@ router.post("/item-master", async (req, res) => {
     });
     const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
 
-    // Fetch data from vendor
+    // Fetch vendor data
     const response = await fetch(vendorUrl, { 
       method: "GET", 
       headers: { "Content-Type": "application/json" } 
     });
-
     const text = await response.text();
+
+    // Parse JSON safely
     let vendorData;
     try {
       vendorData = JSON.parse(text);
@@ -86,15 +87,23 @@ router.post("/item-master", async (req, res) => {
       return res.status(500).json({ error: "Vendor returned invalid JSON" });
     }
 
-    if (!vendorData.data || !Array.isArray(vendorData.data)) {
+    // Determine items array dynamically
+    let itemsArray = [];
+    if (Array.isArray(vendorData)) {
+      itemsArray = vendorData;
+    } else if (Array.isArray(vendorData.data)) {
+      itemsArray = vendorData.data;
+    } else if (Array.isArray(vendorData.items)) {
+      itemsArray = vendorData.items;
+    } else {
       console.error("Vendor response invalid format:", vendorData);
       return res.status(500).json({ error: "Invalid data format received from vendor" });
     }
 
     const insertedItems = [];
 
-    // Insert/update items into local database
-    for (const item of vendorData.data) {
+    // Insert/update items into local DB
+    for (const item of itemsArray) {
       try {
         const query = `
           INSERT INTO item_master (
@@ -151,7 +160,7 @@ router.post("/item-master", async (req, res) => {
 
     res.status(200).json({
       message: "Item master synced successfully",
-      totalItems: vendorData.data.length,
+      totalItems: itemsArray.length,
       insertedItems
     });
 
