@@ -24,8 +24,9 @@ router.post("/generate-token", async (req, res) => {
   try {
     const url = "http://117.211.64.158:41000/ws_c2_services_generate_token";
 
+    // ✅ Use POST instead of GET because body is JSON
     const response = await fetch(url, {
-      method: "GET", // vendor expects GET
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
@@ -33,6 +34,9 @@ router.post("/generate-token", async (req, res) => {
     });
 
     if (!response.ok) {
+      // Try to read the text to log the exact error
+      const text = await response.text();
+      console.error("Vendor API returned:", text);
       throw new Error(`Vendor API failed with status ${response.status}`);
     }
 
@@ -44,7 +48,6 @@ router.post("/generate-token", async (req, res) => {
     res.status(500).json({ error: "Failed to generate token" });
   }
 });
-
 
 router.get("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.query;
