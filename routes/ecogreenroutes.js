@@ -17,21 +17,40 @@ router.get("/", (req, res) => {
 router.get("/generate-token", async (req, res) => {
   const { c2Code, storeId, prodCode, securityKey } = req.query;
 
-  try {
-    const response = await axios.get(
-      "http://localhost:44000/ws_c2_services_generate_token",
-      {
-        params: { c2Code, storeId, prodCode, securityKey },
-      }
-    );
+  if (!c2Code || !storeId || !prodCode || !securityKey) {
+    return res.status(400).json({ error: "Missing required params" });
+  }
 
-    res.status(200).json(response.data);
+  try {
+    // Build query string
+    const params = new URLSearchParams({
+      c2Code,
+      storeId,
+      prodCode,
+      securityKey,
+    });
+
+    const url = `http://117.211.64.158:41000/ws_c2_services_generate_token?${params.toString()}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Vendor API failed");
+    }
+
+    const data = await response.json();
+
+    res.status(200).json(data);
   } catch (err) {
     console.error("Token Error:", err.message);
     res.status(500).json({ error: "Failed to generate token" });
   }
 });
-
 
 router.get("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.query;
