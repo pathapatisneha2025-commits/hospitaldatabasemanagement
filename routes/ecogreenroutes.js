@@ -242,7 +242,6 @@ router.get("/stock-details", async (req, res) => {
 router.post("/local-customers", async (req, res) => {
   const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.body;
 
-  // Validate request body
   if (!c2Code || !storeId || !prodCode || !apiKey || !fromDate || !toDate) {
     return res.status(400).json({ error: "All fields are required" });
   }
@@ -250,9 +249,9 @@ router.post("/local-customers", async (req, res) => {
   try {
     const url = "http://117.211.64.158:41000/ws_c2_services_fetch_local_customer";
 
-    // Send GET request to external API with JSON body
+    // Use POST instead of GET
     const response = await fetch(url, {
-      method: "GET",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
     });
@@ -264,7 +263,6 @@ router.post("/local-customers", async (req, res) => {
 
     const customers = await response.json();
 
-    // Insert/update customers in local database
     for (const cust of customers) {
       const query = `
         INSERT INTO local_customers (
