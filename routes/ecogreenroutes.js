@@ -14,33 +14,26 @@ router.get("/", (req, res) => {
 /* =========================================================
    ✅ 5.1 Generate Token
 ========================================================= */
-router.get("/generate-token", async (req, res) => {
-  const { c2Code, storeId, prodCode, securityKey } = req.query;
+router.post("/generate-token", async (req, res) => {
+  const { c2Code, storeId, prodCode, securityKey } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !securityKey) {
     return res.status(400).json({ error: "Missing required params" });
   }
 
   try {
-    // Build query string
-    const params = new URLSearchParams({
-      c2Code,
-      storeId,
-      prodCode,
-      securityKey,
-    });
-
-    const url = `http://117.211.64.158:41000/ws_c2_services_generate_token?${params.toString()}`;
+    const url = "http://117.211.64.158:41000/ws_c2_services_generate_token";
 
     const response = await fetch(url, {
-      method: "GET",
+      method: "GET", // vendor expects GET
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ c2Code, storeId, prodCode, securityKey }),
     });
 
     if (!response.ok) {
-      throw new Error("Vendor API failed");
+      throw new Error(`Vendor API failed with status ${response.status}`);
     }
 
     const data = await response.json();
@@ -51,6 +44,7 @@ router.get("/generate-token", async (req, res) => {
     res.status(500).json({ error: "Failed to generate token" });
   }
 });
+
 
 router.get("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.query;
