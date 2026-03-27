@@ -296,17 +296,25 @@ router.post("/local-customers", async (req, res) => {
 /* =========================================================
    5.5 Push Purchase Orders
 ========================================================= */
-router.get("/purchase-orders", async (req, res) => {
-  const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.query;
+router.post("/purchase-orders", async (req, res) => {
+  const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !apiKey || !fromDate || !toDate) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
-    const response = await axios.get("http://localhost:45000/ws_c2_services_po_fetch", {
-      params: { c2Code, storeId, prodCode, apiKey, fromDate, toDate }
-    });
+    const response = await axios.post(
+      "http://117.211.64.158:41000/ws_c2_services_po_fetch",
+      {
+        c2Code,
+        storeId,
+        prodCode,
+        apiKey,
+        fromDate,
+        toDate
+      }
+    );
 
     const purchaseOrders = response.data;
 
@@ -326,6 +334,7 @@ router.get("/purchase-orders", async (req, res) => {
           total = EXCLUDED.total,
           details = EXCLUDED.details
       `;
+
       const values = [
         c2Code,
         storeId,
@@ -341,10 +350,17 @@ router.get("/purchase-orders", async (req, res) => {
         po.total,
         JSON.stringify(po.details)
       ];
+
       await pool.query(query, values);
     }
 
-    res.status(200).json({ message: "Purchase orders synced successfully", total: purchaseOrders.length });
+    res.status(200).json({
+      success: true,
+      message: "Purchase orders synced successfully",
+      total: purchaseOrders.length,
+      data: purchaseOrders
+    });
+
   } catch (err) {
     console.error("Purchase Orders Error:", err.message);
     res.status(500).json({ error: "Failed to fetch or save purchase orders" });
