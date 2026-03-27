@@ -246,11 +246,23 @@ router.get("/local-customers", async (req, res) => {
   }
 
   try {
-    const response = await axios.get("http://localhost:45000/ws_c2_services_so_refno_fetch", {
-      params: { c2Code, storeId, prodCode, apiKey, fromDate, toDate }
+    const url = "http://117.211.64.158:41000/ws_c2_services_fetch_local_customer";
+
+    // Send GET request with JSON body
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
     });
 
-    const customers = response.data;
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`External API error: ${response.status} - ${text}`);
+    }
+
+    const customers = await response.json();
+
+    // Insert/update customers in local database
     for (const cust of customers) {
       const query = `
         INSERT INTO local_customers (
@@ -273,6 +285,7 @@ router.get("/local-customers", async (req, res) => {
           parent_code = EXCLUDED.parent_code,
           parent_name = EXCLUDED.parent_name
       `;
+
       const values = [
         cust.brcode,
         cust.lcCode,
@@ -290,6 +303,7 @@ router.get("/local-customers", async (req, res) => {
         cust.parentCode || null,
         cust.parentName || null
       ];
+
       await pool.query(query, values);
     }
 
