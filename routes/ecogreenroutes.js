@@ -58,11 +58,10 @@ router.post("/item-master", async (req, res) => {
   }
 
   try {
-    // Clean up inputDateTime
-// Clean up inputDateTime
-// Assume inputDateTime is "2023-11-28 10:10" or "2023-11-28T10:10"
-let formattedDateTime = inputDateTime
-  .replace('T', ' ') // replace T with space
+   let formattedDateTime = inputDateTime
+  .replace('T', ' ')      // replace T with space
+  .replace(/\s+/g, ' ')   // remove extra spaces
+  .replace(/\s*:\s*/g, ':') // remove spaces around colons
   .trim();
 
 // Ensure seconds exist
@@ -73,7 +72,6 @@ if (!/:\d{2}$/.test(formattedDateTime)) {
 console.log("Formatted DateTime to send:", formattedDateTime);
 
 // Console the formatted date
-console.log("Formatted DateTime to send:", formattedDateTime);    // Build vendor URL
     const params = new URLSearchParams({ 
       c2Code, 
       storeId, 
