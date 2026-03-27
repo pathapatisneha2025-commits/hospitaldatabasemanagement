@@ -49,8 +49,8 @@ router.post("/generate-token", async (req, res) => {
   }
 });
 
-router.get("/item-master", async (req, res) => {
-  const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.query;
+router.post("/item-master", async (req, res) => {
+  const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.body;
 
   // Validate required fields
   if (!c2Code || !storeId || !prodCode || !inputDateTime || !apiKey) {
@@ -58,10 +58,10 @@ router.get("/item-master", async (req, res) => {
   }
 
   try {
-    // Format inputDateTime: remove spaces around colons and trim
-    const formattedDateTime = inputDateTime.replace(/\s*:\s*/g, ":").trim();
+    // Format inputDateTime: remove extra spaces around colons
+    const formattedDateTime = inputDateTime.replace(/\s+/g, ' ').replace(/\s*:\s*/g, ':').trim();
 
-    // Build vendor URL
+    // Build vendor URL with query params
     const params = new URLSearchParams({ 
       c2Code, 
       storeId, 
@@ -69,7 +69,7 @@ router.get("/item-master", async (req, res) => {
       inputDateTime: formattedDateTime, 
       apiKey 
     });
-    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data}`;
+    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
 
     // Fetch data from vendor
     const response = await fetch(vendorUrl, { 
@@ -77,12 +77,12 @@ router.get("/item-master", async (req, res) => {
       headers: { "Content-Type": "application/json" } 
     });
 
-    const text = await response.text(); // read raw text first
+    const text = await response.text();
     let vendorData;
     try {
-      vendorData = JSON.parse(text); // parse JSON safely
+      vendorData = JSON.parse(text);
     } catch (parseErr) {
-      console.error("Failed to parse vendor response as JSON:", text);
+      console.error("Vendor returned invalid JSON:", text);
       return res.status(500).json({ error: "Vendor returned invalid JSON" });
     }
 
