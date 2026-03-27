@@ -59,8 +59,7 @@ router.post("/item-master", async (req, res) => {
 
   try {
     // Clean up inputDateTime
-    const formattedDateTime = inputDateTime.replace(/\s+/g, ' ').replace(/\s*:\s*/g, ':').trim();
-
+const formattedDateTime = inputDateTime.replace(/\s+/g, ' ').replace(/\s*:\s*/g, ':').trim();
     // Build vendor URL
     const params = new URLSearchParams({ 
       c2Code, 
