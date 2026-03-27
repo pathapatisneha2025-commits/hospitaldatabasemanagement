@@ -69,7 +69,7 @@ router.get("/item-master", async (req, res) => {
       inputDateTime: formattedDateTime, 
       apiKey 
     });
-    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
+    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data}`;
 
     // Fetch data from vendor
     const response = await fetch(vendorUrl, { 
