@@ -52,80 +52,97 @@ router.post("/generate-token", async (req, res) => {
 router.get("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.query;
 
+  // Validate required fields
   if (!c2Code || !storeId || !prodCode || !inputDateTime || !apiKey) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
+    // Format inputDateTime for vendor (remove extra spaces)
+    const formattedDateTime = inputDateTime.replace(/\s+/g, " ").trim();
+
     // Build vendor URL
-    const params = new URLSearchParams({ c2Code, storeId, prodCode, inputDateTime, apiKey });
-    const url = `http://localhost:45000/ws_c2_services_get_master_data?${params.toString()}`;
+    const params = new URLSearchParams({ c2Code, storeId, prodCode, inputDateTime: formattedDateTime, apiKey });
+    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
 
     // Fetch data from vendor
-    const response = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
-    if (!response.ok) throw new Error("Failed to fetch vendor data");
+    const response = await fetch(vendorUrl, { method: "GET", headers: { "Content-Type": "application/json" } });
+    if (!response.ok) throw new Error(`Vendor API failed with status ${response.status}`);
 
     const vendorData = await response.json();
 
+    // Validate vendor response
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
-      return res.status(500).json({ error: "Invalid data from vendor" });
+      return res.status(500).json({ error: "Invalid data format received from vendor" });
     }
 
-    // Insert each item into local table
+    const insertedItems = [];
+
+    // Insert/update items into local database
     for (const item of vendorData.data) {
-      const query = `
-        INSERT INTO item_master (
-          item_code, item_name, item_short_name, item_full_name,
-          brand_code, brand_name, category_code, category_name,
-          content_code, content_name, pack_code, pack_name,
-          item_qty_per_box, item_added_date, item_updated_date,
-          hsn_sac_code, hsn_sac_name
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
-        )
-        ON CONFLICT (item_code) DO UPDATE SET
-          item_name = EXCLUDED.item_name,
-          item_short_name = EXCLUDED.item_short_name,
-          item_full_name = EXCLUDED.item_full_name,
-          brand_code = EXCLUDED.brand_code,
-          brand_name = EXCLUDED.brand_name,
-          category_code = EXCLUDED.category_code,
-          category_name = EXCLUDED.category_name,
-          content_code = EXCLUDED.content_code,
-          content_name = EXCLUDED.content_name,
-          pack_code = EXCLUDED.pack_code,
-          pack_name = EXCLUDED.pack_name,
-          item_qty_per_box = EXCLUDED.item_qty_per_box,
-          item_updated_date = EXCLUDED.item_updated_date,
-          hsn_sac_code = EXCLUDED.hsn_sac_code,
-          hsn_sac_name = EXCLUDED.hsn_sac_name
-      `;
-      const values = [
-        item.itemCode,
-        item.itemName,
-        item.itemShortName || null,
-        item.itemFullName || null,
-        item.brandCode || null,
-        item.brandName || null,
-        item.categoryCode || null,
-        item.categoryName || null,
-        item.contentCode || null,
-        item.contentName || null,
-        item.packCode || null,
-        item.packName || null,
-        item.itemQtyPerBox || 0,
-        item.itemAddedDate || null,
-        item.itemUpdatedDate || null,
-        item.hsnSacCode || null,
-        item.hsnSacName || null
-      ];
-      await pool.query(query, values);
+      try {
+        const query = `
+          INSERT INTO item_master (
+            item_code, item_name, item_short_name, item_full_name,
+            brand_code, brand_name, category_code, category_name,
+            content_code, content_name, pack_code, pack_name,
+            item_qty_per_box, item_added_date, item_updated_date,
+            hsn_sac_code, hsn_sac_name
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+          ON CONFLICT (item_code) DO UPDATE SET
+            item_name = EXCLUDED.item_name,
+            item_short_name = EXCLUDED.item_short_name,
+            item_full_name = EXCLUDED.item_full_name,
+            brand_code = EXCLUDED.brand_code,
+            brand_name = EXCLUDED.brand_name,
+            category_code = EXCLUDED.category_code,
+            category_name = EXCLUDED.category_name,
+            content_code = EXCLUDED.content_code,
+            content_name = EXCLUDED.content_name,
+            pack_code = EXCLUDED.pack_code,
+            pack_name = EXCLUDED.pack_name,
+            item_qty_per_box = EXCLUDED.item_qty_per_box,
+            item_updated_date = EXCLUDED.item_updated_date,
+            hsn_sac_code = EXCLUDED.hsn_sac_code,
+            hsn_sac_name = EXCLUDED.hsn_sac_name
+        `;
+
+        const values = [
+          item.itemCode,
+          item.itemName,
+          item.itemShortName || null,
+          item.itemFullName || null,
+          item.brandCode || null,
+          item.brandName || null,
+          item.categoryCode || null,
+          item.categoryName || null,
+          item.contentCode || null,
+          item.contentName || null,
+          item.packCode || null,
+          item.packName || null,
+          item.itemQtyPerBox || 0,
+          item.itemAddedDate || null,
+          item.itemUpdatedDate || null,
+          item.hsnSacCode || null,
+          item.hsnSacName || null
+        ];
+
+        await pool.query(query, values);
+        insertedItems.push({ code: item.itemCode, name: item.itemName });
+      } catch (itemErr) {
+        console.error(`Failed to insert/update item ${item.itemCode}:`, itemErr.message);
+        // continue with other items
+      }
     }
 
-    res.status(200).json({ message: "Item master synced successfully", totalItems: vendorData.data.length });
+    res.status(200).json({
+      message: "Item master synced successfully",
+      totalItems: vendorData.data.length,
+      insertedItems
+    });
 
   } catch (err) {
-    console.error("Item Master Error:", err);
+    console.error("Item Master Error:", err.message);
     res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
