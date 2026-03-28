@@ -320,21 +320,29 @@ router.post("/purchase-orders", async (req, res) => {
   }
 
   try {
-    // Use fetch instead of axios
-    const fetchResponse = await fetch("http://117.211.64.158:41000/ws_c2_services_po_fetch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
-    });
+    // Fetch purchase orders from the external API
+    const fetchResponse = await fetch(
+      "http://117.211.64.158:41000/ws_c2_services_po_fetch",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
+      }
+    );
 
     if (!fetchResponse.ok) {
       const errorText = await fetchResponse.text();
       throw new Error(`Fetch failed: ${fetchResponse.status} - ${errorText}`);
     }
 
-    const purchaseOrders = await fetchResponse.json();
+    const responseJson = await fetchResponse.json();
 
-    // Insert/update in database
+    // Handle single object or array of POs
+    const purchaseOrders = Array.isArray(responseJson.data)
+      ? responseJson.data
+      : [responseJson.data];
+
+    // Insert or update each purchase order in the database
     for (const po of purchaseOrders) {
       const query = `
         INSERT INTO ecogreenpurchase_orders (
@@ -352,7 +360,6 @@ router.post("/purchase-orders", async (req, res) => {
       `;
 
       const values = [
-        
         po.br_code,
         po.year,
         po.prefix,
