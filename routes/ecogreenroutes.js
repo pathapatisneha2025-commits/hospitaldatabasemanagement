@@ -196,33 +196,66 @@ router.post("/item-master", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
-router.post("/stock-details", async (req, res) => {  
+router.post("/stock-details", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey } = req.body;
 
+  // 1️⃣ Validate required fields
   if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes || !apiKey) {
     return res.status(400).json({ error: "All fields are required, including inputDateTime" });
   }
 
   try {
-    const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
+    // 2️⃣ Ensure itemCodes is an array
+    let itemsArray;
+    if (Array.isArray(itemCodes)) {
+      itemsArray = itemCodes;
+    } else if (typeof itemCodes === 'string') {
+      try {
+        itemsArray = JSON.parse(itemCodes);
+        if (!Array.isArray(itemsArray)) throw new Error("Parsed itemCodes is not an array");
+      } catch (parseErr) {
+        console.error("itemCodes parsing error:", parseErr);
+        return res.status(400).json({ error: "Invalid itemCodes format. Must be an array or JSON string." });
+      }
+    } else {
+      return res.status(400).json({ error: "Invalid itemCodes format." });
+    }
 
-    const response = await fetch("http://117.211.64.158:41000/ws_c2_services_get_stock_data", {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ c2Code, storeId, prodCode, inputDateTime, itemCodes: itemsArray, apiKey })
-    });
+    // 3️⃣ Call vendor API
+    let response;
+    try {
+      response = await fetch("http://117.211.64.158:41000/ws_c2_services_get_stock_data", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ c2Code, storeId, prodCode, inputDateTime, itemCodes: itemsArray, apiKey })
+      });
+    } catch (fetchErr) {
+      console.error("Vendor API fetch error:", fetchErr);
+      return res.status(502).json({ error: "Failed to reach vendor API" });
+    }
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: `Vendor API error: ${response.statusText}` });
+      const text = await response.text().catch(() => "Unable to read response");
+      console.error("Vendor API returned error:", response.status, text);
+      return res.status(response.status).json({ error: `Vendor API error: ${text}` });
     }
 
-    const responseData = await response.json();
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (jsonErr) {
+      console.error("Error parsing vendor API response JSON:", jsonErr);
+      return res.status(502).json({ error: "Invalid JSON from vendor API" });
+    }
+
     const stockData = responseData.data;
-
     if (!stockData || !Array.isArray(stockData)) {
-      return res.status(500).json({ error: "Invalid stock data from vendor" });
+      console.error("Vendor API returned invalid stock data:", responseData);
+      return res.status(502).json({ error: "Invalid stock data from vendor" });
     }
 
+    // 4️⃣ Insert/Update in database
+    const failedBatches = [];
     for (const batch of stockData) {
       const query = `
         INSERT INTO stock_batches (
@@ -236,28 +269,35 @@ router.post("/stock-details", async (req, res) => {
           expiry_date = EXCLUDED.expiry_date
       `;
       const values = [
-        batch.c_item_code,
-        batch.itemName,
+        batch.c_item_code || null,
+        batch.itemName || null,
         batch.itemQtyPerBox || 1,
-        batch.batchNo,
-        batch.stockBalQty,
-        batch.expiryDate
+        batch.batchNo || null,
+        batch.stockBalQty || 0,
+        batch.expiryDate || null
       ];
-      await pool.query(query, values);
+
+      try {
+        await pool.query(query, values);
+      } catch (dbErr) {
+        console.error("DB insert/update error for batch:", batch, dbErr);
+        failedBatches.push({ batch, error: dbErr.message });
+      }
     }
 
+    // 5️⃣ Return response
     res.status(200).json({
       success: true,
-      stockData: stockData,
-      totalBatches: stockData.length
+      totalBatches: stockData.length,
+      failedBatches: failedBatches.length > 0 ? failedBatches : undefined,
+      stockData: stockData
     });
 
   } catch (err) {
-    console.error("Stock Details Error:", err);
-    res.status(500).json({ error: "Failed to fetch or store stock details" });
+    console.error("Unexpected Stock Details Error:", err);
+    res.status(500).json({ error: "Unexpected server error while processing stock details" });
   }
 });
-
 // POST /local-customers
 router.post("/local-customers", async (req, res) => {
   const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.body;
