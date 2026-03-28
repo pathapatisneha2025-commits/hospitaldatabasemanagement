@@ -208,18 +208,27 @@ router.post("/stock-details", async (req, res) => {
     // Ensure itemCodes is an array
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
-    // Fetch vendor stock data
-    const response = await axios.get("http://117.211.64.158:41000/ws_c2_services_get_stock_data", {
-      params: {
+    // --- FETCH STOCK DATA VIA POST ---
+    const response = await fetch("http://117.211.64.158:41000/ws_c2_services_get_stock_data", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         c2Code,
         storeId,
         prodCode,
         itemCodes: itemsArray,
         apiKey
-      }
+      })
     });
 
-    const stockData = response.data.data;
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Vendor API error: ${response.statusText}` });
+    }
+
+    const responseData = await response.json();
+    const stockData = responseData.data;
 
     if (!stockData || !Array.isArray(stockData)) {
       return res.status(500).json({ error: "Invalid stock data from vendor" });
@@ -259,6 +268,7 @@ router.post("/stock-details", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store stock details" });
   }
 });
+
 
 
 // POST /local-customers
