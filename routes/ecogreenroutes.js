@@ -196,12 +196,12 @@ router.post("/item-master", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
-router.post("/stock-details", async (req, res) => {
-  const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.body;
+router.post("/stock-details", async (req, res) => { 
+  const { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey } = req.body;
 
   // Validate input
-  if (!c2Code || !storeId || !prodCode || !itemCodes || !apiKey) {
-    return res.status(400).json({ error: "All fields are required" });
+  if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes || !apiKey) {
+    return res.status(400).json({ error: "All fields are required, including inputDateTime" });
   }
 
   try {
@@ -218,6 +218,7 @@ router.post("/stock-details", async (req, res) => {
         c2Code,
         storeId,
         prodCode,
+        inputDateTime,        // <-- Add inputDateTime here
         itemCodes: itemsArray,
         apiKey
       })
@@ -268,8 +269,6 @@ router.post("/stock-details", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store stock details" });
   }
 });
-
-
 
 // POST /local-customers
 router.post("/local-customers", async (req, res) => {
