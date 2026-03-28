@@ -196,20 +196,27 @@ router.post("/item-master", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
-router.get("/stock-details", async (req, res) => {
-  const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.query;
+router.post("/stock-details", async (req, res) => {
+  const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.body;
 
+  // Validate input
   if (!c2Code || !storeId || !prodCode || !itemCodes || !apiKey) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
-    // itemCodes passed as JSON string in query: ["711291","254229"]
-    const items = JSON.parse(itemCodes);
+    // Ensure itemCodes is an array
+    const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
     // Fetch vendor stock data
-    const response = await axios.get("http://localhost:45000/ws_c2_services_get_stock_data", {
-      params: { c2Code, storeId, prodCode, itemCodes: items, apiKey }
+    const response = await axios.get("http://117.211.64.158:41000/ws_c2_services_get_stock_data", {
+      params: {
+        c2Code,
+        storeId,
+        prodCode,
+        itemCodes: itemsArray,
+        apiKey
+      }
     });
 
     const stockData = response.data.data;
@@ -218,13 +225,13 @@ router.get("/stock-details", async (req, res) => {
       return res.status(500).json({ error: "Invalid stock data from vendor" });
     }
 
-    // Insert each stock batch into stock_batches table
+    // Insert or update each stock batch
     for (const batch of stockData) {
       const query = `
         INSERT INTO stock_batches (
           c_item_code, item_name, item_qty_per_box,
           batch_no, stock_bal_qty, expiry_date
-        ) VALUES ($1,$2,$3,$4,$5,$6)
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
           item_name = EXCLUDED.item_name,
           item_qty_per_box = EXCLUDED.item_qty_per_box,
