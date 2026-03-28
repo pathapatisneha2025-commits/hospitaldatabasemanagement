@@ -522,7 +522,29 @@ router.post("/sales-invoice", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.post('/sales-order-status', async (req, res) => {
+  const { orderNo, apiKey } = req.body;
 
+  if (!orderNo || !apiKey) {
+    return res.status(400).json({ error: 'Missing orderNo or apiKey' });
+  }
+
+  try {
+    const url = `http://117.211.64.158:41000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
+
+    const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch order status from remote API' });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch order status' });
+  }
+});
 
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
