@@ -449,14 +449,15 @@ router.post('/create_sales_order', async (req, res) => {
     }
 
     console.log('=== Forwarding to ERP ===');
-    const response = await fetch(
-      'http://192.168.1.100:41000/ws_c2_services_create_sale_order',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(salesOrderData),
-      }
-    );
+   // Public IP accessible from Render
+const response = await fetch(
+  'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(salesOrderData),
+  }
+);
 
     let data;
     try {
