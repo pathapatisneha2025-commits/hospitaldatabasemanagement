@@ -58,20 +58,20 @@ router.post("/item-master", async (req, res) => {
   }
 
   try {
-   let formattedDateTime = inputDateTime
-  .replace('T', ' ')      // replace T with space
-  .replace(/\s+/g, ' ')   // remove extra spaces
-  .replace(/\s*:\s*/g, ':') // remove spaces around colons
-  .trim();
+    // Format inputDateTime
+    let formattedDateTime = inputDateTime
+      .replace('T', ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*:\s*/g, ':')
+      .trim();
 
-// Ensure seconds exist
-if (!/:\d{2}$/.test(formattedDateTime)) {
-  formattedDateTime += ":00";
-}
+    if (!/:\d{2}$/.test(formattedDateTime)) {
+      formattedDateTime += ":00";
+    }
 
-console.log("Formatted DateTime to send:", formattedDateTime);
+    console.log("Formatted DateTime to send:", formattedDateTime);
 
-// Console the formatted date
+    // Build vendor URL
     const params = new URLSearchParams({ 
       c2Code, 
       storeId, 
@@ -79,25 +79,31 @@ console.log("Formatted DateTime to send:", formattedDateTime);
       inputDateTime: formattedDateTime, 
       apiKey 
     });
+
     const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
+    console.log("Vendor URL:", vendorUrl);
 
     // Fetch vendor data
     const response = await fetch(vendorUrl, { 
       method: "GET", 
       headers: { "Content-Type": "application/json" } 
     });
-    const text = await response.text();
 
-    // Parse JSON safely
+    const text = await response.text();
+    console.log("Raw vendor response:", text);
+
     let vendorData;
     try {
       vendorData = JSON.parse(text);
     } catch (parseErr) {
       console.error("Vendor returned invalid JSON:", text);
-      return res.status(500).json({ error: "Vendor returned invalid JSON" });
+      return res.status(500).json({ 
+        error: "Vendor returned invalid JSON", 
+        rawResponse: text 
+      });
     }
 
-    // Determine items array dynamically
+    // Determine items array dynamically with debug info
     let itemsArray = [];
     if (Array.isArray(vendorData)) {
       itemsArray = vendorData;
@@ -105,14 +111,22 @@ console.log("Formatted DateTime to send:", formattedDateTime);
       itemsArray = vendorData.data;
     } else if (Array.isArray(vendorData.items)) {
       itemsArray = vendorData.items;
+    } else if (Array.isArray(vendorData.records)) {
+      itemsArray = vendorData.records;
     } else {
       console.error("Vendor response invalid format:", vendorData);
-      return res.status(500).json({ error: "Invalid data format received from vendor" });
+      return res.status(500).json({ 
+        error: "Invalid data format received from vendor", 
+        rawVendorData: vendorData 
+      });
     }
 
-    const insertedItems = [];
+    if (!itemsArray.length) {
+      console.warn("Vendor returned empty items array:", vendorData);
+    }
 
     // Insert/update items into local DB
+    const insertedItems = [];
     for (const item of itemsArray) {
       try {
         const query = `
@@ -179,7 +193,6 @@ console.log("Formatted DateTime to send:", formattedDateTime);
     res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
-
 router.get("/stock-details", async (req, res) => {
   const { c2Code, storeId, prodCode, itemCodes, apiKey } = req.query;
 
