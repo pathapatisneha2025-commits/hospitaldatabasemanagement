@@ -253,6 +253,7 @@ router.post("/stock-details", async (req, res) => {
       console.error("Vendor API returned invalid stock data:", responseData);
       return res.status(502).json({ error: "Invalid stock data from vendor" });
     }
+    console.log("Stock data being sent to frontend:", stockData);
 
     // 4️⃣ Insert/Update in database
     const failedBatches = [];
