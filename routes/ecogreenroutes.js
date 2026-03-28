@@ -49,7 +49,7 @@ router.post("/generate-token", async (req, res) => {
   }
 });
 
-router.post("/item-master", async (req, res) => {
+router.post("/item-master", async (req, res) => { 
   const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.body;
 
   // Validate required fields
@@ -71,22 +71,23 @@ router.post("/item-master", async (req, res) => {
 
     console.log("Formatted DateTime to send:", formattedDateTime);
 
-    // Build vendor URL
-    const params = new URLSearchParams({ 
-      c2Code, 
-      storeId, 
-      prodCode, 
-      inputDateTime: formattedDateTime, 
-      apiKey 
-    });
-
-    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data?${params.toString()}`;
+    // Vendor API URL (without query params, since we'll POST JSON)
+    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data`;
     console.log("Vendor URL:", vendorUrl);
 
-    // Fetch vendor data
-    const response = await fetch(vendorUrl, { 
-      method: "GET", 
-      headers: { "Content-Type": "application/json" } 
+    // POST body for ERP
+    const postBody = {
+      c2Code,
+      storeId,
+      prodCode,
+      inputDateTime: formattedDateTime,
+      apiKey
+    };
+
+    const response = await fetch(vendorUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(postBody)
     });
 
     const text = await response.text();
@@ -103,7 +104,7 @@ router.post("/item-master", async (req, res) => {
       });
     }
 
-    // Determine items array dynamically with debug info
+    // Determine items array
     let itemsArray = [];
     if (Array.isArray(vendorData)) {
       itemsArray = vendorData;
@@ -113,16 +114,18 @@ router.post("/item-master", async (req, res) => {
       itemsArray = vendorData.items;
     } else if (Array.isArray(vendorData.records)) {
       itemsArray = vendorData.records;
+    } else if (vendorData.code && vendorData.message) {
+      // Vendor returned an error
+      return res.status(400).json({
+        error: "Vendor API error",
+        vendorMessage: vendorData.message
+      });
     } else {
       console.error("Vendor response invalid format:", vendorData);
       return res.status(500).json({ 
         error: "Invalid data format received from vendor", 
         rawVendorData: vendorData 
       });
-    }
-
-    if (!itemsArray.length) {
-      console.warn("Vendor returned empty items array:", vendorData);
     }
 
     // Insert/update items into local DB
