@@ -532,6 +532,7 @@ router.post('/sales-order-status', async (req, res) => {
   try {
     const url = `http://117.211.64.158:41000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
 
+    // Node-fetch example
     const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
 
     if (!response.ok) {
@@ -539,13 +540,16 @@ router.post('/sales-order-status', async (req, res) => {
     }
 
     const data = await response.json();
+
+    // Optional: Normalize Ecogreen API response to always include code
+    if (!data.code) data.code = "200";  
+
     res.json(data);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch order status' });
   }
 });
-
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
