@@ -320,20 +320,21 @@ router.post("/purchase-orders", async (req, res) => {
   }
 
   try {
-    const response = await axios.post(
-      "http://117.211.64.158:41000/ws_c2_services_po_fetch",
-      {
-        c2Code,
-        storeId,
-        prodCode,
-        apiKey,
-        fromDate,
-        toDate
-      }
-    );
+    // Use fetch instead of axios
+    const fetchResponse = await fetch("http://117.211.64.158:41000/ws_c2_services_po_fetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
+    });
 
-    const purchaseOrders = response.data;
+    if (!fetchResponse.ok) {
+      const errorText = await fetchResponse.text();
+      throw new Error(`Fetch failed: ${fetchResponse.status} - ${errorText}`);
+    }
 
+    const purchaseOrders = await fetchResponse.json();
+
+    // Insert/update in database
     for (const po of purchaseOrders) {
       const query = `
         INSERT INTO ecogreenpurchase_orders (
@@ -382,7 +383,6 @@ router.post("/purchase-orders", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or save purchase orders" });
   }
 });
-
 
 /* =========================================================
    ✅ 5.6 Create Sales Order (Webhook Push)
