@@ -435,14 +435,20 @@ router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
 
+    console.log('=== Incoming Request Body ===');
+    console.log(salesOrderData);
+
     // Validate required fields
     if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode) {
+      console.warn('Missing required fields:', {
+        c2Code: salesOrderData.c2Code,
+        storeId: salesOrderData.storeId,
+        prodCode: salesOrderData.prodCode,
+      });
       return res.status(400).json({ message: 'Required fields missing: c2Code, storeId, prodCode' });
     }
 
-    console.log('Forwarding sales order to ERP:\n', JSON.stringify(salesOrderData, null, 2));
-
-    // Forward request to ERP
+    console.log('=== Forwarding to ERP ===');
     const response = await fetch(
       'http://192.168.1.100:41000/ws_c2_services_create_sale_order',
       {
@@ -457,18 +463,21 @@ router.post('/create_sales_order', async (req, res) => {
       data = await response.json();
     } catch (err) {
       console.error('ERP did not return JSON:', err);
-      data = await response.text(); // fallback
+      data = await response.text();
     }
 
     if (response.ok) {
-      console.log('ERP Response:', data);
+      console.log('=== ERP Response OK ===');
+      console.log(data);
       res.status(200).json({ message: 'Sales order submitted successfully!', data });
     } else {
-      console.error('ERP Error:', data);
+      console.error('=== ERP Response ERROR ===');
+      console.error(data);
       res.status(response.status).json({ message: 'Failed to submit sales order', data });
     }
   } catch (error) {
-    console.error('Server Error:', error);
+    console.error('=== SERVER ERROR ===');
+    console.error(error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
