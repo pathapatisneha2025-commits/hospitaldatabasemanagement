@@ -431,6 +431,48 @@ router.post("/purchase-orders", async (req, res) => {
   }
 });
 
+router.post('/create_sales_order', async (req, res) => {
+  try {
+    const salesOrderData = req.body;
+
+    // Validate required fields
+    if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode) {
+      return res.status(400).json({ message: 'Required fields missing: c2Code, storeId, prodCode' });
+    }
+
+    console.log('Forwarding sales order to ERP:\n', JSON.stringify(salesOrderData, null, 2));
+
+    // Forward request to ERP
+    const response = await fetch(
+      'http://192.168.1.100:41000/ws_c2_services_create_sale_order',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(salesOrderData),
+      }
+    );
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (err) {
+      console.error('ERP did not return JSON:', err);
+      data = await response.text(); // fallback
+    }
+
+    if (response.ok) {
+      console.log('ERP Response:', data);
+      res.status(200).json({ message: 'Sales order submitted successfully!', data });
+    } else {
+      console.error('ERP Error:', data);
+      res.status(response.status).json({ message: 'Failed to submit sales order', data });
+    }
+  } catch (error) {
+    console.error('Server Error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 /* =========================================================
    ✅ 5.6 Create Sales Order (Webhook Push)
 ========================================================= */
