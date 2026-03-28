@@ -196,32 +196,20 @@ router.post("/item-master", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
-router.post("/stock-details", async (req, res) => { 
+router.post("/stock-details", async (req, res) => {  
   const { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey } = req.body;
 
-  // Validate input
   if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes || !apiKey) {
     return res.status(400).json({ error: "All fields are required, including inputDateTime" });
   }
 
   try {
-    // Ensure itemCodes is an array
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
-    // --- FETCH STOCK DATA VIA POST ---
     const response = await fetch("http://117.211.64.158:41000/ws_c2_services_get_stock_data", {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        c2Code,
-        storeId,
-        prodCode,
-        inputDateTime,        // <-- Add inputDateTime here
-        itemCodes: itemsArray,
-        apiKey
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ c2Code, storeId, prodCode, inputDateTime, itemCodes: itemsArray, apiKey })
     });
 
     if (!response.ok) {
@@ -235,7 +223,6 @@ router.post("/stock-details", async (req, res) => {
       return res.status(500).json({ error: "Invalid stock data from vendor" });
     }
 
-    // Insert or update each stock batch
     for (const batch of stockData) {
       const query = `
         INSERT INTO stock_batches (
@@ -260,12 +247,13 @@ router.post("/stock-details", async (req, res) => {
     }
 
     res.status(200).json({
-      message: "Stock details synced successfully",
+      success: true,
+      stockData: stockData,
       totalBatches: stockData.length
     });
 
   } catch (err) {
-    console.error("Stock Details Error:", err.message);
+    console.error("Stock Details Error:", err);
     res.status(500).json({ error: "Failed to fetch or store stock details" });
   }
 });
