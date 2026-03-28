@@ -320,7 +320,6 @@ router.post("/purchase-orders", async (req, res) => {
   }
 
   try {
-    // Fetch purchase orders from the external API
     const fetchResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_po_fetch",
       {
@@ -337,12 +336,11 @@ router.post("/purchase-orders", async (req, res) => {
 
     const responseJson = await fetchResponse.json();
 
-    // Handle single object or array of POs
-    const purchaseOrders = Array.isArray(responseJson.data)
-      ? responseJson.data
-      : [responseJson.data];
+    // Use the response object directly, wrap in array if needed
+    const purchaseOrders = Array.isArray(responseJson)
+      ? responseJson
+      : [responseJson];
 
-    // Insert or update each purchase order in the database
     for (const po of purchaseOrders) {
       const query = `
         INSERT INTO ecogreenpurchase_orders (
