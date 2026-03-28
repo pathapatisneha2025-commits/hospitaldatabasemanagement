@@ -338,11 +338,10 @@ router.post("/purchase-orders", async (req, res) => {
     for (const po of purchaseOrders) {
       const query = `
         INSERT INTO ecogreenpurchase_orders (
-          c2_code, store_id, prod_code,
           br_code, year, prefix, srno,
           custcode, custname, refcode, refname,
           total, details
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT (br_code, year, prefix, srno) DO UPDATE SET
           custcode = EXCLUDED.custcode,
           custname = EXCLUDED.custname,
@@ -353,9 +352,7 @@ router.post("/purchase-orders", async (req, res) => {
       `;
 
       const values = [
-        c2Code,
-        storeId,
-        prodCode,
+        
         po.br_code,
         po.year,
         po.prefix,
