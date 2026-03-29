@@ -179,8 +179,25 @@ router.post("/item-master", async (req, res) => {
         ];
 
         await pool.query(query, values);
-        insertedItems.push({ code: item.itemCode, name: item.itemName });
-      } catch (itemErr) {
+insertedItems.push({
+  item_code: item.itemCode,
+  item_name: item.itemName,
+  item_short_name: item.itemShortName || null,
+  item_full_name: item.itemFullName || null,
+  brand_code: item.brandCode || null,
+  brand_name: item.brandName || null,
+  category_code: item.categoryCode || null,
+  category_name: item.categoryName || null,
+  content_code: item.contentCode || null,
+  content_name: item.contentName || null,
+  pack_code: item.packCode || null,
+  pack_name: item.packName || null,
+  item_qty_per_box: item.itemQtyPerBox || 0,
+  item_added_date: item.itemAddedDate || null,
+  item_updated_date: item.itemUpdatedDate || null,
+  hsn_sac_code: item.hsnSacCode || null,
+  hsn_sac_name: item.hsnSacName || null
+});      } catch (itemErr) {
         console.error(`Failed to insert/update item ${item.itemCode}:`, itemErr.message);
       }
     }
