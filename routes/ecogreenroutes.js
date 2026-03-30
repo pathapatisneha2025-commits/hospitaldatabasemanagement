@@ -277,6 +277,7 @@ router.post("/stock-details", async (req, res) => {
         console.error("DB INSERT ERROR:", err.message);
       }
     }
+console.log("STOCK ITEMS TO SEND TO FRONTEND:", JSON.stringify(stockData, null, 2));
 
     // ✅ Send vendor data to frontend
     res.status(200).json({
