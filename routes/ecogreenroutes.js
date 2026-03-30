@@ -233,7 +233,14 @@ router.post("/stock-details", async (req, res) => {
     const vendorResponse = await fetch(vendorUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ c2Code, storeId, prodCode, inputDateTime: formattedDateTime, itemCodes: itemsArray, apiKey })
+      body: JSON.stringify({
+        c2Code,
+        storeId,
+        prodCode,
+        inputDateTime: formattedDateTime,
+        itemCodes: itemsArray,
+        apiKey
+      })
     });
 
     const rawText = await vendorResponse.text();
@@ -246,17 +253,17 @@ router.post("/stock-details", async (req, res) => {
     const stockData = vendorData.data;
 
     // Insert/update into DB
-    const insertedBatches = [];
     for (const batch of stockData) {
       try {
         await pool.query(
-          `INSERT INTO stock_batches (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
-           VALUES ($1,$2,$3,$4,$5,$6)
-           ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
-             item_name = EXCLUDED.item_name,
-             item_qty_per_box = EXCLUDED.item_qty_per_box,
-             stock_bal_qty = EXCLUDED.stock_bal_qty,
-             expiry_date = EXCLUDED.expiry_date`,
+          `INSERT INTO stock_batches 
+          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
+          VALUES ($1,$2,$3,$4,$5,$6)
+          ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
+            item_name = EXCLUDED.item_name,
+            item_qty_per_box = EXCLUDED.item_qty_per_box,
+            stock_bal_qty = EXCLUDED.stock_bal_qty,
+            expiry_date = EXCLUDED.expiry_date`,
           [
             batch.c_item_code,
             batch.itemName,
@@ -266,26 +273,16 @@ router.post("/stock-details", async (req, res) => {
             batch.expiryDate
           ]
         );
-
-        insertedBatches.push({
-          itemCode: batch.c_item_code,
-          itemName: batch.itemName,
-          batchNo: batch.batchNo || '',
-          qtyBox: batch.itemQtyPerBox || 1,
-          balance: batch.stockBalQty || 0,
-          expiryDate: batch.expiryDate || null,
-          isInserted: true
-        });
       } catch (err) {
-        console.error(`Failed to insert/update stock batch ${batch.c_item_code}:`, err.message);
+        console.error("DB INSERT ERROR:", err.message);
       }
     }
 
-    // Respond in same style as item-master
+    // ✅ Send vendor data to frontend
     res.status(200).json({
-      message: "Stock details synced successfully",
-      totalItems: insertedBatches.length,
-      insertedItems: insertedBatches // note the key "insertedItems" to match item-master
+      message: "Stock fetched and stored successfully",
+      totalItems: stockData.length,
+      stockItems: stockData
     });
 
   } catch (err) {
