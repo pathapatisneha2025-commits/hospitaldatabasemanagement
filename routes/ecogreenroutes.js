@@ -281,7 +281,6 @@ router.post("/stock-details", async (req, res) => {
     const failedBatches = [];
 
     for (const batch of stockData) {
-        console.log("PROCESSING BATCH:", batch);
 
       try {
         const query = `
@@ -320,6 +319,8 @@ router.post("/stock-details", async (req, res) => {
         failedBatches.push({ batch, error: dbErr.message });
       }
     }
+console.log("INSERTED BATCHES:", JSON.stringify(insertedBatches, null, 2));
+
 
     // 🔹 Return response like item-master
     res.status(200).json({
