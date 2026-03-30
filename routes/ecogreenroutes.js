@@ -273,6 +273,7 @@ router.post("/stock-details", async (req, res) => {
       console.error("Invalid stock data from vendor:", vendorData);
       return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
     }
+console.log("VENDOR DATA TO INSERT:", JSON.stringify(vendorData.data, null, 2));
 
     const stockData = vendorData.data;
 
