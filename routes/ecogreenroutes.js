@@ -273,7 +273,6 @@ router.post("/stock-details", async (req, res) => {
       console.error("Invalid stock data from vendor:", vendorData);
       return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
     }
-console.log("VENDOR DATA TO INSERT:", JSON.stringify(vendorData.data, null, 2));
 
     const stockData = vendorData.data;
 
@@ -319,6 +318,7 @@ console.log("VENDOR DATA TO INSERT:", JSON.stringify(vendorData.data, null, 2));
         failedBatches.push({ batch, error: dbErr.message });
       }
     }
+console.log("INSERTED BATCHES TO SEND FRONTEND:", JSON.stringify(insertedBatches, null, 2));
 
     // 🔹 Return response like item-master
     res.status(200).json({
