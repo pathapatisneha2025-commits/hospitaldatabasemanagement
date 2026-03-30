@@ -238,15 +238,14 @@ router.post("/stock-details", async (req, res) => {
 
     const rawText = await vendorResponse.text();
     const vendorData = JSON.parse(rawText);
-
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
       return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
     }
 
     const stockData = vendorData.data;
 
-    // Insert/update into DB
-    const insertedBatches = [];
+    // Insert/Update DB
+    const failedBatches = [];
     for (const batch of stockData) {
       try {
         await pool.query(
@@ -257,39 +256,43 @@ router.post("/stock-details", async (req, res) => {
              item_qty_per_box = EXCLUDED.item_qty_per_box,
              stock_bal_qty = EXCLUDED.stock_bal_qty,
              expiry_date = EXCLUDED.expiry_date`,
-          [
-            batch.c_item_code,
-            batch.itemName,
-            batch.itemQtyPerBox,
-            batch.batchNo,
-            batch.stockBalQty,
-            batch.expiryDate
-          ]
+          [batch.c_item_code, batch.itemName, batch.itemQtyPerBox, batch.batchNo, batch.stockBalQty, batch.expiryDate]
         );
-
-        insertedBatches.push({
-          itemCode: batch.c_item_code,
-          itemName: batch.itemName,
-          batchNo: batch.batchNo || '',
-          qtyBox: batch.itemQtyPerBox || 1,
-          balance: batch.stockBalQty || 0,
-          expiryDate: batch.expiryDate || null,
-          isInserted: true
-        });
       } catch (err) {
-        console.error(`Failed to insert/update stock batch ${batch.c_item_code}:`, err.message);
+        failedBatches.push({ batch, error: err.message });
       }
     }
 
-    // Respond in same style as item-master
+    // Fetch actual DB rows for the frontend
+    const dbResult = await pool.query(
+      `SELECT c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date
+       FROM stock_batches
+       WHERE c_item_code = ANY($1)
+       ORDER BY c_item_code, batch_no`,
+      [itemsArray]
+    );
+
+    const insertedBatches = dbResult.rows.map(row => ({
+      cItemCode: row.c_item_code,
+      itemName: row.item_name,
+      qtyBox: row.item_qty_per_box,
+      batchNo: row.batch_no,
+      balance: row.stock_bal_qty,
+      expiryDate: row.expiry_date,
+      isInserted: true
+    }));
+
+    console.log("INSERTED BATCHES FROM DB:", JSON.stringify(insertedBatches, null, 2));
+
     res.status(200).json({
       message: "Stock details synced successfully",
-      totalItems: insertedBatches.length,
-      insertedItems: insertedBatches // note the key "insertedItems" to match item-master
+      totalBatches: insertedBatches.length,
+      insertedBatches,
+      failedBatches: failedBatches.length ? failedBatches : undefined
     });
 
   } catch (err) {
-    console.error("Stock Details Error:", err.message);
+    console.error("Stock Details Error:", err);
     res.status(500).json({ error: "Failed to fetch or store stock details" });
   }
 });
