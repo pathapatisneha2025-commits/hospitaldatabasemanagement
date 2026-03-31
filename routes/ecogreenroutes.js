@@ -244,7 +244,6 @@ router.post("/stock-details", async (req, res) => {
     });
 
     const rawText = await vendorResponse.text();
-        console.log("VENDOR RAW RESPONSE:\n", rawText);
 
     const vendorData = JSON.parse(rawText);
 
