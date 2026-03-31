@@ -284,7 +284,6 @@ router.post("/stock-details", async (req, res) => {
     }
 
     // --- Safe logging ---
-    console.log(`STOCK ITEMS TO SEND TO FRONTEND (Page ${page}):`);
     paginatedData.forEach((item, index) => {
       console.log(`[${index}]`, {
         c_item_code: item.c_item_code,
