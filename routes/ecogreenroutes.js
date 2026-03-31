@@ -228,7 +228,7 @@ router.post("/stock-details", async (req, res) => {
 
     let itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
-    // Fetch vendor data
+    // --- Step 1: Fetch vendor data ONCE ---
     const vendorUrl = "http://117.211.64.158:41000/ws_c2_services_get_stock_data";
     const vendorResponse = await fetch(vendorUrl, {
       method: "POST",
@@ -252,16 +252,10 @@ router.post("/stock-details", async (req, res) => {
 
     const stockData = vendorData.data;
 
-    // --- PAGINATION ---
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedData = stockData.slice(start, end);
-
-    // Insert/update into DB only for the current page
-    for (const batch of paginatedData) {
-      try {
-        await pool.query(
-          `INSERT INTO stock_batches 
+    // --- Step 2: Bulk insert/update ALL vendor data into DB ---
+    const insertPromises = stockData.map(batch => {
+      return pool.query(
+        `INSERT INTO stock_batches 
           (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
           VALUES ($1,$2,$3,$4,$5,$6)
           ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
@@ -269,32 +263,39 @@ router.post("/stock-details", async (req, res) => {
             item_qty_per_box = EXCLUDED.item_qty_per_box,
             stock_bal_qty = EXCLUDED.stock_bal_qty,
             expiry_date = EXCLUDED.expiry_date`,
-          [
-            batch.c_item_code,
-            batch.itemName,
-            batch.itemQtyPerBox,
-            batch.batchNo,
-            batch.stockBalQty,
-            batch.expiryDate
-          ]
-        );
-      } catch (err) {
-        console.error("DB INSERT ERROR:", err.message);
-      }
-    }
+        [
+          batch.c_item_code,
+          batch.itemName,
+          batch.itemQtyPerBox,
+          batch.batchNo,
+          batch.stockBalQty,
+          batch.expiryDate
+        ]
+      );
+    });
 
-    console.log(`STOCK ITEMS TO SEND TO FRONTEND (Page ${page}):`, JSON.stringify(paginatedData, null, 2));
+    await Promise.allSettled(insertPromises);
+
+    // --- Step 3: Serve paginated data from DB ---
+    const offset = (page - 1) * limit;
+    const { rows: paginatedRows } = await pool.query(
+      `SELECT * FROM stock_batches
+       WHERE c_item_code = ANY($1)
+       ORDER BY c_item_code, batch_no
+       OFFSET $2 LIMIT $3`,
+      [itemsArray.length ? itemsArray : stockData.map(b => b.c_item_code), offset, limit]
+    );
 
     res.status(200).json({
       message: "Stock fetched and stored successfully",
       totalItems: stockData.length,
       page,
       limit,
-      stockItems: paginatedData
+      stockItems: paginatedRows
     });
 
   } catch (err) {
-    console.error("Stock Details Error:", err.message);
+    console.error("Stock Details Error:", err);
     res.status(500).json({ error: "Failed to fetch or store stock details" });
   }
 });
