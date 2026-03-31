@@ -283,7 +283,6 @@ router.post("/stock-details", async (req, res) => {
       }
     }
 
-    console.log(`STOCK ITEMS TO SEND TO FRONTEND (Page ${page}):`, JSON.stringify(paginatedData, null, 2));
 
     res.status(200).json({
       message: "Stock fetched and stored successfully",
