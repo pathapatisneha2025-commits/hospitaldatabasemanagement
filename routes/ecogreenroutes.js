@@ -226,7 +226,7 @@ router.post("/stock-details", async (req, res) => {
     let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
     if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
 
-    let itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
+    const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
     // Fetch vendor data
     const vendorUrl = "http://117.211.64.158:41000/ws_c2_services_get_stock_data";
@@ -262,13 +262,13 @@ router.post("/stock-details", async (req, res) => {
       try {
         await pool.query(
           `INSERT INTO stock_batches 
-          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
-          VALUES ($1,$2,$3,$4,$5,$6)
-          ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
-            item_name = EXCLUDED.item_name,
-            item_qty_per_box = EXCLUDED.item_qty_per_box,
-            stock_bal_qty = EXCLUDED.stock_bal_qty,
-            expiry_date = EXCLUDED.expiry_date`,
+            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
+             item_name = EXCLUDED.item_name,
+             item_qty_per_box = EXCLUDED.item_qty_per_box,
+             stock_bal_qty = EXCLUDED.stock_bal_qty,
+             expiry_date = EXCLUDED.expiry_date`,
           [
             batch.c_item_code,
             batch.itemName,
@@ -283,7 +283,20 @@ router.post("/stock-details", async (req, res) => {
       }
     }
 
+    // --- Safe logging ---
+    console.log(`STOCK ITEMS TO SEND TO FRONTEND (Page ${page}):`);
+    paginatedData.forEach((item, index) => {
+      console.log(`[${index}]`, {
+        c_item_code: item.c_item_code,
+        itemName: item.itemName,
+        itemQtyPerBox: item.itemQtyPerBox,
+        batchNo: item.batchNo,
+        stockBalQty: item.stockBalQty,
+        expiryDate: item.expiryDate
+      });
+    });
 
+    // --- Send response ---
     res.status(200).json({
       message: "Stock fetched and stored successfully",
       totalItems: stockData.length,
