@@ -215,11 +215,15 @@ insertedItems.push({
   }
 });
 router.post("/stock-details", async (req, res) => {
-  const { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey, page = 1, limit = 100 } = req.body;
+  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey, page = 1, limit = 100 } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes || !apiKey) {
     return res.status(400).json({ error: "All fields are required, including inputDateTime" });
   }
+
+  // Ensure page & limit are numbers
+  page = parseInt(page, 10) || 1;
+  limit = parseInt(limit, 10) || 100;
 
   try {
     // Format inputDateTime
@@ -243,8 +247,7 @@ router.post("/stock-details", async (req, res) => {
       })
     });
 
-    const rawText = await vendorResponse.text();
-    const vendorData = JSON.parse(rawText);
+    const vendorData = await vendorResponse.json();
 
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
       return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
@@ -257,7 +260,7 @@ router.post("/stock-details", async (req, res) => {
     const end = start + limit;
     const paginatedData = stockData.slice(start, end);
 
-    // Insert/update into DB only for the current page
+    // Insert/update into DB only for current page
     for (const batch of paginatedData) {
       try {
         await pool.query(
@@ -283,25 +286,12 @@ router.post("/stock-details", async (req, res) => {
       }
     }
 
-    // --- Safe logging ---
-    console.log(`STOCK ITEMS TO SEND TO FRONTEND (Page ${page}):`);
-    paginatedData.forEach((item, index) => {
-      console.log(`[${index}]`, {
-        c_item_code: item.c_item_code,
-        itemName: item.itemName,
-        itemQtyPerBox: item.itemQtyPerBox,
-        batchNo: item.batchNo,
-        stockBalQty: item.stockBalQty,
-        expiryDate: item.expiryDate
-      });
-    });
-
-    // --- Send response ---
     res.status(200).json({
       message: "Stock fetched and stored successfully",
       totalItems: stockData.length,
       page,
       limit,
+      totalPages: Math.ceil(stockData.length / limit),
       stockItems: paginatedData
     });
 
