@@ -460,14 +460,14 @@ router.post('/create_sales_order', async (req, res) => {
       }
     );
 
-    // Read body once
+    // Read the ERP response body only once
     const rawData = await response.text();
 
-    // Console the raw ERP response
+    // Log raw ERP response
     console.log('=== ERP RAW RESPONSE ===');
     console.log(rawData);
 
-    // Try parsing JSON safely
+    // Attempt JSON parse
     let data;
     try {
       data = JSON.parse(rawData);
