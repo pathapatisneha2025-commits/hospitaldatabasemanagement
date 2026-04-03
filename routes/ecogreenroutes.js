@@ -450,30 +450,22 @@ router.post('/create_sales_order', async (req, res) => {
     }
 
     console.log('=== Forwarding to ERP ===');
+   // Public IP accessible from Render
+const response = await fetch(
+  'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(salesOrderData),
+  }
+);
 
-    const response = await fetch(
-      'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(salesOrderData),
-      }
-    );
-
-    // Read the ERP response body only once
-    const rawData = await response.text();
-
-    // Log raw ERP response
-    console.log('=== ERP RAW RESPONSE ===');
-    console.log(rawData);
-
-    // Attempt JSON parse
     let data;
     try {
-      data = JSON.parse(rawData);
+      data = await response.json();
     } catch (err) {
-      console.error('ERP did not return valid JSON:', err);
-      data = rawData; // fallback to raw text
+      console.error('ERP did not return JSON:', err);
+      data = await response.text();
     }
 
     if (response.ok) {
@@ -485,7 +477,6 @@ router.post('/create_sales_order', async (req, res) => {
       console.error(data);
       res.status(response.status).json({ message: 'Failed to submit sales order', data });
     }
-
   } catch (error) {
     console.error('=== SERVER ERROR ===');
     console.error(error);
