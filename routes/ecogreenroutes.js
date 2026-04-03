@@ -215,11 +215,15 @@ insertedItems.push({
   }
 });
 router.post("/stock-details", async (req, res) => {
-  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey } = req.body;
+  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey, page = 1, limit = 100 } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes || !apiKey) {
     return res.status(400).json({ error: "All fields are required, including inputDateTime" });
   }
+
+  // Ensure page & limit are numbers
+  page = parseInt(page, 10) || 1;
+  limit = parseInt(limit, 10) || 100;
 
   try {
     // Format inputDateTime
@@ -228,7 +232,7 @@ router.post("/stock-details", async (req, res) => {
 
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
-    // Fetch all vendor data
+    // Fetch vendor data
     const vendorUrl = "http://117.211.64.158:41000/ws_c2_services_get_stock_data";
     const vendorResponse = await fetch(vendorUrl, {
       method: "POST",
@@ -251,8 +255,13 @@ router.post("/stock-details", async (req, res) => {
 
     const stockData = vendorData.data;
 
-    // Insert/update into DB for all items (optional)
-    for (const batch of stockData) {
+    // --- PAGINATION ---
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const paginatedData = stockData.slice(start, end);
+
+    // Insert/update into DB only for current page
+    for (const batch of paginatedData) {
       try {
         await pool.query(
           `INSERT INTO stock_batches 
@@ -277,11 +286,13 @@ router.post("/stock-details", async (req, res) => {
       }
     }
 
-    // Return **all data**, no limit or page
     res.status(200).json({
       message: "Stock fetched and stored successfully",
       totalItems: stockData.length,
-      stockItems: stockData
+      page,
+      limit,
+      totalPages: Math.ceil(stockData.length / limit),
+      stockItems: paginatedData
     });
 
   } catch (err) {
