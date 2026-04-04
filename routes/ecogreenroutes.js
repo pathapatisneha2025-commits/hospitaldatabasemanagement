@@ -435,7 +435,7 @@ router.post("/purchase-orders", async (req, res) => {
 router.get('/ecogreenpurchase_orders', async (req, res) => {
   try {
     const query = 'SELECT * FROM ecogreenpurchase_orders ORDER BY id DESC';
-    const result = await db.query(query);
+    const result = await pool.query(query);
 
     res.status(200).json({
       success: true,
