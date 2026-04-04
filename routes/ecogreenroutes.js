@@ -513,7 +513,38 @@ router.get('/delivery_boy_location/:id', async (req, res) => {
     });
   }
 });
+router.get("/delivery_boy/ecogreenpurchase_orders", async (req, res) => {
+  try {
+    const { delivery_boy } = req.query;
 
+    let query;
+    let params = [];
+
+    if (delivery_boy) {
+      // Fetch only orders for this delivery boy
+      query = 'SELECT * FROM ecogreenpurchase_orders WHERE delivery_boy = $1 ORDER BY id DESC';
+      params = [delivery_boy];
+    } else {
+      // Fetch all orders if no delivery boy ID provided
+      query = 'SELECT * FROM ecogreenpurchase_orders ORDER BY id DESC';
+    }
+
+    const result = await pool.query(query, params);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching purchase orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch purchase orders',
+      error: error.message
+    });
+  }
+});
 router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
