@@ -480,6 +480,40 @@ router.post("/assign_delivery_boy", async (req, res) => {
   }
 });
 
+// GET delivery boy live location
+router.get('/delivery_boy_location/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT latitude, longitude, status, updated_at
+       FROM delivery_boy_locations
+       WHERE delivery_boy_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: false,
+        message: "No location found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error fetching location:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
