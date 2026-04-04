@@ -432,6 +432,26 @@ router.post("/purchase-orders", async (req, res) => {
   }
 });
 
+router.get('/ecogreenpurchase_orders', async (req, res) => {
+  try {
+    const query = 'SELECT * FROM ecogreenpurchase_orders ORDER BY id DESC';
+    const result = await db.query(query);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching purchase orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch purchase orders',
+      error: error.message
+    });
+  }
+});
+
 router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
