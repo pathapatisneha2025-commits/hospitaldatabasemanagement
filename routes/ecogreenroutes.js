@@ -545,6 +545,33 @@ router.get("/delivery_boy/ecogreenpurchase_orders", async (req, res) => {
     });
   }
 });
+
+router.put("/mark-delivered/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Update only the status column
+    const query = `
+      UPDATE ecogreenpurchase_orders
+      SET status = 'Delivered'
+      WHERE id = $1
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, [orderId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, message: "Order status updated to Delivered", order: result.rows[0] });
+  } catch (err) {
+    console.error("Mark EcoGreen Purchase Delivered Error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
 router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
