@@ -573,7 +573,11 @@ router.put("/mark-delivered/:orderId", async (req, res) => {
 
 router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
   try {
-    const query = `SELECT * FROM ecogreenpurchase_orders WHERE status = 'Delivered'`;
+    const query = `
+      SELECT * FROM ecogreenpurchase_orders 
+      WHERE status IN ('Delivered', 'Completed')
+      ORDER BY id DESC
+    `;
 
     const result = await pool.query(query);
 
@@ -583,7 +587,7 @@ router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
       data: result.rows,
     });
   } catch (err) {
-    console.error("Error fetching delivered EcoGreen orders:", err);
+    console.error("Error fetching EcoGreen orders:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 });
