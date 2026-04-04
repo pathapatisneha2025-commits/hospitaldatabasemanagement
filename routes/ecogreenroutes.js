@@ -587,6 +587,35 @@ router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 });
+
+router.put("/mark-completed/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { receivedby } = req.body; // employee ID
+
+    if (!receivedby) {
+      return res.status(400).json({ success: false, message: "Employee ID is required" });
+    }
+
+    const updateQuery = `
+      UPDATE ecogreenpurchase_orders
+      SET status = 'Completed', employee_id = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+
+    const result = await pool.query(updateQuery, [receivedby, orderId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, message: "Order marked as completed", data: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
