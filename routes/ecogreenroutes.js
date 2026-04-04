@@ -451,6 +451,34 @@ router.get('/ecogreenpurchase_orders', async (req, res) => {
     });
   }
 });
+router.post("/assign_delivery_boy", async (req, res) => {
+  const { order_id, delivery_boy } = req.body;
+
+  if (!order_id || !delivery_boy) {
+    return res.status(400).json({ success: false, message: "Order ID and delivery boy are required" });
+  }
+
+  try {
+    const query = `
+      UPDATE ecogreenpurchase_orders
+      SET delivery_boy = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+
+    const values = [delivery_boy, order_id];
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, message: `Delivery Boy "${delivery_boy}" assigned successfully`, data: result.rows[0] });
+  } catch (err) {
+    console.error("Error assigning delivery boy:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 router.post('/create_sales_order', async (req, res) => {
   try {
