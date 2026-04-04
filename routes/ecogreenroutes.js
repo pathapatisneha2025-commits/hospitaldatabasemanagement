@@ -571,7 +571,22 @@ router.put("/mark-delivered/:orderId", async (req, res) => {
   }
 });
 
+router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
+  try {
+    const query = `SELECT * FROM ecogreenpurchase_orders WHERE status = 'Delivered'`;
 
+    const result = await pool.query(query);
+
+    res.json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error("Error fetching delivered EcoGreen orders:", err);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
 router.post('/create_sales_order', async (req, res) => {
   try {
     const salesOrderData = req.body;
