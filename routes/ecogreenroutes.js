@@ -893,22 +893,58 @@ router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
   const { deliveryBoyId } = req.params;
 
   try {
+    // Fetch all order details for the delivery boy
     const orderResult = await pool.query(
       `SELECT 
           o.id,
           o.order_id,
+          o.cust_code,
+          o.created_at,
+          o.assigned_by,
+          o.delivery_boy_id,
+          o.status,
+          i.id AS invoice_id,
+          i.doc_no,
+          i.doc_total,
           json_agg(d.product_name) AS product_names,
           COUNT(d.id) AS total_products
        FROM ecogreensales_order_status o
        LEFT JOIN ecogreensales_invoices i ON o.order_id = i.order_id
        LEFT JOIN ecogreensales_order_detail d ON i.id = d.invoice_id
        WHERE o.delivery_boy_id = $1
-       GROUP BY o.id, o.order_id
+       GROUP BY o.id, o.order_id, i.id, i.doc_no, i.doc_total
        ORDER BY o.created_at DESC`,
       [deliveryBoyId]
     );
 
-    res.json({ success: true, count: orderResult.rowCount, orders: orderResult.rows });
+    // Transform the rows to match the desired structure
+    const orders = [];
+    const map = new Map();
+
+    orderResult.rows.forEach((row) => {
+      if (!map.has(row.id)) {
+        map.set(row.id, {
+          id: row.id,
+          order_id: row.order_id,
+          cust_code: row.cust_code,
+          invoices: [],
+          created_at: row.created_at,
+          assigned_by: row.assigned_by,
+          delivery_boy_id: row.delivery_boy_id,
+          status: row.status,
+        });
+        orders.push(map.get(row.id));
+      }
+
+      map.get(row.id).invoices.push({
+        docNo: row.doc_no,
+        docTotal: row.doc_total,
+        product_names: row.product_names,
+        total_products: parseInt(row.total_products),
+      });
+    });
+
+    res.json({ success: true, count: orders.length, orders });
   } catch (err) {
     console.error("Error fetching simplified orders for delivery boy:", err);
     res.status(500).json({ success: false, message: "Server error" });
