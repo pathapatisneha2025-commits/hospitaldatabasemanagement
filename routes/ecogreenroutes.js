@@ -841,6 +841,22 @@ router.post('/sales-order-status', async (req, res) => {
   }
 });
 
+
+router.get('/sales-order-status/all', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM ecogreensales_order_status ORDER BY created_at DESC'
+    );
+
+    res.status(200).json({
+      count: result.rows.length,
+      orders: result.rows, // includes invoices JSONB
+    });
+  } catch (err) {
+    console.error('Fetch All Orders Error:', err);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
