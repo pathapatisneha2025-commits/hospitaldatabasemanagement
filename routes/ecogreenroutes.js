@@ -888,6 +888,33 @@ router.put("/sales-orderstatus/assign-delivery-boy/:orderId", async (req, res) =
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
+  const { deliveryBoyId } = req.params;
+
+  try {
+    const orderResult = await pool.query(
+      `SELECT 
+          o.id,
+          o.order_id,
+          json_agg(d.product_name) AS product_names,
+          COUNT(d.id) AS total_products
+       FROM ecogreensales_order_status o
+       LEFT JOIN ecogreensales_invoices i ON o.order_id = i.order_id
+       LEFT JOIN ecogreensales_order_detail d ON i.id = d.invoice_id
+       WHERE o.delivery_boy_id = $1
+       GROUP BY o.id, o.order_id
+       ORDER BY o.created_at DESC`,
+      [deliveryBoyId]
+    );
+
+    res.json({ success: true, count: orderResult.rowCount, orders: orderResult.rows });
+  } catch (err) {
+    console.error("Error fetching simplified orders for delivery boy:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
