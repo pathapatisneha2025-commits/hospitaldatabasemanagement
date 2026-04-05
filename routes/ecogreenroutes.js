@@ -929,6 +929,40 @@ router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+router.put("/salesstatus/mark-sales-delivered/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const result = await pool.query(
+      `UPDATE ecogreensales_order_status
+       SET status = 'Delivered',
+         WHERE order_id = $2
+       RETURNING *`,
+      [ orderId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Order marked as Delivered",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error marking delivered:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
