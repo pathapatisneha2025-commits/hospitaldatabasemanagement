@@ -936,10 +936,10 @@ router.put("/salesstatus/mark-sales-delivered/:orderId", async (req, res) => {
 
     const result = await pool.query(
       `UPDATE ecogreensales_order_status
-       SET status = 'Delivered',
-         WHERE id = $2
+       SET status = 'Delivered'
+       WHERE id = $1
        RETURNING *`,
-      [ orderId]
+      [orderId]
     );
 
     if (result.rowCount === 0) {
@@ -962,7 +962,6 @@ router.put("/salesstatus/mark-sales-delivered/:orderId", async (req, res) => {
     });
   }
 });
-
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
