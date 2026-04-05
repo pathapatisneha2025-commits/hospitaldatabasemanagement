@@ -932,7 +932,16 @@ router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
 
 router.put("/salesstatus/mark-sales-delivered/:orderId", async (req, res) => {
   try {
-    const { orderId } = req.params;
+    let { orderId } = req.params;
+
+    // Convert to integer to avoid Postgres type error
+    orderId = parseInt(orderId, 10);
+    if (isNaN(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID",
+      });
+    }
 
     const result = await pool.query(
       `UPDATE ecogreensales_order_status
