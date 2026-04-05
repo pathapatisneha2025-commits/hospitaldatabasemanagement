@@ -786,10 +786,11 @@ router.post('/sales-order-status', async (req, res) => {
     return res.status(400).json({ error: 'Missing orderNo or apiKey' });
   }
 
+  const client = await pool.connect();
+
   try {
     const url = `http://117.211.64.158:41000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
 
-    // Node-fetch example
     const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
 
     if (!response.ok) {
@@ -797,16 +798,50 @@ router.post('/sales-order-status', async (req, res) => {
     }
 
     const data = await response.json();
+    if (!data.code) data.code = "200";
 
-    // Optional: Normalize Ecogreen API response to always include code
-    if (!data.code) data.code = "200";  
+    // Begin transaction
+    await client.query('BEGIN');
 
+    // Insert or update order with JSONB invoices
+    await client.query(
+      `INSERT INTO sales_orders 
+        (code, order_id, cust_code, from_gst_no, to_gst_no, customer_type, doctor_name, invoices)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (order_id) DO UPDATE 
+       SET code = EXCLUDED.code,
+           cust_code = EXCLUDED.cust_code,
+           from_gst_no = EXCLUDED.from_gst_no,
+           to_gst_no = EXCLUDED.to_gst_no,
+           customer_type = EXCLUDED.customer_type,
+           doctor_name = EXCLUDED.doctor_name,
+           invoices = EXCLUDED.invoices`,
+      [
+        data.code,
+        data.orderId,
+        data.custCode,
+        data.fromGstNo,
+        data.toGstNo,
+        data.customerType,
+        data.doctorName,
+        JSON.stringify(data.invoices)
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    // Return the original API response
     res.json(data);
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch order status' });
+    await client.query('ROLLBACK');
+    console.error('Fetch/Insert Error:', err);
+    res.status(500).json({ error: 'Failed to fetch or save order status' });
+  } finally {
+    client.release();
   }
 });
+
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
@@ -827,17 +862,15 @@ router.get("/sales-order-status/:orderNo", async (req, res) => {
 
     // Store invoice in DB
     await pool.query(
-      `INSERT INTO ecogreensales_order_invoices(
-        sales_order_id,
-        code, order_id, cust_code,
+      `INSERT INTO ecogreensales_order_status(
+         order_id, cust_code,
         from_gst_no, to_gst_no,
         customer_type, doctor_name,
-        invoices, created_at
+        invoices
       )
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`,
+      VALUES($1,$2,$3,$4,$5,$6,$7)`,
       [
-        orderNo,
-        data.code,
+      
         data.orderId,
         data.custCode,
         data.fromGstNo,
