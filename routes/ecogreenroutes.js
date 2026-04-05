@@ -805,19 +805,18 @@ router.post('/sales-order-status', async (req, res) => {
 
     // Insert or update order with JSONB invoices
     await client.query(
-      `INSERT INTO sales_orders 
-        (code, order_id, cust_code, from_gst_no, to_gst_no, customer_type, doctor_name, invoices)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO ecogreensales_order_status
+        ( order_id, cust_code, from_gst_no, to_gst_no, customer_type, doctor_name, invoices)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,)
        ON CONFLICT (order_id) DO UPDATE 
-       SET code = EXCLUDED.code,
-           cust_code = EXCLUDED.cust_code,
+       SET cust_code = EXCLUDED.cust_code,
            from_gst_no = EXCLUDED.from_gst_no,
            to_gst_no = EXCLUDED.to_gst_no,
            customer_type = EXCLUDED.customer_type,
            doctor_name = EXCLUDED.doctor_name,
            invoices = EXCLUDED.invoices`,
       [
-        data.code,
+        
         data.orderId,
         data.custCode,
         data.fromGstNo,
