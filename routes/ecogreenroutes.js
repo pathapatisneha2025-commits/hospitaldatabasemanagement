@@ -434,7 +434,15 @@ router.post("/purchase-orders", async (req, res) => {
 
 router.get('/ecogreenpurchase_orders', async (req, res) => {
   try {
-    const query = 'SELECT * FROM ecogreenpurchase_orders ORDER BY id DESC';
+    const query = `
+      SELECT 
+        po.*,
+        e.full_name AS assigned_by_name,
+      FROM ecogreenpurchase_orders po
+      LEFT JOIN employees e ON po.assigned_by = e.id
+      ORDER BY po.id DESC
+    `;
+
     const result = await pool.query(query);
 
     res.status(200).json({
