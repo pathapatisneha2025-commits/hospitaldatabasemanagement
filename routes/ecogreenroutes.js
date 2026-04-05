@@ -916,7 +916,7 @@ router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
       );
 
       return {
-        order_id: order.order_id,
+        order_id: Number(order.order_id), // <-- convert to number here
         product_names: products.join(", "), // comma-separated
         total_products: products.length,
         total_amount: total_amount.toFixed(2), // string with 2 decimal places
