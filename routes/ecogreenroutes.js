@@ -807,7 +807,7 @@ router.post('/sales-order-status', async (req, res) => {
     await client.query(
       `INSERT INTO ecogreensales_order_status
         ( order_id, cust_code, from_gst_no, to_gst_no, customer_type, doctor_name, invoices)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        ON CONFLICT (order_id) DO UPDATE 
        SET cust_code = EXCLUDED.cust_code,
            from_gst_no = EXCLUDED.from_gst_no,
