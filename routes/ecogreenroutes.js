@@ -452,34 +452,42 @@ router.get('/ecogreenpurchase_orders', async (req, res) => {
   }
 });
 router.post("/assign_delivery_boy", async (req, res) => {
-  const { order_id, delivery_boy } = req.body;
+  const { order_id, delivery_boy, assigned_by } = req.body;
 
-  if (!order_id || !delivery_boy) {
-    return res.status(400).json({ success: false, message: "Order ID and delivery boy are required" });
+  if (!order_id || !delivery_boy || !assigned_by) {
+    return res.status(400).json({
+      success: false,
+      message: "Order ID, delivery boy, and assigned_by employee ID are required",
+    });
   }
 
   try {
     const query = `
       UPDATE ecogreenpurchase_orders
-      SET delivery_boy = $1
-      WHERE id = $2
+      SET delivery_boy = $1,
+          assigned_by = $2,
+          assigned_at = NOW()
+      WHERE id = $3
       RETURNING *;
     `;
 
-    const values = [delivery_boy, order_id];
+    const values = [delivery_boy, assigned_by, order_id];
     const result = await pool.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    res.json({ success: true, message: `Delivery Boy "${delivery_boy}" assigned successfully`, data: result.rows[0] });
+    res.json({
+      success: true,
+      message: "Delivery boy assigned successfully",
+      data: result.rows[0],
+    });
   } catch (err) {
     console.error("Error assigning delivery boy:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 // GET delivery boy live location
 router.get('/delivery_boy_location/:id', async (req, res) => {
   const { id } = req.params;
