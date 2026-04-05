@@ -902,17 +902,24 @@ router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
       [deliveryBoyId]
     );
 
-    // Transform to get order_id, product names, and total products
+    // Transform to get order_id, product names, total products, and total amount
     const orders = orderResult.rows.map((order) => {
       // Collect all products from all invoices
       const products = order.invoices.flatMap((invoice) =>
         invoice.detail.map((p) => p.productName)
       );
 
+      // Sum all docTotal values from invoices
+      const total_amount = order.invoices.reduce(
+        (sum, invoice) => sum + parseFloat(invoice.docTotal),
+        0
+      );
+
       return {
         order_id: order.order_id,
         product_names: products.join(", "), // comma-separated
         total_products: products.length,
+        total_amount: total_amount.toFixed(2), // string with 2 decimal places
       };
     });
 
@@ -922,7 +929,6 @@ router.get("/delivery-boy/:deliveryBoyId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
