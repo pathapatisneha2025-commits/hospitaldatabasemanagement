@@ -937,7 +937,7 @@ router.put("/salesstatus/mark-sales-delivered/:orderId", async (req, res) => {
     const result = await pool.query(
       `UPDATE ecogreensales_order_status
        SET status = 'Delivered'
-       WHERE id = $1
+       WHERE order_id = $1
        RETURNING *`,
       [orderId]
     );
