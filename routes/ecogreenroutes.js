@@ -437,7 +437,7 @@ router.get('/ecogreenpurchase_orders', async (req, res) => {
     const query = `
       SELECT 
         po.*,
-        e.full_name AS assigned_by_name,
+        e.full_name AS assigned_by_name
       FROM ecogreenpurchase_orders po
       LEFT JOIN employees e ON po.assigned_by = e.id
       ORDER BY po.id DESC
