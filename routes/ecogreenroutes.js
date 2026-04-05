@@ -857,6 +857,37 @@ router.get('/sales-order-status/all', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
+
+
+router.put("/sales-orderstatus/assign-delivery-boy/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+  const { assigned_by, delivery_boy_id } = req.body;
+
+  if (!assigned_by || !delivery_boy_id) {
+    return res.status(400).json({ success: false, message: "assigned_by and delivery_boy_id are required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE ecogreensales_order_status
+       SET assigned_by = $1,
+           delivery_boy_id = $2,
+           status = 'pending'
+       WHERE order_id = $3
+       RETURNING *`,
+      [assigned_by, delivery_boy_id, orderId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, message: "Delivery boy assigned", order: result.rows[0] });
+  } catch (err) {
+    console.error("Assign Delivery Boy Error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
