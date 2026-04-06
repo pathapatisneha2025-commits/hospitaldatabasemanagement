@@ -844,14 +844,38 @@ router.post('/sales-order-status', async (req, res) => {
 
 router.get('/sales-order-status/all', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM ecogreensales_order_status ORDER BY created_at DESC'
-    );
+    const result = await pool.query(`
+      SELECT 
+        so.*,
+        e1.full_name AS assigned_by_name,
+        e2.full_name AS delivery_boy_name,
+        dbl.latitude,
+        dbl.longitude
+      FROM ecogreensales_order_status so
+
+      -- Assigned By
+      LEFT JOIN employees e1 ON so.assigned_by = e1.id
+
+      -- Delivery Boy Name
+      LEFT JOIN employees e2 ON so.delivery_boy_id = e2.id
+
+      -- Latest Delivery Boy Location
+      LEFT JOIN LATERAL (
+        SELECT latitude, longitude
+        FROM delivery_boy_locations
+        WHERE delivery_boy_id = so.delivery_boy_id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) dbl ON true
+
+      ORDER BY so.created_at DESC
+    `);
 
     res.status(200).json({
       count: result.rows.length,
-      orders: result.rows, // includes invoices JSONB
+      orders: result.rows,
     });
+
   } catch (err) {
     console.error('Fetch All Orders Error:', err);
     res.status(500).json({ error: 'Failed to fetch orders' });
