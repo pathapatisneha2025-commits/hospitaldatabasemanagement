@@ -986,6 +986,29 @@ router.put("/salesstatus/mark-sales-delivered/:orderId", async (req, res) => {
     });
   }
 });
+// PUT /ecogreen/sales-orderstatus/complete/:orderId
+router.put("/sales-orderstatus/complete/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `UPDATE ecogreensales_order_status
+       SET status = 'Completed'
+       WHERE order_id = $1
+       RETURNING *`,
+      [orderId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, message: "Order marked as Completed", order: result.rows[0] });
+  } catch (err) {
+    console.error("Error completing order:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 /* =========================================================
    ✅ 5.7 Sales Order Status (Invoice Webhook)
 ========================================================= */
