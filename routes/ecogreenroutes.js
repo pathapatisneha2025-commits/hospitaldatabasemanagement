@@ -355,10 +355,10 @@ router.post("/local-customers", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customers" });
   }
 });
-router.post('/local-customers/mobile', async (req, res) => {
-  const { mobileNo } = req.body;
+router.get('/local-customers/:mobile', async (req, res) => {
+  const { mobile } = req.params;
 
-  if (!mobileNo) {
+  if (!mobile) {
     return res.status(400).json({ message: 'Mobile number is required' });
   }
 
@@ -368,34 +368,29 @@ router.post('/local-customers/mobile', async (req, res) => {
       FROM local_customers
       WHERE mobile_no = $1
     `;
-    const result = await pool.query(query, [mobileNo]);
+    const result = await pool.query(query, [mobile]);
 
     if (result.rows.length === 0) {
-      // Customer not found, discount = 0
-      return res.status(404).json({
-        message: 'Customer not found',
-        discount: 0
-      });
+      return res.status(404).json({ message: 'Customer not found' });
     }
 
     const customer = result.rows[0];
 
+    // Return customer data
     res.json({
-      customer: {
-        lc_code: customer.lc_code,
-        lc_name: customer.lc_name,
-        age: customer.age,
-        gender: customer.gender,
-        address1: customer.address1,
-        address2: customer.address2,
-        address3: customer.address3,
-        city: customer.city,
-        pin: customer.pin,
-        mobile_no: customer.mobile_no,
-        mail_id: customer.mail_id
-      },
-      discount: 10 // apply 10% discount automatically
+      lc_code: customer.lc_code,
+      lc_name: customer.lc_name,
+      age: customer.age,
+      gender: customer.gender,
+      address1: customer.address1,
+      address2: customer.address2,
+      address3: customer.address3,
+      city: customer.city,
+      pin: customer.pin,
+      mobile_no: customer.mobile_no,
+      mail_id: customer.mail_id,
     });
+
   } catch (error) {
     console.error('Error fetching customer:', error);
     res.status(500).json({ message: 'Internal server error', error });
