@@ -867,6 +867,19 @@ router.post("/sales-invoice", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+// Fetch all sales invoices
+router.get("/sales-invoice/all", async (req, res) => {
+  try {
+    const query = `SELECT * FROM ecogreensales_invoices ORDER BY created_at DESC`;
+    const result = await pool.query(query);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching sales invoices:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 router.post('/sales-order-status', async (req, res) => {
   const { orderNo, apiKey } = req.body;
 
