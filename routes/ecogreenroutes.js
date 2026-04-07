@@ -775,13 +775,26 @@ router.post("/sales-order", async (req, res) => {
 });
 router.get("/sales-orders", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM ecogreensales_orders ORDER BY created_at DESC");
+    const result = await pool.query(
+      "SELECT * FROM ecogreensales_orders ORDER BY created_at DESC"
+    );
+
     const orders = result.rows.map((order) => ({
       ...order,
-      patient_address: JSON.parse(order.patient_address || "{}"),
-      pharmacy: JSON.parse(order.pharmacy || "{}"),
-      order_items: JSON.parse(order.order_items || "[]"),
+      patient_address:
+        typeof order.patient_address === "string"
+          ? JSON.parse(order.patient_address || "{}")
+          : order.patient_address || {},
+      pharmacy:
+        typeof order.pharmacy === "string"
+          ? JSON.parse(order.pharmacy || "{}")
+          : order.pharmacy || {},
+      order_items:
+        typeof order.order_items === "string"
+          ? JSON.parse(order.order_items || "[]")
+          : order.order_items || [],
     }));
+
     res.status(200).json(orders);
   } catch (err) {
     console.error("Error fetching orders:", err);
