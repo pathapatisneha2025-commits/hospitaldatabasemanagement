@@ -773,6 +773,40 @@ router.post("/sales-order", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.get("/sales-orders", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM ecogreensales_orders ORDER BY created_at DESC");
+    const orders = result.rows.map((order) => ({
+      ...order,
+      patient_address: JSON.parse(order.patient_address || "{}"),
+      pharmacy: JSON.parse(order.pharmacy || "{}"),
+      order_items: JSON.parse(order.order_items || "[]"),
+    }));
+    res.status(200).json(orders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ✅ Fetch single order by ID
+router.get("/sales-orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query("SELECT * FROM ecogreensales_orders WHERE id=$1", [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Order not found" });
+
+    const order = result.rows[0];
+    order.patient_address = JSON.parse(order.patient_address || "{}");
+    order.pharmacy = JSON.parse(order.pharmacy || "{}");
+    order.order_items = JSON.parse(order.order_items || "[]");
+
+    res.status(200).json(order);
+  } catch (err) {
+    console.error("Error fetching order:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 // =====================
 // Sales Invoice Webhook
