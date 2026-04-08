@@ -272,7 +272,6 @@ router.post("/item-master", async (req, res) => {
   }
 });
 router.post("/stock-details", async (req, res) => {
-  // Log the entire request body
   console.log("Incoming request body:", req.body);
 
   let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
@@ -299,17 +298,13 @@ router.post("/stock-details", async (req, res) => {
       storeId,
       prodCode,
       itemCodes: itemsArray,
-      apiKey
+      apiKey,
+      // Always include inputDateTime; send empty string if not provided
+      inputDateTime: inputDateTime && inputDateTime.trim() !== "" 
+        ? inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim() + (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
+        : ""
     };
 
-    // Only include inputDateTime if non-empty
-    if (inputDateTime && inputDateTime.trim() !== "") {
-      let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
-      if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
-      payload.inputDateTime = formattedDateTime;
-    }
-
-    // Log the payload being sent to vendor
     console.log("Payload for vendor API:", payload);
 
     // Fetch stock data from vendor
@@ -323,8 +318,6 @@ router.post("/stock-details", async (req, res) => {
     );
 
     const vendorData = await vendorResponse.json();
-
-    // Log vendor response
     console.log("Vendor response:", vendorData);
 
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
