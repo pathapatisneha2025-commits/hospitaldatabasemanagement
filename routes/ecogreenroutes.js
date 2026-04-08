@@ -272,10 +272,14 @@ router.post("/item-master", async (req, res) => {
   }
 });
 router.post("/stock-details", async (req, res) => {
+  // Log the entire request body
+  console.log("Incoming request body:", req.body);
+
   let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
 
   // Validate required fields (excluding inputDateTime)
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
+    console.log("Validation failed:", { c2Code, storeId, prodCode, itemCodes });
     return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode, itemCodes" });
   }
 
@@ -290,19 +294,23 @@ router.post("/stock-details", async (req, res) => {
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
     // Prepare payload for vendor API
-   const payload = {
-  c2Code,
-  storeId,
-  prodCode,
-  itemCodes: itemsArray,
-  apiKey
-};
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      itemCodes: itemsArray,
+      apiKey
+    };
 
-if (inputDateTime && inputDateTime.trim() !== "") {
-  let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
-  if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
-  payload.inputDateTime = formattedDateTime;
-}
+    // Only include inputDateTime if non-empty
+    if (inputDateTime && inputDateTime.trim() !== "") {
+      let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
+      if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
+      payload.inputDateTime = formattedDateTime;
+    }
+
+    // Log the payload being sent to vendor
+    console.log("Payload for vendor API:", payload);
 
     // Fetch stock data from vendor
     const vendorResponse = await fetch(
@@ -316,13 +324,16 @@ if (inputDateTime && inputDateTime.trim() !== "") {
 
     const vendorData = await vendorResponse.json();
 
+    // Log vendor response
+    console.log("Vendor response:", vendorData);
+
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
       return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
     }
 
     const stockData = vendorData.data;
 
-    // --- Pagination ---
+    // Pagination
     const start = (page - 1) * limit;
     const end = start + limit;
     const paginatedData = stockData.slice(start, end);
