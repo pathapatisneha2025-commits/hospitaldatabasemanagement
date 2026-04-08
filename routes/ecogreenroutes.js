@@ -274,39 +274,46 @@ router.post("/item-master", async (req, res) => {
 router.post("/stock-details", async (req, res) => {
   let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
 
-  // Validate required fields (no need for apiKey from client)
-  if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes) {
-    return res.status(400).json({ error: "All fields are required, including inputDateTime" });
+  // Validate required fields (excluding inputDateTime)
+  if (!c2Code || !storeId || !prodCode || !itemCodes) {
+    return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode, itemCodes" });
   }
 
-  // Ensure page & limit are numbers
   page = parseInt(page, 10) || 1;
   limit = parseInt(limit, 10) || 100;
 
   try {
-    // 🔐 Get valid token from backend
+    // 🔐 Get token automatically
     const apiKey = await getToken();
 
-    // Format inputDateTime
-    let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
-    if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
+    // Only format inputDateTime if provided
+    let formattedDateTime;
+    if (inputDateTime) {
+      formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
+      if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
+    }
 
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
+    // Prepare payload
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      itemCodes: itemsArray,
+      apiKey
+    };
+    if (formattedDateTime) payload.inputDateTime = formattedDateTime;
+
     // Fetch vendor data
-    const vendorUrl = "http://117.211.64.158:41000/ws_c2_services_get_stock_data";
-    const vendorResponse = await fetch(vendorUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        c2Code,
-        storeId,
-        prodCode,
-        inputDateTime: formattedDateTime,
-        itemCodes: itemsArray,
-        apiKey // ✅ Inject token here
-      })
-    });
+    const vendorResponse = await fetch(
+      "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
 
     const vendorData = await vendorResponse.json();
 
@@ -316,12 +323,12 @@ router.post("/stock-details", async (req, res) => {
 
     const stockData = vendorData.data;
 
-    // --- PAGINATION ---
+    // --- Pagination ---
     const start = (page - 1) * limit;
     const end = start + limit;
     const paginatedData = stockData.slice(start, end);
 
-    // Insert/update into DB only for current page
+    // Insert/update DB
     for (const batch of paginatedData) {
       try {
         await pool.query(
