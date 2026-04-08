@@ -290,20 +290,19 @@ router.post("/stock-details", async (req, res) => {
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
     // Prepare payload for vendor API
-    const payload = {
-      c2Code,
-      storeId,
-      prodCode,
-      itemCodes: itemsArray,
-      apiKey
-    };
+   const payload = {
+  c2Code,
+  storeId,
+  prodCode,
+  itemCodes: itemsArray,
+  apiKey
+};
 
-    // Only include inputDateTime if user provided it
-    if (inputDateTime) {
-      let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
-      if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
-      payload.inputDateTime = formattedDateTime;
-    }
+if (inputDateTime && inputDateTime.trim() !== "") {
+  let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
+  if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
+  payload.inputDateTime = formattedDateTime;
+}
 
     // Fetch stock data from vendor
     const vendorResponse = await fetch(
