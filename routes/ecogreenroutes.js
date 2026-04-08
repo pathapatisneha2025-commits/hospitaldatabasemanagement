@@ -796,16 +796,21 @@ router.post('/create_sales_order', async (req, res) => {
       return res.status(400).json({ message: 'Required fields missing: c2Code, storeId, prodCode' });
     }
 
+    // 🔐 Generate API token automatically if not provided
+    if (!salesOrderData.apiKey) {
+      salesOrderData.apiKey = await getToken();
+      console.log('Generated API Key:', salesOrderData.apiKey);
+    }
+
     console.log('=== Forwarding to ERP ===');
-   // Public IP accessible from Render
-const response = await fetch(
-  'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
-  {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(salesOrderData),
-  }
-);
+    const response = await fetch(
+      'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(salesOrderData),
+      }
+    );
 
     let data;
     try {
@@ -830,7 +835,6 @@ const response = await fetch(
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
 /* =========================================================
    ✅ 5.6 Create Sales Order (Webhook Push)
 ========================================================= */
