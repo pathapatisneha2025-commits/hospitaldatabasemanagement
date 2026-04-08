@@ -114,7 +114,7 @@ router.post("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime } = req.body;
 
   // ✅ apiKey removed from validation
-  if (!c2Code || !storeId || !prodCode || !inputDateTime) {
+  if (!c2Code || !storeId || !prodCode ) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
