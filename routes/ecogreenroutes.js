@@ -235,9 +235,24 @@ router.post("/item-master", async (req, res) => {
         await pool.query(query, values);
 
         insertedItems.push({
-          itemCode: item.itemCode,
-          itemName: item.itemName,
-          isInserted: true
+  itemCode: item.itemCode,
+  itemName: item.itemName,
+  itemShortName: item.itemShortName || '',
+  itemFullName: item.itemFullName || null,
+  brandCode: item.brandCode || '',
+  brandName: item.brandName || '',
+  categoryCode: item.categoryCode || '',
+  categoryName: item.categoryName || '',
+  contentCode: item.contentCode || '',
+  contentName: item.contentName || '',
+  packCode: item.packCode || '',
+  packName: item.packName || '',
+  itemQtyPerBox: item.itemQtyPerBox || 0,
+  itemAddedDate: item.itemAddedDate || null,
+  itemUpdatedDate: item.itemUpdatedDate || null,
+  hsnSacCode: item.hsnSacCode || '',
+  hsnSacName: item.hsnSacName || '',
+  isInserted: true 
         });
 
       } catch (itemErr) {
