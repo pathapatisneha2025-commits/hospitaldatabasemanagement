@@ -272,9 +272,10 @@ router.post("/item-master", async (req, res) => {
   }
 });
 router.post("/stock-details", async (req, res) => {
-  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, apiKey, page = 1, limit = 100 } = req.body;
+  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
 
-  if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes || !apiKey) {
+  // Validate required fields (no need for apiKey from client)
+  if (!c2Code || !storeId || !prodCode || !inputDateTime || !itemCodes) {
     return res.status(400).json({ error: "All fields are required, including inputDateTime" });
   }
 
@@ -283,6 +284,9 @@ router.post("/stock-details", async (req, res) => {
   limit = parseInt(limit, 10) || 100;
 
   try {
+    // 🔐 Get valid token from backend
+    const apiKey = await getToken();
+
     // Format inputDateTime
     let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
     if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
@@ -300,7 +304,7 @@ router.post("/stock-details", async (req, res) => {
         prodCode,
         inputDateTime: formattedDateTime,
         itemCodes: itemsArray,
-        apiKey
+        apiKey // ✅ Inject token here
       })
     });
 
