@@ -286,16 +286,10 @@ router.post("/stock-details", async (req, res) => {
     // 🔐 Get token automatically
     const apiKey = await getToken();
 
-    // Only format inputDateTime if provided
-    let formattedDateTime;
-    if (inputDateTime) {
-      formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
-      if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
-    }
-
+    // Ensure itemCodes is an array
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
-    // Prepare payload
+    // Prepare payload for vendor API
     const payload = {
       c2Code,
       storeId,
@@ -303,9 +297,15 @@ router.post("/stock-details", async (req, res) => {
       itemCodes: itemsArray,
       apiKey
     };
-    if (formattedDateTime) payload.inputDateTime = formattedDateTime;
 
-    // Fetch vendor data
+    // Only include inputDateTime if provided
+    if (inputDateTime) {
+      let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
+      if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
+      payload.inputDateTime = formattedDateTime;
+    }
+
+    // Fetch stock data from vendor
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
       {
