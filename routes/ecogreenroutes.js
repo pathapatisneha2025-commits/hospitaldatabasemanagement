@@ -298,7 +298,7 @@ router.post("/stock-details", async (req, res) => {
       apiKey
     };
 
-    // Only include inputDateTime if provided
+    // Only include inputDateTime if user provided it
     if (inputDateTime) {
       let formattedDateTime = inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim();
       if (!/:\d{2}$/.test(formattedDateTime)) formattedDateTime += ":00";
