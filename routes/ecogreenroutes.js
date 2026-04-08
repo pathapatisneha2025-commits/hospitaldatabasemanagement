@@ -494,19 +494,30 @@ router.get('/local-customers/:mobile', async (req, res) => {
    5.5 Push Purchase Orders
 ========================================================= */
 router.post("/purchase-orders", async (req, res) => {
-  const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.body;
+  let { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
 
-  if (!c2Code || !storeId || !prodCode || !apiKey || !fromDate || !toDate) {
-    return res.status(400).json({ error: "All fields are required" });
+  if (!c2Code || !storeId || !prodCode) {
+    return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode" });
   }
 
+  // fromDate and toDate are optional; can be empty strings if not provided
+  fromDate = fromDate || "";
+  toDate = toDate || "";
+
   try {
+    // 🔐 Generate API token automatically
+    const apiKey = await getToken();
+    console.log("Generated API Key:", apiKey);
+
+    const payload = { c2Code, storeId, prodCode, apiKey, fromDate, toDate };
+    console.log("Payload for vendor API:", payload);
+
     const fetchResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_po_fetch",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
+        body: JSON.stringify(payload)
       }
     );
 
@@ -517,10 +528,7 @@ router.post("/purchase-orders", async (req, res) => {
 
     const responseJson = await fetchResponse.json();
 
-    // Use the response object directly, wrap in array if needed
-    const purchaseOrders = Array.isArray(responseJson)
-      ? responseJson
-      : [responseJson];
+    const purchaseOrders = Array.isArray(responseJson) ? responseJson : [responseJson];
 
     for (const po of purchaseOrders) {
       const query = `
