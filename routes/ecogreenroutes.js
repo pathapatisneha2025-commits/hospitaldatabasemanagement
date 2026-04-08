@@ -14,50 +14,114 @@ router.get("/", (req, res) => {
 /* =========================================================
    ✅ 5.1 Generate Token
 ========================================================= */
-router.post("/generate-token", async (req, res) => {
-  const { c2Code, storeId, prodCode, securityKey } = req.body;
+// router.post("/generate-token", async (req, res) => {
 
-  if (!c2Code || !storeId || !prodCode || !securityKey) {
-    return res.status(400).json({ error: "Missing required params" });
-  }
+//   const { c2Code, storeId, prodCode, securityKey } = req.body;
 
+//   if (!c2Code || !storeId || !prodCode || !securityKey) {
+//     return res.status(400).json({ error: "Missing required params" });
+//   }
+
+//   try {
+//     const url = "http://117.211.64.158:41000/ws_c2_services_generate_token";
+
+//     // ✅ Use POST instead of GET because body is JSON
+//     const response = await fetch(url, {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//       },
+//       body: JSON.stringify({ c2Code, storeId, prodCode, securityKey }),
+//     });
+
+//     if (!response.ok) {
+//       // Try to read the text to log the exact error
+//       const text = await response.text();
+//       console.error("Vendor API returned:", text);
+//       throw new Error(`Vendor API failed with status ${response.status}`);
+//     }
+
+//     const data = await response.json();
+
+//     res.status(200).json(data);
+//   } catch (err) {
+//     console.error("Token Error:", err.message);
+//     res.status(500).json({ error: "Failed to generate token" });
+//   }
+// });
+
+let tokenData = {
+  apiKey: null,
+  expiry: null,
+};
+
+// 🔐 Fixed credentials (move to .env in real project)
+const credentials = {
+  c2Code: process.env.C2_CODE,
+  storeId: process.env.STORE_ID,
+  prodCode: process.env.PROD_CODE,
+  securityKey: process.env.SECURITY_KEY,
+};
+
+// 🔄 Generate Token Function
+const generateToken = async () => {
   try {
-    const url = "http://117.211.64.158:41000/ws_c2_services_generate_token";
+    console.log("🔄 Generating token...");
 
-    // ✅ Use POST instead of GET because body is JSON
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ c2Code, storeId, prodCode, securityKey }),
-    });
-
-    if (!response.ok) {
-      // Try to read the text to log the exact error
-      const text = await response.text();
-      console.error("Vendor API returned:", text);
-      throw new Error(`Vendor API failed with status ${response.status}`);
-    }
+    const response = await fetch(
+      "http://117.211.64.158:41000/ws_c2_services_generate_token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(credentials),
+      }
+    );
 
     const data = await response.json();
 
-    res.status(200).json(data);
+    if (data.code === "200" && data.apiKey) {
+      tokenData.apiKey = data.apiKey;
+
+      // ⏰ 3 hours expiry
+      tokenData.expiry = Date.now() + 3 * 60 * 60 * 1000;
+
+      console.log("✅ Token stored");
+    } else {
+      console.error("❌ Token generation failed", data);
+    }
   } catch (err) {
     console.error("Token Error:", err.message);
-    res.status(500).json({ error: "Failed to generate token" });
   }
-});
+};
+
+// 🚀 Run at server start
+generateToken();
+
+// 🔁 Auto refresh every 3 hours
+setInterval(generateToken, 3 * 60 * 60 * 1000);
+
+// 📌 Always get valid token
+const getToken = async () => {
+  if (!tokenData.apiKey || Date.now() > tokenData.expiry) {
+    await generateToken();
+  }
+  return tokenData.apiKey;
+};
 
 router.post("/item-master", async (req, res) => { 
-  const { c2Code, storeId, prodCode, inputDateTime, apiKey } = req.body;
+  const { c2Code, storeId, prodCode, inputDateTime } = req.body;
 
-  // Validate required fields
-  if (!c2Code || !storeId || !prodCode || !inputDateTime || !apiKey) {
+  // ✅ apiKey removed from validation
+  if (!c2Code || !storeId || !prodCode || !inputDateTime) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
+    // 🔥 GET TOKEN FROM BACKEND
+    const apiKey = await getToken();
+
     // Format inputDateTime
     let formattedDateTime = inputDateTime
       .replace('T', ' ')
@@ -69,19 +133,14 @@ router.post("/item-master", async (req, res) => {
       formattedDateTime += ":00";
     }
 
-    console.log("Formatted DateTime to send:", formattedDateTime);
-
-    // Vendor API URL (without query params, since we'll POST JSON)
     const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data`;
-    console.log("Vendor URL:", vendorUrl);
 
-    // POST body for ERP
     const postBody = {
       c2Code,
       storeId,
       prodCode,
       inputDateTime: formattedDateTime,
-      apiKey
+      apiKey // ✅ AUTO injected
     };
 
     const response = await fetch(vendorUrl, {
@@ -91,20 +150,17 @@ router.post("/item-master", async (req, res) => {
     });
 
     const text = await response.text();
-    console.log("Raw vendor response:", text);
 
     let vendorData;
     try {
       vendorData = JSON.parse(text);
     } catch (parseErr) {
-      console.error("Vendor returned invalid JSON:", text);
       return res.status(500).json({ 
         error: "Vendor returned invalid JSON", 
         rawResponse: text 
       });
     }
 
-    // Determine items array
     let itemsArray = [];
     if (Array.isArray(vendorData)) {
       itemsArray = vendorData;
@@ -115,21 +171,19 @@ router.post("/item-master", async (req, res) => {
     } else if (Array.isArray(vendorData.records)) {
       itemsArray = vendorData.records;
     } else if (vendorData.code && vendorData.message) {
-      // Vendor returned an error
       return res.status(400).json({
         error: "Vendor API error",
         vendorMessage: vendorData.message
       });
     } else {
-      console.error("Vendor response invalid format:", vendorData);
       return res.status(500).json({ 
         error: "Invalid data format received from vendor", 
         rawVendorData: vendorData 
       });
     }
 
-    // Insert/update items into local DB
     const insertedItems = [];
+
     for (const item of itemsArray) {
       try {
         const query = `
@@ -179,27 +233,15 @@ router.post("/item-master", async (req, res) => {
         ];
 
         await pool.query(query, values);
-insertedItems.push({
-  itemCode: item.itemCode,
-  itemName: item.itemName,
-  itemShortName: item.itemShortName || '',
-  itemFullName: item.itemFullName || null,
-  brandCode: item.brandCode || '',
-  brandName: item.brandName || '',
-  categoryCode: item.categoryCode || '',
-  categoryName: item.categoryName || '',
-  contentCode: item.contentCode || '',
-  contentName: item.contentName || '',
-  packCode: item.packCode || '',
-  packName: item.packName || '',
-  itemQtyPerBox: item.itemQtyPerBox || 0,
-  itemAddedDate: item.itemAddedDate || null,
-  itemUpdatedDate: item.itemUpdatedDate || null,
-  hsnSacCode: item.hsnSacCode || '',
-  hsnSacName: item.hsnSacName || '',
-  isInserted: true // optional flag to indicate newly inserted/updated
-});      } catch (itemErr) {
-        console.error(`Failed to insert/update item ${item.itemCode}:`, itemErr.message);
+
+        insertedItems.push({
+          itemCode: item.itemCode,
+          itemName: item.itemName,
+          isInserted: true
+        });
+
+      } catch (itemErr) {
+        console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
       }
     }
 
