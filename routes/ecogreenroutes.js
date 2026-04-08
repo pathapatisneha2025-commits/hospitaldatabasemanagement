@@ -373,56 +373,79 @@ router.post("/stock-details", async (req, res) => {
 });
 // POST /local-customers
 router.post("/local-customers", async (req, res) => {
-  const { c2Code, storeId, prodCode, apiKey, fromDate, toDate } = req.body;
+  const { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
+
+  if (!c2Code || !storeId || !prodCode) {
+    return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode" });
+  }
 
   try {
+    // 🔐 Generate token automatically
+    const apiKey = await getToken();
+    console.log("Generated API Key:", apiKey);
+
     const url = "http://117.211.64.158:41000/ws_c2_services_fetch_local_customer";
+
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      apiKey,
+      fromDate: fromDate || "", // optional
+      toDate: toDate || ""      // optional
+    };
+
+    console.log("Payload for vendor API:", payload);
 
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ c2Code, storeId, prodCode, apiKey, fromDate, toDate })
+      body: JSON.stringify(payload)
     });
 
     const customers = await response.json();
+    console.log("Vendor response:", customers);
 
     // Save to DB
     for (const cust of customers) {
-      await pool.query(
-        `INSERT INTO local_customers (
-          brcode, lc_code, lc_name, added_date, age, gender,
-          address1, address2, address3, city, pin, mobile_no,
-          mail_id, parent_code, parent_name
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-        ON CONFLICT (lc_code) DO UPDATE SET
-          lc_name = EXCLUDED.lc_name,
-          city = EXCLUDED.city,
-          mobile_no = EXCLUDED.mobile_no`,
-        [
-          cust.brcode,
-          cust.lcCode,
-          cust.lcName,
-          cust.addedDate,
-          cust.age,
-          cust.gender,
-          cust.address1,
-          cust.address2,
-          cust.address3,
-          cust.city,
-          cust.pin,
-          cust.mobileNo,
-          cust.mailId,
-          cust.parentCode,
-          cust.parentName
-        ]
-      );
+      try {
+        await pool.query(
+          `INSERT INTO local_customers (
+            brcode, lc_code, lc_name, added_date, age, gender,
+            address1, address2, address3, city, pin, mobile_no,
+            mail_id, parent_code, parent_name
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          ON CONFLICT (lc_code) DO UPDATE SET
+            lc_name = EXCLUDED.lc_name,
+            city = EXCLUDED.city,
+            mobile_no = EXCLUDED.mobile_no`,
+          [
+            cust.brcode,
+            cust.lcCode,
+            cust.lcName,
+            cust.addedDate,
+            cust.age,
+            cust.gender,
+            cust.address1,
+            cust.address2,
+            cust.address3,
+            cust.city,
+            cust.pin,
+            cust.mobileNo,
+            cust.mailId,
+            cust.parentCode,
+            cust.parentName
+          ]
+        );
+      } catch (err) {
+        console.error("DB INSERT ERROR:", err.message);
+      }
     }
 
-    // ✅ RETURN ARRAY BACK TO FRONTEND
     res.json(customers);
 
   } catch (err) {
-    console.error(err);
+    console.error("Local Customers Error:", err.message);
     res.status(500).json({ error: "Failed to fetch customers" });
   }
 });
