@@ -987,64 +987,73 @@ router.get("/sales-invoice/all", async (req, res) => {
   }
 });
 router.post('/sales-order-status', async (req, res) => {
-  const { orderNo, apiKey } = req.body;
+  const { orderNo } = req.body;
 
-  if (!orderNo || !apiKey) {
-    return res.status(400).json({ error: 'Missing orderNo or apiKey' });
+  if (!orderNo) {
+    return res.status(400).json({ error: 'Missing orderNo' });
   }
 
-  const client = await pool.connect();
-
   try {
-    const url = `http://117.211.64.158:41000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
+    // 🔐 Always generate API token internally
+    const apiKey = await getToken();
+    console.log('Generated API Key:', apiKey);
 
-    const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+    const client = await pool.connect();
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch order status from remote API' });
+    try {
+      const url = `http://117.211.64.158:41000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
+
+      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'Failed to fetch order status from remote API' });
+      }
+
+      const data = await response.json();
+      if (!data.code) data.code = "200";
+
+      // Begin transaction
+      await client.query('BEGIN');
+
+      // Insert or update order with JSONB invoices
+      await client.query(
+        `INSERT INTO ecogreensales_order_status
+          (order_id, cust_code, from_gst_no, to_gst_no, customer_type, doctor_name, invoices)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (order_id) DO UPDATE 
+         SET cust_code = EXCLUDED.cust_code,
+             from_gst_no = EXCLUDED.from_gst_no,
+             to_gst_no = EXCLUDED.to_gst_no,
+             customer_type = EXCLUDED.customer_type,
+             doctor_name = EXCLUDED.doctor_name,
+             invoices = EXCLUDED.invoices`,
+        [
+          data.orderId,
+          data.custCode,
+          data.fromGstNo,
+          data.toGstNo,
+          data.customerType,
+          data.doctorName,
+          JSON.stringify(data.invoices)
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      // Return the original API response
+      res.json(data);
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('Fetch/Insert Error:', err);
+      res.status(500).json({ error: 'Failed to fetch or save order status' });
+    } finally {
+      client.release();
     }
 
-    const data = await response.json();
-    if (!data.code) data.code = "200";
-
-    // Begin transaction
-    await client.query('BEGIN');
-
-    // Insert or update order with JSONB invoices
-    await client.query(
-      `INSERT INTO ecogreensales_order_status
-        ( order_id, cust_code, from_gst_no, to_gst_no, customer_type, doctor_name, invoices)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (order_id) DO UPDATE 
-       SET cust_code = EXCLUDED.cust_code,
-           from_gst_no = EXCLUDED.from_gst_no,
-           to_gst_no = EXCLUDED.to_gst_no,
-           customer_type = EXCLUDED.customer_type,
-           doctor_name = EXCLUDED.doctor_name,
-           invoices = EXCLUDED.invoices`,
-      [
-        
-        data.orderId,
-        data.custCode,
-        data.fromGstNo,
-        data.toGstNo,
-        data.customerType,
-        data.doctorName,
-        JSON.stringify(data.invoices)
-      ]
-    );
-
-    await client.query('COMMIT');
-
-    // Return the original API response
-    res.json(data);
-
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Fetch/Insert Error:', err);
-    res.status(500).json({ error: 'Failed to fetch or save order status' });
-  } finally {
-    client.release();
+    console.error('API Key Generation Error:', err);
+    res.status(500).json({ error: 'Failed to generate API Key' });
   }
 });
 
