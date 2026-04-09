@@ -386,7 +386,7 @@ router.post("/verify-otp", async (req, res) => {
     const { rows } = await pool.query(
       `SELECT o.status, p.customer_otp
        FROM orders o
-       JOIN patient p ON o.patient_id = p.id
+       JOIN patients p ON o.patient_id = p.id
        WHERE o.id = $1`,
       [orderId]
     );
