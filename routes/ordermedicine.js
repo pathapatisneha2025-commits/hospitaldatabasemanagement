@@ -374,7 +374,7 @@ router.post("/collect-payment", async (req, res) => {
 });
 
 // POST /order-medicine/verify-otp
-router.post("/order-medicine/verify-otp", async (req, res) => {
+router.post("/verify-otp", async (req, res) => {
   const { orderId, otp } = req.body;
 
   if (!orderId || !otp) {
