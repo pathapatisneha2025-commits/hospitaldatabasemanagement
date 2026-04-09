@@ -113,16 +113,13 @@ const getToken = async () => {
 router.post("/item-master", async (req, res) => { 
   const { c2Code, storeId, prodCode, inputDateTime } = req.body;
 
-  // ✅ apiKey removed from validation
-  if (!c2Code || !storeId || !prodCode ) {
+  if (!c2Code || !storeId || !prodCode) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
-    // 🔥 GET TOKEN FROM BACKEND
     const apiKey = await getToken();
 
-    // Format inputDateTime
     let formattedDateTime = inputDateTime
       .replace('T', ' ')
       .replace(/\s+/g, ' ')
@@ -134,14 +131,7 @@ router.post("/item-master", async (req, res) => {
     }
 
     const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data`;
-
-    const postBody = {
-      c2Code,
-      storeId,
-      prodCode,
-      inputDateTime: formattedDateTime,
-      apiKey // ✅ AUTO injected
-    };
+    const postBody = { c2Code, storeId, prodCode, inputDateTime: formattedDateTime, apiKey };
 
     const response = await fetch(vendorUrl, {
       method: "POST",
@@ -150,37 +140,18 @@ router.post("/item-master", async (req, res) => {
     });
 
     const text = await response.text();
-
     let vendorData;
-    try {
-      vendorData = JSON.parse(text);
-    } catch (parseErr) {
-      return res.status(500).json({ 
-        error: "Vendor returned invalid JSON", 
-        rawResponse: text 
-      });
-    }
+    try { vendorData = JSON.parse(text); } 
+    catch { return res.status(500).json({ error: "Vendor returned invalid JSON", rawResponse: text }); }
 
     let itemsArray = [];
-    if (Array.isArray(vendorData)) {
-      itemsArray = vendorData;
-    } else if (Array.isArray(vendorData.data)) {
-      itemsArray = vendorData.data;
-    } else if (Array.isArray(vendorData.items)) {
-      itemsArray = vendorData.items;
-    } else if (Array.isArray(vendorData.records)) {
-      itemsArray = vendorData.records;
-    } else if (vendorData.code && vendorData.message) {
-      return res.status(400).json({
-        error: "Vendor API error",
-        vendorMessage: vendorData.message
-      });
-    } else {
-      return res.status(500).json({ 
-        error: "Invalid data format received from vendor", 
-        rawVendorData: vendorData 
-      });
-    }
+    if (Array.isArray(vendorData)) itemsArray = vendorData;
+    else if (Array.isArray(vendorData.data)) itemsArray = vendorData.data;
+    else if (Array.isArray(vendorData.items)) itemsArray = vendorData.items;
+    else if (Array.isArray(vendorData.records)) itemsArray = vendorData.records;
+    else if (vendorData.code && vendorData.message) {
+      return res.status(400).json({ error: "Vendor API error", vendorMessage: vendorData.message });
+    } else return res.status(500).json({ error: "Invalid data format received", rawVendorData: vendorData });
 
     const insertedItems = [];
 
@@ -192,8 +163,16 @@ router.post("/item-master", async (req, res) => {
             brand_code, brand_name, category_code, category_name,
             content_code, content_name, pack_code, pack_name,
             item_qty_per_box, item_added_date, item_updated_date,
-            hsn_sac_code, hsn_sac_name
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+            hsn_sac_code, hsn_sac_name,
+            minSaleQty, note, mfacName, mfacCode,
+            packTypCode, packTypName, scheduleCode, scheduleName,
+            categoryHeadCode, categoryHeadName,
+            categoryClassCode, categoryClassName,
+            allowDisc, gstCode, parentItemCode, parentItemName
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+            $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32
+          )
           ON CONFLICT (item_code) DO UPDATE SET
             item_name = EXCLUDED.item_name,
             item_short_name = EXCLUDED.item_short_name,
@@ -209,51 +188,41 @@ router.post("/item-master", async (req, res) => {
             item_qty_per_box = EXCLUDED.item_qty_per_box,
             item_updated_date = EXCLUDED.item_updated_date,
             hsn_sac_code = EXCLUDED.hsn_sac_code,
-            hsn_sac_name = EXCLUDED.hsn_sac_name
+            hsn_sac_name = EXCLUDED.hsn_sac_name,
+            minSaleQty = EXCLUDED.minSaleQty,
+            note = EXCLUDED.note,
+            mfacName = EXCLUDED.mfacName,
+            mfacCode = EXCLUDED.mfacCode,
+            packTypCode = EXCLUDED.packTypCode,
+            packTypName = EXCLUDED.packTypName,
+            scheduleCode = EXCLUDED.scheduleCode,
+            scheduleName = EXCLUDED.scheduleName,
+            categoryHeadCode = EXCLUDED.categoryHeadCode,
+            categoryHeadName = EXCLUDED.categoryHeadName,
+            categoryClassCode = EXCLUDED.categoryClassCode,
+            categoryClassName = EXCLUDED.categoryClassName,
+            allowDisc = EXCLUDED.allowDisc,
+            gstCode = EXCLUDED.gstCode,
+            parentItemCode = EXCLUDED.parentItemCode,
+            parentItemName = EXCLUDED.parentItemName
         `;
 
         const values = [
-          item.itemCode,
-          item.itemName,
-          item.itemShortName || null,
-          item.itemFullName || null,
-          item.brandCode || null,
-          item.brandName || null,
-          item.categoryCode || null,
-          item.categoryName || null,
-          item.contentCode || null,
-          item.contentName || null,
-          item.packCode || null,
-          item.packName || null,
-          item.itemQtyPerBox || 0,
-          item.itemAddedDate || null,
-          item.itemUpdatedDate || null,
-          item.hsnSacCode || null,
-          item.hsnSacName || null
+          item.itemCode, item.itemName, item.itemShortName || null, item.itemFullName || null,
+          item.brandCode || null, item.brandName || null, item.categoryCode || null, item.categoryName || null,
+          item.contentCode || null, item.contentName || null, item.packCode || null, item.packName || null,
+          item.itemQtyPerBox || 0, item.itemAddedDate || null, item.itemUpdatedDate || null,
+          item.hsnSacCode || null, item.hsnSacName || null,
+          item.minSaleQty || 1, item.note || null, item.mfacName || '-', item.mfacCode || '-',
+          item.packTypCode || '-', item.packTypName || '-', item.scheduleCode || '-', item.scheduleName || '-',
+          item.categoryHeadCode || 'CH0005', item.categoryHeadName || 'MEDICINE',
+          item.categoryClassCode || 'CAT005', item.categoryClassName || 'MEDICINE',
+          item.allowDisc || 'YES', item.gstCode || '00', item.parentItemCode || null, item.parentItemName || null
         ];
 
         await pool.query(query, values);
 
-        insertedItems.push({
-  itemCode: item.itemCode,
-  itemName: item.itemName,
-  itemShortName: item.itemShortName || '',
-  itemFullName: item.itemFullName || null,
-  brandCode: item.brandCode || '',
-  brandName: item.brandName || '',
-  categoryCode: item.categoryCode || '',
-  categoryName: item.categoryName || '',
-  contentCode: item.contentCode || '',
-  contentName: item.contentName || '',
-  packCode: item.packCode || '',
-  packName: item.packName || '',
-  itemQtyPerBox: item.itemQtyPerBox || 0,
-  itemAddedDate: item.itemAddedDate || null,
-  itemUpdatedDate: item.itemUpdatedDate || null,
-  hsnSacCode: item.hsnSacCode || '',
-  hsnSacName: item.hsnSacName || '',
-  isInserted: true 
-        });
+        insertedItems.push({ ...item, isInserted: true });
 
       } catch (itemErr) {
         console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
@@ -276,7 +245,6 @@ router.post("/stock-details", async (req, res) => {
 
   let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
 
-  // Validate required fields (excluding inputDateTime)
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
     console.log("Validation failed:", { c2Code, storeId, prodCode, itemCodes });
     return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode, itemCodes" });
@@ -286,35 +254,19 @@ router.post("/stock-details", async (req, res) => {
   limit = parseInt(limit, 10) || 100;
 
   try {
-    // 🔐 Get token automatically
     const apiKey = await getToken();
-
-    // Ensure itemCodes is an array
     const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
 
-    // Prepare payload for vendor API
-    const payload = {
-      c2Code,
-      storeId,
-      prodCode,
-      itemCodes: itemsArray,
-      apiKey,
-      // Always include inputDateTime; send empty string if not provided
-      inputDateTime: inputDateTime && inputDateTime.trim() !== "" 
-        ? inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim() + (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
-        : ""
-    };
+    const formattedDateTime = inputDateTime && inputDateTime.trim() !== ""
+      ? inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim() + (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
+      : "";
 
+    const payload = { c2Code, storeId, prodCode, itemCodes: itemsArray, apiKey, inputDateTime: formattedDateTime };
     console.log("Payload for vendor API:", payload);
 
-    // Fetch stock data from vendor
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
     );
 
     const vendorData = await vendorResponse.json();
@@ -326,38 +278,38 @@ router.post("/stock-details", async (req, res) => {
 
     const stockData = vendorData.data;
 
-    // Pagination
     const start = (page - 1) * limit;
     const end = start + limit;
     const paginatedData = stockData.slice(start, end);
 
-    // Insert/update DB
     for (const batch of paginatedData) {
       try {
         await pool.query(
           `INSERT INTO stock_batches 
-            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date,mrp,mrpbox,saleRate)
+            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, saleRate)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
            ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
              item_name = EXCLUDED.item_name,
              item_qty_per_box = EXCLUDED.item_qty_per_box,
              stock_bal_qty = EXCLUDED.stock_bal_qty,
-             expiry_date = EXCLUDED.expiry_date
-              mrp=EXCLUDED.mrp
-              mrpbox=EXCLUDED.mrpbox
-saleRate=EXCLUDED.saleRate`,
-             mrp
+             expiry_date = EXCLUDED.expiry_date,
+             mrp = EXCLUDED.mrp,
+             mrpbox = EXCLUDED.mrpbox,
+             saleRate = EXCLUDED.saleRate`,
           [
             batch.c_item_code,
             batch.itemName,
             batch.itemQtyPerBox,
             batch.batchNo,
             batch.stockBalQty,
-            batch.expiryDate
+            batch.expiryDate,
+            batch.mrp || 0,
+            batch.mrpbox || 0,
+            batch.saleRate || 0
           ]
         );
       } catch (err) {
-        console.error("DB INSERT ERROR:", err.message);
+        console.error(`DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`, err.message);
       }
     }
 
@@ -541,12 +493,10 @@ router.post("/purchase-orders", async (req, res) => {
     return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode" });
   }
 
-  // fromDate and toDate are optional; can be empty strings if not provided
   fromDate = fromDate || "";
   toDate = toDate || "";
 
   try {
-    // 🔐 Generate API token automatically
     const apiKey = await getToken();
     console.log("Generated API Key:", apiKey);
 
@@ -568,23 +518,35 @@ router.post("/purchase-orders", async (req, res) => {
     }
 
     const responseJson = await fetchResponse.json();
-
     const purchaseOrders = Array.isArray(responseJson) ? responseJson : [responseJson];
 
     for (const po of purchaseOrders) {
+      // Set default audit values if missing
+      const createDateTime = po.createDateTime || new Date();
+      const createUser = po.createUser || "SYSTEM";
+      const modifyDateTime = po.modifyDateTime || new Date();
+      const modifiedUser = po.modifiedUser || "SYSTEM";
+      const remarks = po.remarks || "";
+
       const query = `
         INSERT INTO ecogreenpurchase_orders (
           br_code, year, prefix, srno,
           custcode, custname, refcode, refname,
-          total, details
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          total, details,
+          createDateTime, createUser, modifyDateTime, modifiedUser, remarks
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         ON CONFLICT (br_code, year, prefix, srno) DO UPDATE SET
           custcode = EXCLUDED.custcode,
           custname = EXCLUDED.custname,
           refcode = EXCLUDED.refcode,
           refname = EXCLUDED.refname,
           total = EXCLUDED.total,
-          details = EXCLUDED.details
+          details = EXCLUDED.details,
+          createDateTime = EXCLUDED.createDateTime,
+          createUser = EXCLUDED.createUser,
+          modifyDateTime = EXCLUDED.modifyDateTime,
+          modifiedUser = EXCLUDED.modifiedUser,
+          remarks = EXCLUDED.remarks
       `;
 
       const values = [
@@ -597,10 +559,19 @@ router.post("/purchase-orders", async (req, res) => {
         po.refcode || null,
         po.refname || null,
         po.total,
-        JSON.stringify(po.details)
+        JSON.stringify(po.details),
+        createDateTime,
+        createUser,
+        modifyDateTime,
+        modifiedUser,
+        remarks
       ];
 
-      await pool.query(query, values);
+      try {
+        await pool.query(query, values);
+      } catch (dbErr) {
+        console.error(`DB INSERT ERROR for ${po.br_code}-${po.prefix}-${po.srno}:`, dbErr.message);
+      }
     }
 
     res.status(200).json({
