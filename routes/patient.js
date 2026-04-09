@@ -172,7 +172,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = `SELECT id, first_name, last_name, gender, phone_number, email 
+    const query = `SELECT id, first_name, last_name, gender, phone_number, email ,customer_otp
                    FROM patients WHERE id = $1`;
     const result = await db.query(query, [id]);
 
