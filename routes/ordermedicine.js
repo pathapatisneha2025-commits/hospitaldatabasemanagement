@@ -372,6 +372,48 @@ router.post("/collect-payment", async (req, res) => {
     res.status(500).json({ error: "Server error while updating order" });
   }
 });
+
+// POST /order-medicine/verify-otp
+router.post("/order-medicine/verify-otp", async (req, res) => {
+  const { orderId, otp } = req.body;
+
+  if (!orderId || !otp) {
+    return res.status(400).json({ success: false, error: "Order ID and OTP are required" });
+  }
+
+  try {
+    // Fetch order with patient OTP
+    const { rows } = await pool.query(
+      `SELECT o.status, p.customer_otp
+       FROM orders o
+       JOIN patient p ON o.patient_id = p.id
+       WHERE o.id = $1`,
+      [orderId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: "Order not found" });
+    }
+
+    const order = rows[0];
+
+    if (order.status === "delivered") {
+      return res.status(400).json({ success: false, error: "Order already delivered" });
+    }
+
+    if (order.customer_otp !== otp) {
+      return res.status(400).json({ success: false, error: "Invalid OTP" });
+    }
+
+    // Mark order as delivered
+    await pool.query("UPDATE orders SET status='delivered' WHERE id=$1", [orderId]);
+
+    res.json({ success: true, message: "Order marked as delivered ✅" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 router.post("/mark-delivered", async (req, res) => {
   try {
     const { orderId } = req.body;
