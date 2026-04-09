@@ -10,33 +10,80 @@ const router = express.Router();
 // REGISTER API
 router.post("/register", async (req, res) => {
   try {
-    const { first_name, last_name, gender, phone_number, email, password, confirm_password } = req.body;
+    const {
+      first_name,
+      last_name,
+      gender,
+      phone_number,
+      email,
+      password,
+      confirm_password
+    } = req.body;
 
+    // Check password match
     if (password !== confirm_password) {
-      return res.status(400).json({ message: "Passwords do not match" });
+      return res.status(400).json({
+        message: "Passwords do not match"
+      });
     }
+
+    // Generate unique customer OTP/PIN during registration
+    // This will stay fixed for that user
+    const customer_otp = Math.floor(
+      100000 + Math.random() * 900000
+    );
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert + return new patient info
+    // Insert patient with OTP
     const query = `
-      INSERT INTO patients (first_name, last_name, gender, phone_number, email, password, confirm_password)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, first_name, last_name, gender, phone_number, email;
+      INSERT INTO patients (
+        first_name,
+        last_name,
+        gender,
+        phone_number,
+        email,
+        password,
+        confirm_password,
+        customer_otp
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING 
+        id,
+        first_name,
+        last_name,
+        gender,
+        phone_number,
+        email,
+        customer_otp;
     `;
 
-    const values = [first_name, last_name, gender, phone_number, email, hashedPassword, hashedPassword];
+    const values = [
+      first_name,
+      last_name,
+      gender,
+      phone_number,
+      email,
+      hashedPassword,
+      hashedPassword,
+      customer_otp
+    ];
+
     const result = await db.query(query, values);
 
     const newPatient = result.rows[0];
 
     res.status(201).json({
       message: "Patient registered successfully",
-      patient: newPatient
+      patient: newPatient,
+      otp: customer_otp // remove in production
     });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
