@@ -371,6 +371,20 @@ router.post("/stock-details", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch or store stock details" });
   }
 });
+router.get("/stock-details/all", async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT * FROM stock_batches ORDER BY expiry_date ASC");
+    res.status(200).json({
+      message: "All stock batches fetched successfully",
+      totalItems: rows.length,
+      stockItems: rows,
+    });
+  } catch (err) {
+    console.error("Error fetching stock batches:", err.message);
+    res.status(500).json({ error: "Failed to fetch stock batches" });
+  }
+});
+
 // POST /local-customers
 router.post("/local-customers", async (req, res) => {
   const { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
