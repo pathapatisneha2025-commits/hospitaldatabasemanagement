@@ -110,7 +110,7 @@ const getToken = async () => {
   return tokenData.apiKey;
 };
 
-router.post("/item-master", async (req, res) => {
+router.post("/item-master", async (req, res) => { 
   const { c2Code, storeId, prodCode, inputDateTime } = req.body;
 
   if (!c2Code || !storeId || !prodCode) {
@@ -121,9 +121,9 @@ router.post("/item-master", async (req, res) => {
     const apiKey = await getToken();
 
     let formattedDateTime = inputDateTime
-      .replace("T", " ")
-      .replace(/\s+/g, " ")
-      .replace(/\s*:\s*/g, ":")
+      .replace('T', ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*:\s*/g, ':')
       .trim();
 
     if (!/:\d{2}$/.test(formattedDateTime)) {
@@ -131,51 +131,27 @@ router.post("/item-master", async (req, res) => {
     }
 
     const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data`;
+    const postBody = { c2Code, storeId, prodCode, inputDateTime: formattedDateTime, apiKey };
 
     const response = await fetch(vendorUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        c2Code,
-        storeId,
-        prodCode,
-        inputDateTime: formattedDateTime,
-        apiKey,
-      }),
+      body: JSON.stringify(postBody)
     });
 
     const text = await response.text();
-
     let vendorData;
-    try {
-      vendorData = JSON.parse(text);
-    } catch {
-      return res.status(500).json({
-        error: "Vendor returned invalid JSON",
-        rawResponse: text,
-      });
-    }
+    try { vendorData = JSON.parse(text); } 
+    catch { return res.status(500).json({ error: "Vendor returned invalid JSON", rawResponse: text }); }
 
     let itemsArray = [];
-
     if (Array.isArray(vendorData)) itemsArray = vendorData;
     else if (Array.isArray(vendorData.data)) itemsArray = vendorData.data;
     else if (Array.isArray(vendorData.items)) itemsArray = vendorData.items;
     else if (Array.isArray(vendorData.records)) itemsArray = vendorData.records;
-    else if (vendorData.message) {
-      return res.status(400).json({
-        error: "Vendor API error",
-        vendorMessage: vendorData.message,
-      });
-    } else {
-      return res.status(500).json({
-        error: "Invalid data format",
-        rawVendorData: vendorData,
-      });
-    }
-
-    // 🔥 CLEAN FUNCTION (IMPORTANT)
-    const clean = (v) => (v === "-" || v === "" ? null : v);
+    else if (vendorData.code && vendorData.message) {
+      return res.status(400).json({ error: "Vendor API error", vendorMessage: vendorData.message });
+    } else return res.status(500).json({ error: "Invalid data format received", rawVendorData: vendorData });
 
     const insertedItems = [];
 
@@ -193,12 +169,9 @@ router.post("/item-master", async (req, res) => {
             categoryHeadCode, categoryHeadName,
             categoryClassCode, categoryClassName,
             allowDisc, gstCode, parentItemCode, parentItemName
-          )
-          VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,
-            $9,$10,$11,$12,$13,$14,$15,$16,
-            $17,$18,$19,$20,$21,$22,$23,$24,
-            $25,$26,$27,$28,$29,$30,$31,$32
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+            $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33
           )
           ON CONFLICT (item_code) DO UPDATE SET
             item_name = EXCLUDED.item_name,
@@ -235,74 +208,36 @@ router.post("/item-master", async (req, res) => {
         `;
 
         const values = [
-          item.itemCode,
-          item.itemName,
-          item.itemShortName || null,
-          item.itemFullName || null,
-
-          clean(item.brandCode),
-          clean(item.brandName),
-          clean(item.categoryCode),
-          clean(item.categoryName),
-
-          clean(item.contentCode),
-          clean(item.contentName),
-          clean(item.packCode),
-          clean(item.packName),
-
-          item.itemQtyPerBox || 0,
-          item.itemAddedDate || null,
-          item.itemUpdatedDate || null,
-
-          item.hsnSacCode || null,
-          item.hsnSacName || null,
-
-          item.minSaleQty || 1,
-          item.note || null,
-
-          clean(item.mfacName),
-          clean(item.mfacCode),
-
-          clean(item.packTypCode),
-          clean(item.packTypName),
-
-          clean(item.scheduleCode),
-          clean(item.scheduleName),
-
-          clean(item.categoryHeadCode),
-          clean(item.categoryHeadName),
-
-          clean(item.categoryClassCode),
-          clean(item.categoryClassName),
-
-          item.allowDisc || "YES",
-          item.gstCode || null,
-
-          item.parentItemCode || null,
-          item.parentItemName || null,
+          item.itemCode, item.itemName, item.itemShortName || null, item.itemFullName || null,
+          item.brandCode || null, item.brandName || null, item.categoryCode || null, item.categoryName || null,
+          item.contentCode || null, item.contentName || null, item.packCode || null, item.packName || null,
+          item.itemQtyPerBox || 0, item.itemAddedDate || null, item.itemUpdatedDate || null,
+          item.hsnSacCode || null, item.hsnSacName || null,
+          item.minSaleQty || 1, item.note || null, item.mfacName || '-', item.mfacCode || '-',
+          item.packTypCode || '-', item.packTypName || '-', item.scheduleCode || '-', item.scheduleName || '-',
+          item.categoryHeadCode || 'CH0005', item.categoryHeadName || 'MEDICINE',
+          item.categoryClassCode || 'CAT005', item.categoryClassName || 'MEDICINE',
+          item.allowDisc || 'YES', item.gstCode || '00', item.parentItemCode || null, item.parentItemName || null
         ];
 
         await pool.query(query, values);
 
-        insertedItems.push({
-          itemCode: item.itemCode,
-          status: "inserted/updated",
-        });
-      } catch (err) {
-        console.error("Insert failed:", item.itemCode, err.message);
+        insertedItems.push({ ...item, isInserted: true });
+
+      } catch (itemErr) {
+        console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
       }
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Item master synced successfully",
       totalItems: itemsArray.length,
-      insertedCount: insertedItems.length,
+      insertedItems
     });
+
   } catch (err) {
     console.error("Item Master Error:", err.message);
-    return res.status(500).json({
-      error: "Failed to fetch or store item master",
-    });
+    res.status(500).json({ error: "Failed to fetch or store item master" });
   }
 });
 router.post("/stock-details", async (req, res) => {
