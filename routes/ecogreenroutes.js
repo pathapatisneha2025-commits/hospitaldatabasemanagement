@@ -499,6 +499,63 @@ router.put(
     }
   }
 );
+
+router.get("/stock-details/customer", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        id,
+        c_item_code,
+        item_name,
+        stock_bal_qty,
+        mrp,
+        sale_rate,
+        expiry_date,
+        image,
+        description
+      FROM stock_batches
+      ORDER BY item_name ASC
+    `);
+
+    const formatted = result.rows.map((item) => {
+      const mrp = parseFloat(item.mrp || 0);
+      const sale = parseFloat(item.sale_rate || 0);
+
+      const discount = mrp > sale ? mrp - sale : 0;
+      const discountPercent =
+        mrp > 0 ? ((discount / mrp) * 100).toFixed(2) : "0";
+
+      return {
+        id: item.id,
+        c_item_code: item.c_item_code,
+        item_name: item.item_name,
+
+        stock_bal_qty: item.stock_bal_qty,
+
+        mrp,
+        sale_rate: sale,
+
+        discount: Number(discount.toFixed(2)),
+        discount_percent: discountPercent,
+
+        expiry_date: item.expiry_date,
+        image: item.image,
+        description: item.description,
+
+        // 👉 useful UI flag
+        is_out_of_stock: Number(item.stock_bal_qty) <= 0,
+      };
+    });
+
+    res.json({
+      success: true,
+      products: formatted,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // POST /local-customers
 router.post("/local-customers", async (req, res) => {
   const { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
