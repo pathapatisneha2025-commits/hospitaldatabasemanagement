@@ -286,7 +286,7 @@ router.post("/stock-details", async (req, res) => {
       try {
         await pool.query(
           `INSERT INTO stock_batches 
-            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, saleRate)
+            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
            ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
              item_name = EXCLUDED.item_name,
@@ -295,7 +295,7 @@ router.post("/stock-details", async (req, res) => {
              expiry_date = EXCLUDED.expiry_date,
              mrp = EXCLUDED.mrp,
              mrpbox = EXCLUDED.mrpbox,
-             saleRate = EXCLUDED.saleRate`,
+             sale_rate = EXCLUDED.sale_rate`,
           [
             batch.c_item_code,
             batch.itemName,
