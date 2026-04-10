@@ -3,7 +3,26 @@ const axios = require("axios");
 const pool = require("../db"); // ✅ PostgreSQL pool
 
 const router = express.Router();
+const multer = require("multer");
+const path = require("path");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
+/* ---------------- CLOUDINARY STORAGE ---------------- */
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "ecogreen_stock",
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name;
+      return Date.now() + "-" + nameWithoutExt;
+    },
+  },
+});
+
+const upload = multer({ storage });
 /* =========================================================
    ✅ Test Route
 ========================================================= */
@@ -410,7 +429,82 @@ router.get("/stock-details/all", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch stock batches" });
   }
 });
+router.put(
+  "/stock-details/edit/:id",
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
+      const {
+        c_item_code,
+        item_name,
+        item_qty_per_box,
+        batch_no,
+        stock_bal_qty,
+        expiry_date,
+        mrp,
+        mrpbox,
+        sale_rate,
+        description,
+      } = req.body;
+
+      const newImageUrl = req.file ? req.file.path : null;
+
+      /* ---------------- GET OLD IMAGE (for safe update) ---------------- */
+      const oldData = await pool.query(
+        `SELECT image FROM stock_batches WHERE id = $1`,
+        [id]
+      );
+
+      if (oldData.rowCount === 0) {
+        return res.status(404).json({ error: "Stock not found" });
+      }
+
+      const oldImage = oldData.rows[0].image;
+
+      const finalImage = newImageUrl || oldImage;
+
+      /* ---------------- UPDATE QUERY ---------------- */
+      const query = `
+        UPDATE stock_batches
+        SET
+          c_item_code = $1,
+          item_name = $2,
+          item_qty_per_box = $3,
+          batch_no = $4,
+          stock_bal_qty = $5,
+          expiry_date = $6,
+          mrp = $7,
+          mrpbox = $8,
+          sale_rate = $9,
+          image = $10,
+          description = $11
+        WHERE id = $12
+      `;
+
+      await pool.query(query, [
+        c_item_code,
+        item_name,
+        item_qty_per_box,
+        batch_no,
+        stock_bal_qty,
+        expiry_date,
+        mrp,
+        mrpbox,
+        sale_rate,
+        finalImage,
+        description,
+        id,
+      ]);
+
+      res.json({ success: true, message: "Stock updated successfully" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
 // POST /local-customers
 router.post("/local-customers", async (req, res) => {
   const { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
