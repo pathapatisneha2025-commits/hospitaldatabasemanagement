@@ -222,8 +222,55 @@ router.post("/item-master", async (req, res) => {
 
         await pool.query(query, values);
 
-        insertedItems.push({ ...item, isInserted: true });
+insertedItems.push({
+  itemCode: item.itemCode,
+  itemName: item.itemName,
+  itemShortName: item.itemShortName || null,
+  itemFullName: item.itemFullName || null,
 
+  brandCode: item.brandCode || null,
+  brandName: item.brandName || null,
+  categoryCode: item.categoryCode || null,
+  categoryName: item.categoryName || null,
+
+  contentCode: item.contentCode || null,
+  contentName: item.contentName || null,
+  packCode: item.packCode || null,
+  packName: item.packName || null,
+
+  itemQtyPerBox: item.itemQtyPerBox || 0,
+  itemAddedDate: item.itemAddedDate || null,
+  itemUpdatedDate: item.itemUpdatedDate || null,
+
+  hsnSacCode: item.hsnSacCode || null,
+  hsnSacName: item.hsnSacName || null,
+
+  minSaleQty: item.minSaleQty || 1,
+  note: item.note || null,
+
+  mfacName: item.mfacName || null,
+  mfacCode: item.mfacCode || null,
+
+  packTypCode: item.packTypCode || null,
+  packTypName: item.packTypName || null,
+
+  scheduleCode: item.scheduleCode || null,
+  scheduleName: item.scheduleName || null,
+
+  categoryHeadCode: item.categoryHeadCode || null,
+  categoryHeadName: item.categoryHeadName || null,
+
+  categoryClassCode: item.categoryClassCode || null,
+  categoryClassName: item.categoryClassName || null,
+
+  allowDisc: item.allowDisc || null,
+  gstCode: item.gstCode || null,
+
+  parentItemCode: item.parentItemCode || null,
+  parentItemName: item.parentItemName || null,
+
+  status: "inserted"
+});
       } catch (itemErr) {
         console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
       }
