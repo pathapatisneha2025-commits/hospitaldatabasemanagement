@@ -451,7 +451,6 @@ router.put(
 
       const newImageUrl = req.file ? req.file.path : null;
 
-      /* ---------------- GET OLD IMAGE (for safe update) ---------------- */
       const oldData = await pool.query(
         `SELECT image FROM stock_batches WHERE id = $1`,
         [id]
@@ -461,44 +460,39 @@ router.put(
         return res.status(404).json({ error: "Stock not found" });
       }
 
-      const oldImage = oldData.rows[0].image;
+      const finalImage = newImageUrl || oldData.rows[0].image;
 
-      const finalImage = newImageUrl || oldImage;
+      await pool.query(
+        `UPDATE stock_batches SET
+          c_item_code=$1,
+          item_name=$2,
+          item_qty_per_box=$3,
+          batch_no=$4,
+          stock_bal_qty=$5,
+          expiry_date=$6,
+          mrp=$7,
+          mrpbox=$8,
+          sale_rate=$9,
+          image=$10,
+          description=$11
+        WHERE id=$12`,
+        [
+          c_item_code,
+          item_name,
+          item_qty_per_box,
+          batch_no,
+          stock_bal_qty,
+          expiry_date,
+          mrp,
+          mrpbox,
+          sale_rate,
+          finalImage,
+          description,
+          id,
+        ]
+      );
 
-      /* ---------------- UPDATE QUERY ---------------- */
-      const query = `
-        UPDATE stock_batches
-        SET
-          c_item_code = $1,
-          item_name = $2,
-          item_qty_per_box = $3,
-          batch_no = $4,
-          stock_bal_qty = $5,
-          expiry_date = $6,
-          mrp = $7,
-          mrpbox = $8,
-          sale_rate = $9,
-          image = $10,
-          description = $11
-        WHERE id = $12
-      `;
-
-      await pool.query(query, [
-        c_item_code,
-        item_name,
-        item_qty_per_box,
-        batch_no,
-        stock_bal_qty,
-        expiry_date,
-        mrp,
-        mrpbox,
-        sale_rate,
-        finalImage,
-        description,
-        id,
-      ]);
-
-      res.json({ success: true, message: "Stock updated successfully" });
+      res.json({ success: true, image: finalImage });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Server error" });
