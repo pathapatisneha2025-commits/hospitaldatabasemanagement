@@ -922,26 +922,17 @@ router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
 router.put("/mark-completed/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { receivedby } = req.body;
-
-    if (!receivedby) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee ID is required",
-      });
-    }
 
     const updateQuery = `
       UPDATE ecogreenpurchase_orders
       SET 
         status = 'Completed',
-        employee_id = $1,
-        completed_at = NOW()
-      WHERE srno = $2
+        completed_at = (NOW() AT TIME ZONE 'Asia/Kolkata')
+      WHERE id = $1
       RETURNING *;
     `;
 
-    const result = await pool.query(updateQuery, [receivedby, orderId]);
+    const result = await pool.query(updateQuery, [orderId]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
