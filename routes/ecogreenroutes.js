@@ -919,25 +919,25 @@ router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
   }
 });
 
-router.put("/mark-completed/:orderId", async (req, res) => {
+router.put("/mark-completed/:srno", async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const { srno } = req.params;
 
     const updateQuery = `
       UPDATE ecogreenpurchase_orders
       SET 
         status = 'Completed',
         completed_at = (NOW() AT TIME ZONE 'Asia/Kolkata')
-      WHERE id = $1
+      WHERE srno = $1
       RETURNING *;
     `;
 
-    const result = await pool.query(updateQuery, [orderId]);
+    const result = await pool.query(updateQuery, [srno]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Order not found",
+        message: "Order not found with this SRNO",
       });
     }
 
@@ -946,6 +946,7 @@ router.put("/mark-completed/:orderId", async (req, res) => {
       message: "Order marked as completed",
       data: result.rows[0],
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({
