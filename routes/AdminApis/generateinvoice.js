@@ -56,7 +56,7 @@ router.post("/generate", async (req, res) => {
     // Reduce stock for each item
     for (const item of cartResult.rows) {
       // Get medicine ID and current stock
-      const medRes = await client.query("SELECT id, stock FROM medicines WHERE name = $1", [item.name]);
+      const medRes = await client.query("SELECT id, stock FROM medicines WHERE id = $1", [item.name]);
       if (!medRes.rows.length) {
         await client.query("ROLLBACK");
         return res.status(404).json({ success: false, message: `Medicine not found: ${item.name}` });
