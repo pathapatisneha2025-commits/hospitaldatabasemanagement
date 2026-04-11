@@ -55,10 +55,10 @@ router.post("/generate", async (req, res) => {
     const medicines = [];
     // Reduce stock for each item
    for (const item of cartResult.rows) {
-  const medRes = await client.query(
-    "SELECT id, stock_bal_qty FROM stock_batches WHERE c_item_code = $1",
-    [item.category]
-  );
+const medRes = await client.query(
+  "SELECT id, stock_bal_qty FROM stock_batches WHERE c_item_code = $1",
+  [item.c_item_code]
+);
 
   if (!medRes.rows.length) {
     await client.query("ROLLBACK");
