@@ -54,40 +54,44 @@ router.post("/generate", async (req, res) => {
 
     const medicines = [];
     // Reduce stock for each item
-    for (const item of cartResult.rows) {
-      // Get medicine ID and current stock
-const medRes = await client.query(
-  `SELECT id, stock 
-   FROM medicines 
-   WHERE c_item_code = $1`,
-  [item.category]
-);      if (!medRes.rows.length) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ success: false, message: `Medicine not found: ${item.name}` });
-      }
+   for (const item of cartResult.rows) {
+  const medRes = await client.query(
+    "SELECT id, stock_bal_qty FROM stock_batches WHERE item_code = $1",
+    [item.category]
+  );
 
-      const medId = medRes.rows[0].id;
-      const currentStock = medRes.rows[0].stock;
+  if (!medRes.rows.length) {
+    await client.query("ROLLBACK");
+    return res.status(404).json({
+      success: false,
+      message: `Medicine not found: ${item.name}`,
+    });
+  }
 
-      if (currentStock < item.quantity) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ success: false, message: `Insufficient stock for ${item.name}` });
-      }
+  const medId = medRes.rows[0].id;
+  const currentStock = parseInt(medRes.rows[0].stock_bal_qty || 0);
 
-      // Reduce stock
-      await client.query(
-        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
-        [item.quantity, medId]
-      );
+  if (currentStock < item.quantity) {
+    await client.query("ROLLBACK");
+    return res.status(400).json({
+      success: false,
+      message: `Insufficient stock for ${item.name}`,
+    });
+  }
 
-      medicines.push({
-        id: medId,
-        name: item.name,
-        quantity: item.quantity,
-        unitPrice: parseFloat(item.price),
-        total: parseFloat(item.price) * item.quantity,
-      });
-    }
+  await client.query(
+    "UPDATE stock_batches SET stock_bal_qty = stock_bal_qty - $1 WHERE id = $2",
+    [item.quantity, medId]
+  );
+
+  medicines.push({
+    id: medId,
+    name: item.name,
+    quantity: item.quantity,
+    unitPrice: parseFloat(item.price),
+    total: parseFloat(item.price) * item.quantity,
+  });
+}
 
     const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
     const invoiceNo = generateInvoiceNo();
