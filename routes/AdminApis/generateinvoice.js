@@ -55,10 +55,12 @@ router.post("/generate", async (req, res) => {
     const medicines = [];
     // Reduce stock for each item
    for (const item of cartResult.rows) {
-const medRes = await client.query(
-  "SELECT id, stock_bal_qty FROM stock_batches WHERE c_item_code = $1",
-  [item.c_item_code]
-);
+  const medRes = await client.query(
+    `SELECT id, stock_bal_qty 
+     FROM stock_batches 
+     WHERE c_item_code = $1`,
+    [item.category]   // ✅ THIS is correct
+  );
 
   if (!medRes.rows.length) {
     await client.query("ROLLBACK");
@@ -80,7 +82,9 @@ const medRes = await client.query(
   }
 
   await client.query(
-    "UPDATE stock_batches SET stock_bal_qty = stock_bal_qty - $1 WHERE id = $2",
+    `UPDATE stock_batches 
+     SET stock_bal_qty = stock_bal_qty - $1 
+     WHERE id = $2`,
     [item.quantity, medId]
   );
 
