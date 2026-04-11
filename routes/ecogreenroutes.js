@@ -1385,7 +1385,9 @@ router.put("/sales-orderstatus/complete/:orderId", async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE ecogreensales_order_status
-       SET status = 'Completed'
+       SET 
+         status = 'Completed',
+         completed_at = NOW()
        WHERE order_id = $1
        RETURNING *`,
       [orderId]
@@ -1395,7 +1397,11 @@ router.put("/sales-orderstatus/complete/:orderId", async (req, res) => {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    res.json({ success: true, message: "Order marked as Completed", order: result.rows[0] });
+    res.json({
+      success: true,
+      message: "Order marked as Completed",
+      order: result.rows[0],
+    });
   } catch (err) {
     console.error("Error completing order:", err);
     res.status(500).json({ success: false, message: "Server error" });
