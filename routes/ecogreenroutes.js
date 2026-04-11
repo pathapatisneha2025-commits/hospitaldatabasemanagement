@@ -627,7 +627,9 @@ router.post("/purchase-orders", async (req, res) => {
   let { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
 
   if (!c2Code || !storeId || !prodCode) {
-    return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode" });
+    return res.status(400).json({
+      error: "Required fields missing: c2Code, storeId, prodCode",
+    });
   }
 
   fromDate = fromDate || "";
@@ -645,7 +647,7 @@ router.post("/purchase-orders", async (req, res) => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       }
     );
 
@@ -654,11 +656,24 @@ router.post("/purchase-orders", async (req, res) => {
       throw new Error(`Fetch failed: ${fetchResponse.status} - ${errorText}`);
     }
 
-    const responseJson = await fetchResponse.json();
-    const purchaseOrders = Array.isArray(responseJson) ? responseJson : [responseJson];
+    // ✅ FIX: handle broken JSON response safely
+    const rawText = await fetchResponse.text();
+
+    let purchaseOrders;
+
+    try {
+      purchaseOrders = JSON.parse(rawText);
+    } catch (err) {
+      // Fix: multiple JSON objects stuck together
+      const fixedText = `[${rawText.replace(/}{/g, "},{")}]`;
+      purchaseOrders = JSON.parse(fixedText);
+    }
+
+    purchaseOrders = Array.isArray(purchaseOrders)
+      ? purchaseOrders
+      : [purchaseOrders];
 
     for (const po of purchaseOrders) {
-      // Set default audit values if missing
       const createDateTime = po.createDateTime || new Date();
       const createUser = po.createUser || "SYSTEM";
       const modifyDateTime = po.modifyDateTime || new Date();
@@ -701,13 +716,16 @@ router.post("/purchase-orders", async (req, res) => {
         createUser,
         modifyDateTime,
         modifiedUser,
-        remarks
+        remarks,
       ];
 
       try {
         await pool.query(query, values);
       } catch (dbErr) {
-        console.error(`DB INSERT ERROR for ${po.br_code}-${po.prefix}-${po.srno}:`, dbErr.message);
+        console.error(
+          `DB INSERT ERROR for ${po.br_code}-${po.prefix}-${po.srno}:`,
+          dbErr.message
+        );
       }
     }
 
@@ -715,12 +733,13 @@ router.post("/purchase-orders", async (req, res) => {
       success: true,
       message: "Purchase orders synced successfully",
       total: purchaseOrders.length,
-      data: purchaseOrders
+      data: purchaseOrders,
     });
-
   } catch (err) {
     console.error("Purchase Orders Error:", err.message);
-    res.status(500).json({ error: "Failed to fetch or save purchase orders" });
+    res.status(500).json({
+      error: "Failed to fetch or save purchase orders",
+    });
   }
 });
 
