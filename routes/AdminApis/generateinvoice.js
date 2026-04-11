@@ -56,7 +56,7 @@ router.post("/generate", async (req, res) => {
     // Reduce stock for each item
    for (const item of cartResult.rows) {
   const medRes = await client.query(
-    "SELECT id, stock_bal_qty FROM stock_batches WHERE item_code = $1",
+    "SELECT id, stock_bal_qty FROM stock_batches WHERE c_item_code = $1",
     [item.category]
   );
 
