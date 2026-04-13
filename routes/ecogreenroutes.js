@@ -315,7 +315,7 @@ router.post("/stock-details", async (req, res) => {
 
   try {
     const apiKey = await getToken();
-
+console.log("🔥 API KEY:", apiKey);
     const itemsArray = Array.isArray(itemCodes)
       ? itemCodes
       : [];
@@ -336,6 +336,7 @@ router.post("/stock-details", async (req, res) => {
       page,
       limit
     };
+console.log("🔥 PAYLOAD:", payload);
 
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
