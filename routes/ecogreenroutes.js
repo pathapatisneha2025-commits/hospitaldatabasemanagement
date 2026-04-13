@@ -395,35 +395,18 @@ router.post("/stock-details", async (req, res) => {
 });
 router.get("/stock-details/all", async (req, res) => {
   try {
-    let { page = 1, limit =1000 } = req.query;
-
-    page = parseInt(page);
-    limit = parseInt(limit);
-
-    const offset = (page - 1) * limit;
-
     const { rows } = await pool.query(
       `SELECT * 
        FROM stock_batches 
-       ORDER BY expiry_date ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY expiry_date ASC`
     );
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM stock_batches`
-    );
-
-    const totalItems = parseInt(countResult.rows[0].count);
 
     res.status(200).json({
       message: "Stock batches fetched successfully",
-      totalItems,
-      page,
-      limit,
-      totalPages: Math.ceil(totalItems / limit),
+      totalItems: rows.length,
       stockItems: rows,
     });
+
   } catch (err) {
     console.error("Error fetching stock batches:", err.message);
     res.status(500).json({ error: "Failed to fetch stock batches" });
