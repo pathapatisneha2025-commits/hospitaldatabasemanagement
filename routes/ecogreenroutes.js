@@ -428,7 +428,7 @@ router.post("/stock-details", async (req, res) => {
 });
 router.get("/stock-details/all", async (req, res) => {
   try {
-    let { page = 1, limit = 100 } = req.query;
+    let { page = 1, limit = 1000 } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);
