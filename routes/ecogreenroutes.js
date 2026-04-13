@@ -313,33 +313,30 @@ router.post("/stock-details", async (req, res) => {
 
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
     return res.status(400).json({
-      error: "Required fields missing: c2Code, storeId, prodCode, itemCodes"
+      error: "Required fields missing"
     });
   }
 
   try {
     const apiKey = await getToken();
+
     const itemsArray = Array.isArray(itemCodes)
       ? itemCodes
       : JSON.parse(itemCodes);
 
     const formattedDateTime =
       inputDateTime && inputDateTime.trim() !== ""
-        ? inputDateTime
-            .replace("T", " ")
-            .replace(/\s+/g, " ")
-            .trim() +
-          (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
+        ? inputDateTime.replace("T", " ").trim()
         : "";
 
+    const limit = 1000;
     let page = 1;
-    const limit = 1000; // safe large batch size
-    let allData = [];
+    let totalProcessed = 0;
 
-    console.log("Starting vendor pagination fetch...");
+    console.log("Starting SAFE streaming sync...");
 
     // =========================
-    // 1. FETCH ALL DATA FROM VENDOR IN PAGES
+    // PROCESS PAGE BY PAGE (NO MEMORY STORAGE)
     // =========================
     while (true) {
       const payload = {
@@ -366,7 +363,7 @@ router.post("/stock-details", async (req, res) => {
 
       if (!vendorData.data || !Array.isArray(vendorData.data)) {
         return res.status(502).json({
-          error: "Invalid stock data from vendor",
+          error: "Invalid vendor response",
           rawData: vendorData
         });
       }
@@ -375,26 +372,10 @@ router.post("/stock-details", async (req, res) => {
 
       if (data.length === 0) break;
 
-      allData.push(...data);
-
-      console.log(`Fetched page ${page}, records: ${data.length}`);
-
-      if (data.length < limit) break;
-
-      page++;
-    }
-
-    console.log("Total records fetched:", allData.length);
-
-    // =========================
-    // 2. BATCH INSERT INTO DB
-    // =========================
-    const batchSize = 500;
-
-    for (let i = 0; i < allData.length; i += batchSize) {
-      const batch = allData.slice(i, i + batchSize);
-
-      for (const item of batch) {
+      // =========================
+      // INSERT DIRECTLY (NO allData ARRAY)
+      // =========================
+      for (const item of data) {
         try {
           await pool.query(
             `INSERT INTO stock_batches 
@@ -421,22 +402,22 @@ router.post("/stock-details", async (req, res) => {
             ]
           );
         } catch (err) {
-          console.error(
-            `DB INSERT ERROR ${item.c_item_code} batch ${item.batchNo}:`,
-            err.message
-          );
+          console.error("DB ERROR:", err.message);
         }
       }
+
+      totalProcessed += data.length;
+
+      console.log(`Page ${page} processed: ${data.length}`);
+
+      if (data.length < limit) break;
+
+      page++;
     }
 
-    // =========================
-    // 3. RESPONSE
-    // =========================
     return res.status(200).json({
-      message: "Stock fetched and stored successfully",
-      totalItems: allData.length,
-      pagesFetched: page,
-      storedBatches: allData.length
+      message: "Stock sync completed successfully",
+      totalItemsProcessed: totalProcessed
     });
   } catch (err) {
     console.error("Stock Details Error:", err.message);
