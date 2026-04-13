@@ -307,61 +307,113 @@ insertedItems.push({
   }
 });
 router.post("/stock-details", async (req, res) => {
-  console.log("Incoming request body:", req.body);
-
-  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
+  let {
+    c2Code,
+    storeId,
+    prodCode,
+    inputDateTime,
+    itemCodes,
+    page = 1,
+    limit = 100,
+    refresh = false,
+  } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
-    console.log("Validation failed:", { c2Code, storeId, prodCode, itemCodes });
-    return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode, itemCodes" });
+    return res.status(400).json({
+      error: "Required fields missing",
+    });
   }
 
-  page = parseInt(page, 10) || 1;
-  limit = parseInt(limit, 10) || 100;
+  page = parseInt(page) || 1;
+  limit = Math.min(parseInt(limit) || 100, 500);
+  const offset = (page - 1) * limit;
 
   try {
+    /* ===============================
+       ✅ STEP 1: GET FROM DB
+    =============================== */
+    const dbData = await pool.query(
+      `SELECT * FROM stock_batches
+       ORDER BY id DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*) FROM stock_batches`
+    );
+
+    const totalItems = parseInt(countRes.rows[0].count);
+
+    // ✅ If already have data → return
+    if (dbData.rows.length > 0 && !refresh) {
+      return res.json({
+        source: "db",
+        totalItems,
+        page,
+        limit,
+        totalPages: Math.ceil(totalItems / limit),
+        stockItems: dbData.rows,
+      });
+    }
+
+    /* ===============================
+       ✅ STEP 2: FETCH FULL FROM VENDOR (ONLY ONCE)
+    =============================== */
+    console.log("Fetching FULL data from vendor...");
+
     const apiKey = await getToken();
-    const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
+    const itemsArray = Array.isArray(itemCodes)
+      ? itemCodes
+      : JSON.parse(itemCodes);
 
-    const formattedDateTime = inputDateTime && inputDateTime.trim() !== ""
-      ? inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim() + (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
-      : "";
-
-    const payload = { c2Code, storeId, prodCode, itemCodes: itemsArray, apiKey, inputDateTime: formattedDateTime };
-    console.log("Payload for vendor API:", payload);
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      itemCodes: itemsArray,
+      apiKey,
+      inputDateTime,
+    };
 
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
     );
 
     const vendorData = await vendorResponse.json();
-    console.log("Vendor response:", vendorData);
 
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
-      return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
+      return res.status(502).json({ error: "Invalid vendor data" });
     }
 
     const stockData = vendorData.data;
 
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedData = stockData.slice(start, end);
+    /* ===============================
+       ✅ STEP 3: BULK INSERT ALL DATA (NO LIMIT HERE)
+    =============================== */
+    const client = await pool.connect();
 
-    for (const batch of paginatedData) {
-      try {
-        await pool.query(
+    try {
+      await client.query("BEGIN");
+
+      for (const batch of stockData) {
+        await client.query(
           `INSERT INTO stock_batches 
-            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
-             item_name = EXCLUDED.item_name,
-             item_qty_per_box = EXCLUDED.item_qty_per_box,
-             stock_bal_qty = EXCLUDED.stock_bal_qty,
-             expiry_date = EXCLUDED.expiry_date,
-             mrp = EXCLUDED.mrp,
-             mrpbox = EXCLUDED.mrpbox,
-             sale_rate = EXCLUDED.sale_rate`,
+          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
+            item_name = EXCLUDED.item_name,
+            item_qty_per_box = EXCLUDED.item_qty_per_box,
+            stock_bal_qty = EXCLUDED.stock_bal_qty,
+            expiry_date = EXCLUDED.expiry_date,
+            mrp = EXCLUDED.mrp,
+            mrpbox = EXCLUDED.mrpbox,
+            sale_rate = EXCLUDED.sale_rate`,
           [
             batch.c_item_code,
             batch.itemName,
@@ -371,26 +423,47 @@ router.post("/stock-details", async (req, res) => {
             batch.expiryDate,
             batch.mrp || 0,
             batch.mrpbox || 0,
-            batch.saleRate || 0
+            batch.saleRate || 0,
           ]
         );
-      } catch (err) {
-        console.error(`DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`, err.message);
       }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error(err);
+    } finally {
+      client.release();
     }
 
-    res.status(200).json({
-      message: "Stock fetched and stored successfully",
-      totalItems: stockData.length,
+    /* ===============================
+       ✅ STEP 4: RETURN PAGINATED DATA FROM DB
+    =============================== */
+    const newData = await pool.query(
+      `SELECT * FROM stock_batches
+       ORDER BY id DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    const newCount = await pool.query(
+      `SELECT COUNT(*) FROM stock_batches`
+    );
+
+    const newTotal = parseInt(newCount.rows[0].count);
+
+    res.json({
+      source: "vendor+db",
+      totalItems: newTotal,
       page,
       limit,
-      totalPages: Math.ceil(stockData.length / limit),
-      stockItems: paginatedData
+      totalPages: Math.ceil(newTotal / limit),
+      stockItems: newData.rows,
     });
 
   } catch (err) {
-    console.error("Stock Details Error:", err.message);
-    res.status(500).json({ error: "Failed to fetch or store stock details" });
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 router.get("/stock-details/all", async (req, res) => {
