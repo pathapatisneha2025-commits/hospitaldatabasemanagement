@@ -309,46 +309,58 @@ insertedItems.push({
 router.post("/stock-details", async (req, res) => {
   console.log("Incoming request body:", req.body);
 
-  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
+  let { c2Code, storeId, prodCode, inputDateTime, itemCodes } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
     console.log("Validation failed:", { c2Code, storeId, prodCode, itemCodes });
-    return res.status(400).json({ error: "Required fields missing: c2Code, storeId, prodCode, itemCodes" });
+    return res.status(400).json({
+      error: "Required fields missing: c2Code, storeId, prodCode, itemCodes"
+    });
   }
-
-  page = parseInt(page, 10) || 1;
-  limit = parseInt(limit, 10) || 100;
 
   try {
     const apiKey = await getToken();
-    const itemsArray = Array.isArray(itemCodes) ? itemCodes : JSON.parse(itemCodes);
+    const itemsArray = Array.isArray(itemCodes)
+      ? itemCodes
+      : JSON.parse(itemCodes);
 
-    const formattedDateTime = inputDateTime && inputDateTime.trim() !== ""
-      ? inputDateTime.replace('T', ' ').replace(/\s+/g, ' ').trim() + (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
-      : "";
+    const formattedDateTime =
+      inputDateTime && inputDateTime.trim() !== ""
+        ? inputDateTime.replace("T", " ").replace(/\s+/g, " ").trim() +
+          (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
+        : "";
 
-    const payload = { c2Code, storeId, prodCode, itemCodes: itemsArray, apiKey, inputDateTime: formattedDateTime };
-    console.log("Payload for vendor API:", payload);
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      itemCodes: itemsArray,
+      apiKey,
+      inputDateTime: formattedDateTime,
+    };
 
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
     );
 
     const vendorData = await vendorResponse.json();
-    console.log("Vendor response:", vendorData);
 
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
-      return res.status(502).json({ error: "Invalid stock data from vendor", rawData: vendorData });
+      return res.status(502).json({
+        error: "Invalid stock data from vendor",
+        rawData: vendorData,
+      });
     }
 
     const stockData = vendorData.data;
 
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedData = stockData.slice(start, end);
-
-    for (const batch of paginatedData) {
+    // ✅ INSERT ALL DATA (NO PAGINATION)
+    for (const batch of stockData) {
       try {
         await pool.query(
           `INSERT INTO stock_batches 
@@ -371,26 +383,28 @@ router.post("/stock-details", async (req, res) => {
             batch.expiryDate,
             batch.mrp || 0,
             batch.mrpbox || 0,
-            batch.saleRate || 0
+            batch.saleRate || 0,
           ]
         );
       } catch (err) {
-        console.error(`DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`, err.message);
+        console.error(
+          `DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`,
+          err.message
+        );
       }
     }
 
-    res.status(200).json({
+    // ✅ RETURN FULL DATA (NO PAGINATION)
+    return res.status(200).json({
       message: "Stock fetched and stored successfully",
       totalItems: stockData.length,
-      page,
-      limit,
-      totalPages: Math.ceil(stockData.length / limit),
-      stockItems: paginatedData
+      stockItems: stockData,
     });
-
   } catch (err) {
     console.error("Stock Details Error:", err.message);
-    res.status(500).json({ error: "Failed to fetch or store stock details" });
+    res.status(500).json({
+      error: "Failed to fetch or store stock details",
+    });
   }
 });
 router.get("/stock-details/all", async (req, res) => {
