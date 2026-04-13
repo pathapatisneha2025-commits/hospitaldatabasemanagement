@@ -307,14 +307,10 @@ insertedItems.push({
   }
 });
 router.post("/stock-details", async (req, res) => {
-  console.log("Incoming request body:", req.body);
+  let { c2Code, storeId, prodCode, inputDateTime, itemCodes, page = 1, limit = 100 } = req.body;
 
-  let { c2Code, storeId, prodCode, inputDateTime, itemCodes } = req.body;
-
-  if (!c2Code || !storeId || !prodCode || !itemCodes) {
-    return res.status(400).json({
-      error: "Required fields missing"
-    });
+  if (!c2Code || !storeId || !prodCode) {
+    return res.status(400).json({ error: "Required fields missing" });
   }
 
   try {
@@ -322,107 +318,88 @@ router.post("/stock-details", async (req, res) => {
 
     const itemsArray = Array.isArray(itemCodes)
       ? itemCodes
-      : JSON.parse(itemCodes);
+      : [];
 
     const formattedDateTime =
       inputDateTime && inputDateTime.trim() !== ""
         ? inputDateTime.replace("T", " ").trim()
         : "";
 
-    const limit = 1000;
-    let page = 1;
-    let totalProcessed = 0;
+    // ✅ CALL VENDOR API (ONLY ONE PAGE)
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      itemCodes: itemsArray,
+      apiKey,
+      inputDateTime: formattedDateTime,
+      page,
+      limit
+    };
 
-    console.log("Starting SAFE streaming sync...");
-
-    // =========================
-    // PROCESS PAGE BY PAGE (NO MEMORY STORAGE)
-    // =========================
-    while (true) {
-      const payload = {
-        c2Code,
-        storeId,
-        prodCode,
-        itemCodes: itemsArray,
-        apiKey,
-        inputDateTime: formattedDateTime,
-        page,
-        limit
-      };
-
-      const vendorResponse = await fetch(
-        "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }
-      );
-
-      const vendorData = await vendorResponse.json();
-
-      if (!vendorData.data || !Array.isArray(vendorData.data)) {
-        return res.status(502).json({
-          error: "Invalid vendor response",
-          rawData: vendorData
-        });
+    const vendorResponse = await fetch(
+      "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       }
+    );
 
-      const data = vendorData.data;
+    const vendorData = await vendorResponse.json();
 
-      if (data.length === 0) break;
-
-      // =========================
-      // INSERT DIRECTLY (NO allData ARRAY)
-      // =========================
-      for (const item of data) {
-        try {
-          await pool.query(
-            `INSERT INTO stock_batches 
-            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-            ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
-              item_name = EXCLUDED.item_name,
-              item_qty_per_box = EXCLUDED.item_qty_per_box,
-              stock_bal_qty = EXCLUDED.stock_bal_qty,
-              expiry_date = EXCLUDED.expiry_date,
-              mrp = EXCLUDED.mrp,
-              mrpbox = EXCLUDED.mrpbox,
-              sale_rate = EXCLUDED.sale_rate`,
-            [
-              item.c_item_code,
-              item.itemName,
-              item.itemQtyPerBox,
-              item.batchNo,
-              item.stockBalQty,
-              item.expiryDate,
-              item.mrp || 0,
-              item.mrpbox || 0,
-              item.saleRate || 0
-            ]
-          );
-        } catch (err) {
-          console.error("DB ERROR:", err.message);
-        }
-      }
-
-      totalProcessed += data.length;
-
-      console.log(`Page ${page} processed: ${data.length}`);
-
-      if (data.length < limit) break;
-
-      page++;
+    if (!vendorData.data || !Array.isArray(vendorData.data)) {
+      return res.status(502).json({
+        error: "Invalid vendor response",
+        rawData: vendorData
+      });
     }
 
-    return res.status(200).json({
-      message: "Stock sync completed successfully",
-      totalItemsProcessed: totalProcessed
+    const data = vendorData.data;
+
+    // ✅ OPTIONAL: SAVE TO DB
+    for (const item of data) {
+      try {
+        await pool.query(
+          `INSERT INTO stock_batches 
+          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
+            item_name = EXCLUDED.item_name,
+            item_qty_per_box = EXCLUDED.item_qty_per_box,
+            stock_bal_qty = EXCLUDED.stock_bal_qty,
+            expiry_date = EXCLUDED.expiry_date,
+            mrp = EXCLUDED.mrp,
+            mrpbox = EXCLUDED.mrpbox,
+            sale_rate = EXCLUDED.sale_rate`,
+          [
+            item.c_item_code,
+            item.itemName,
+            item.itemQtyPerBox,
+            item.batchNo,
+            item.stockBalQty,
+            item.expiryDate,
+            item.mrp || 0,
+            item.mrpbox || 0,
+            item.saleRate || 0
+          ]
+        );
+      } catch (err) {
+        console.error("DB ERROR:", err.message);
+      }
+    }
+
+    // ✅ RETURN DATA TO FRONTEND (THIS IS THE FIX)
+    return res.json({
+      data: data,
+      page,
+      limit
     });
+
   } catch (err) {
-    console.error("Stock Details Error:", err.message);
-    return res.status(500).json({
-      error: "Failed to fetch or store stock details"
+    console.error(err);
+    res.status(500).json({
+      error: "Failed to fetch stock"
     });
   }
 });
