@@ -312,17 +312,24 @@ router.post("/stock-details", async (req, res) => {
   let { c2Code, storeId, prodCode, inputDateTime, itemCodes } = req.body;
 
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
-    console.log("Validation failed:", { c2Code, storeId, prodCode, itemCodes });
     return res.status(400).json({
-      error: "Required fields missing: c2Code, storeId, prodCode, itemCodes"
+      error: "Required fields missing: c2Code, storeId, prodCode, itemCodes",
     });
   }
 
   try {
     const apiKey = await getToken();
-    const itemsArray = Array.isArray(itemCodes)
-      ? itemCodes
-      : JSON.parse(itemCodes);
+
+    let itemsArray = [];
+    try {
+      itemsArray = Array.isArray(itemCodes)
+        ? itemCodes
+        : JSON.parse(itemCodes);
+    } catch (e) {
+      return res.status(400).json({
+        error: "Invalid itemCodes format",
+      });
+    }
 
     const formattedDateTime =
       inputDateTime && inputDateTime.trim() !== ""
@@ -339,6 +346,9 @@ router.post("/stock-details", async (req, res) => {
       inputDateTime: formattedDateTime,
     };
 
+    // =========================
+    // VENDOR API CALL
+    // =========================
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
       {
@@ -359,50 +369,57 @@ router.post("/stock-details", async (req, res) => {
 
     const stockData = vendorData.data;
 
-    // ✅ INSERT ALL DATA (NO PAGINATION)
-    for (const batch of stockData) {
-      try {
-        await pool.query(
-          `INSERT INTO stock_batches 
-            (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
-             item_name = EXCLUDED.item_name,
-             item_qty_per_box = EXCLUDED.item_qty_per_box,
-             stock_bal_qty = EXCLUDED.stock_bal_qty,
-             expiry_date = EXCLUDED.expiry_date,
-             mrp = EXCLUDED.mrp,
-             mrpbox = EXCLUDED.mrpbox,
-             sale_rate = EXCLUDED.sale_rate`,
-          [
-            batch.c_item_code,
-            batch.itemName,
-            batch.itemQtyPerBox,
-            batch.batchNo,
-            batch.stockBalQty,
-            batch.expiryDate,
-            batch.mrp || 0,
-            batch.mrpbox || 0,
-            batch.saleRate || 0,
-          ]
-        );
-      } catch (err) {
-        console.error(
-          `DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`,
-          err.message
-        );
-      }
-    }
+    // =========================
+    // FAST DB INSERT (PARALLEL)
+    // =========================
+    await Promise.all(
+      stockData.map(async (batch) => {
+        try {
+          await pool.query(
+            `INSERT INTO stock_batches 
+              (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date, mrp, mrpbox, sale_rate)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             ON CONFLICT (c_item_code, batch_no) DO UPDATE SET
+               item_name = EXCLUDED.item_name,
+               item_qty_per_box = EXCLUDED.item_qty_per_box,
+               stock_bal_qty = EXCLUDED.stock_bal_qty,
+               expiry_date = EXCLUDED.expiry_date,
+               mrp = EXCLUDED.mrp,
+               mrpbox = EXCLUDED.mrpbox,
+               sale_rate = EXCLUDED.sale_rate`,
+            [
+              batch.c_item_code,
+              batch.itemName,
+              batch.itemQtyPerBox,
+              batch.batchNo,
+              batch.stockBalQty,
+              batch.expiryDate,
+              batch.mrp || 0,
+              batch.mrpbox || 0,
+              batch.saleRate || 0,
+            ]
+          );
+        } catch (err) {
+          console.error(
+            `DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`,
+            err.message
+          );
+        }
+      })
+    );
 
-    // ✅ RETURN FULL DATA (NO PAGINATION)
+    // =========================
+    // RESPONSE
+    // =========================
     return res.status(200).json({
       message: "Stock fetched and stored successfully",
       totalItems: stockData.length,
       stockItems: stockData,
     });
+
   } catch (err) {
     console.error("Stock Details Error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to fetch or store stock details",
     });
   }
