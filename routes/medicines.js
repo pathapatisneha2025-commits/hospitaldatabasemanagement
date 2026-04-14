@@ -273,7 +273,7 @@ router.post("/bulk-upload", csvUpload.single("csv"), async (req, res) => {
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query("SELECT * FROM stock_batches WHERE id = $1", [id]);
+    const result = await pool.query("SELECT * FROM medicines WHERE id = $1", [id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Medicine not found" });
     }
