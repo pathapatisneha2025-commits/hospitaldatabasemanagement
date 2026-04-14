@@ -319,15 +319,7 @@ router.post("/stock-details", async (req, res) => {
     limit = 100,
   } = req.body;
 
-  // Validation
   if (!c2Code || !storeId || !prodCode || !itemCodes) {
-    console.log("Validation failed:", {
-      c2Code,
-      storeId,
-      prodCode,
-      itemCodes,
-    });
-
     return res.status(400).json({
       error: "Required fields missing: c2Code, storeId, prodCode, itemCodes",
     });
@@ -339,18 +331,13 @@ router.post("/stock-details", async (req, res) => {
   try {
     const apiKey = await getToken();
 
-    // Safe JSON parsing
     const itemsArray = Array.isArray(itemCodes)
       ? itemCodes
       : JSON.parse(itemCodes);
 
-    // Format datetime
     const formattedDateTime =
       inputDateTime && inputDateTime.trim() !== ""
-        ? inputDateTime
-            .replace("T", " ")
-            .replace(/\s+/g, " ")
-            .trim() + (/:\\d{2}$/.test(inputDateTime) ? "" : ":00")
+        ? inputDateTime.replace("T", " ").trim() + ":00"
         : "";
 
     const payload = {
@@ -362,22 +349,16 @@ router.post("/stock-details", async (req, res) => {
       inputDateTime: formattedDateTime,
     };
 
-    console.log("Payload for vendor API:", payload);
-
-    // Vendor API call
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }
     );
 
     const vendorData = await vendorResponse.json();
-    console.log("Vendor response:", vendorData);
 
     if (!vendorData.data || !Array.isArray(vendorData.data)) {
       return res.status(502).json({
@@ -388,57 +369,70 @@ router.post("/stock-details", async (req, res) => {
 
     const stockData = vendorData.data;
 
-    // Pagination
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedData = stockData.slice(start, end);
+    // ===============================
+    // 🚀 BULK INSERT (CHUNKED SAFE)
+    // ===============================
+    const chunkSize = 5000;
 
-    // Insert into DB
-    for (const batch of paginatedData) {
-      try {
-        await pool.query(
-          `
-          INSERT INTO stock_batches (
-            c_item_code,
-            item_name,
-            item_qty_per_box,
-            batch_no,
-            stock_bal_qty,
-            expiry_date,
-            mrp,
-            mrpbox,
-            sale_rate
-          )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-          ON CONFLICT (c_item_code, batch_no)
-          DO UPDATE SET
-            item_name = EXCLUDED.item_name,
-            item_qty_per_box = EXCLUDED.item_qty_per_box,
-            stock_bal_qty = EXCLUDED.stock_bal_qty,
-            expiry_date = EXCLUDED.expiry_date,
-            mrp = EXCLUDED.mrp,
-            mrpbox = EXCLUDED.mrpbox,
-            sale_rate = EXCLUDED.sale_rate
-          `,
-          [
-            batch.c_item_code,
-            batch.itemName,
-            batch.itemQtyPerBox,
-            batch.batchNo,
-            batch.stockBalQty,
-            batch.expiryDate,
-            batch.mrp || 0,
-            batch.mrpbox || 0,
-            batch.saleRate || 0,
-          ]
+    for (let i = 0; i < stockData.length; i += chunkSize) {
+      const chunk = stockData.slice(i, i + chunkSize);
+
+      const values = [];
+      const placeholders = [];
+
+      chunk.forEach((batch, index) => {
+        const idx = index * 9;
+
+        placeholders.push(
+          `($${idx + 1},$${idx + 2},$${idx + 3},$${idx + 4},$${idx + 5},$${idx + 6},$${idx + 7},$${idx + 8},$${idx + 9})`
         );
-      } catch (err) {
-        console.error(
-          `DB INSERT ERROR for ${batch.c_item_code} batch ${batch.batchNo}:`,
-          err.message
+
+        values.push(
+          batch.c_item_code,
+          batch.itemName,
+          batch.itemQtyPerBox,
+          batch.batchNo,
+          batch.stockBalQty,
+          batch.expiryDate,
+          batch.mrp || 0,
+          batch.mrpbox || 0,
+          batch.saleRate || 0
         );
-      }
+      });
+
+      await pool.query(
+        `
+        INSERT INTO stock_batches (
+          c_item_code,
+          item_name,
+          item_qty_per_box,
+          batch_no,
+          stock_bal_qty,
+          expiry_date,
+          mrp,
+          mrpbox,
+          sale_rate
+        )
+        VALUES ${placeholders.join(",")}
+        ON CONFLICT (c_item_code, batch_no)
+        DO UPDATE SET
+          item_name = EXCLUDED.item_name,
+          item_qty_per_box = EXCLUDED.item_qty_per_box,
+          stock_bal_qty = EXCLUDED.stock_bal_qty,
+          expiry_date = EXCLUDED.expiry_date,
+          mrp = EXCLUDED.mrp,
+          mrpbox = EXCLUDED.mrpbox,
+          sale_rate = EXCLUDED.sale_rate
+        `,
+        values
+      );
     }
+
+    // ===============================
+    // PAGINATION FOR FRONTEND ONLY
+    // ===============================
+    const start = (page - 1) * limit;
+    const paginatedData = stockData.slice(start, start + limit);
 
     return res.status(200).json({
       message: "Stock fetched and stored successfully",
@@ -448,9 +442,9 @@ router.post("/stock-details", async (req, res) => {
       totalPages: Math.ceil(stockData.length / limit),
       stockItems: paginatedData,
     });
-  } catch (err) {
-    console.error("Stock Details Error:", err.message);
 
+  } catch (err) {
+    console.error("Stock Details Error:", err);
     return res.status(500).json({
       error: "Failed to fetch or store stock details",
     });
