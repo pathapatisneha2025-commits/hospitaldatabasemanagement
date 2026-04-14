@@ -167,7 +167,7 @@ router.post("/assign-delivery", async (req, res) => {
 
       // ✅ Reduce stock
       await client.query(
-        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
+        "UPDATE stock_batches SET stock_bal_qty = stock_bal_qty - $1 WHERE id = $2",
         [item.quantity, medicine.id]
       );
     }
