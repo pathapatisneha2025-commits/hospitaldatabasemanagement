@@ -147,7 +147,7 @@ router.post("/assign-delivery", async (req, res) => {
     // ✅ Reduce stock for each item
     for (const item of orderItems) {
       const stockRes = await client.query(
-        "SELECT id, stock_bal_qty FROM stock_batches WHERE name = $1 FOR UPDATE",
+        "SELECT id,stock_bal_qty  FROM stock_batches WHERE item_name = $1 FOR UPDATE",
         [item.name]
       );
 
@@ -167,7 +167,7 @@ router.post("/assign-delivery", async (req, res) => {
 
       // ✅ Reduce stock
       await client.query(
-        "UPDATE stock_batches SET stock_bal_qty = stock_bal_qty - $1 WHERE id = $2",
+        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
         [item.quantity, medicine.id]
       );
     }
