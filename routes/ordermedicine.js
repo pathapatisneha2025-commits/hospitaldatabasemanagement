@@ -385,40 +385,63 @@ router.post("/verify-otp", async (req, res) => {
   const { orderId, otp } = req.body;
 
   if (!orderId || !otp) {
-    return res.status(400).json({ success: false, error: "Order ID and OTP are required" });
+    return res.status(400).json({
+      success: false,
+      error: "Order ID and OTP are required",
+    });
   }
 
   try {
-    // Fetch order with patient OTP
+    // ✅ fetch OTP directly from orders table
     const { rows } = await pool.query(
-      `SELECT o.status, p.customer_otp
-       FROM orders o
-       JOIN patients p ON o.patient_id = p.id
-       WHERE o.id = $1`,
+      `SELECT id, status, otp
+       FROM orders
+       WHERE id = $1`,
       [orderId]
     );
 
     if (!rows.length) {
-      return res.status(404).json({ success: false, error: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        error: "Order not found",
+      });
     }
 
     const order = rows[0];
 
     if (order.status === "delivered") {
-      return res.status(400).json({ success: false, error: "Order already delivered" });
+      return res.status(400).json({
+        success: false,
+        error: "Order already delivered",
+      });
     }
 
-    if (order.customer_otp !== otp) {
-      return res.status(400).json({ success: false, error: "Invalid OTP" });
+    // ⚠️ convert both to string to avoid type mismatch
+    if (String(order.otp) !== String(otp)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid OTP",
+      });
     }
 
-    // Mark order as delivered
-    await pool.query("UPDATE orders SET status='delivered' WHERE id=$1", [orderId]);
+    // ✅ mark delivered
+    await pool.query(
+      `UPDATE orders
+       SET status = 'delivered'
+       WHERE id = $1`,
+      [orderId]
+    );
 
-    res.json({ success: true, message: "Order marked as delivered ✅" });
+    return res.json({
+      success: true,
+      message: "Order marked as delivered ✅",
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Server error" });
+    return res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
 });
 router.post("/mark-delivered", async (req, res) => {
