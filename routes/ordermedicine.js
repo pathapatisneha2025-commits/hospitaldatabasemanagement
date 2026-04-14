@@ -4,7 +4,9 @@ const router = express.Router();
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
 
-
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000);
+}
 router.get("/bus/export", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -195,7 +197,7 @@ router.post("/checkout", async (req, res) => {
     }
     const address = addressRes.rows[0];
 
-    // 2️⃣ Fetch cart items for the patient directly
+    // 2️⃣ Fetch cart items
     const cartRes = await client.query(
       `SELECT id AS cart_id, name, quantity, price
        FROM cart
@@ -207,7 +209,7 @@ router.post("/checkout", async (req, res) => {
       return res.status(400).json({ error: "No items in cart" });
     }
 
-    // 3️⃣ Prepare order summary and calculate totals
+    // 3️⃣ Prepare order summary
     let subtotal = 0;
     const orderSummary = cartRes.rows.map(item => {
       const total = (item.price || 0) * (item.quantity || 1);
@@ -221,25 +223,28 @@ router.post("/checkout", async (req, res) => {
       };
     });
 
-    const deliveryFee = 40; // fixed delivery fee
-    const tax = Math.round(subtotal * 0.05); // 5% tax
+    const deliveryFee = 40;
+    const tax = Math.round(subtotal * 0.05);
     const totalAmount = subtotal + deliveryFee + tax;
 
-    // 4️⃣ Insert order into orders table
+    // ✅ 4️⃣ Generate OTP
+    const otp = generateOTP();
+
+    // 5️⃣ Insert order WITH OTP
     const insertOrder = `
       INSERT INTO orders (
         patient_id, address_id, address, payment_method,
         expected_delivery, subtotal, delivery_fee, tax, total,
-        order_summary, status, created_at
+        order_summary, status, otp, created_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending', NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,NOW())
       RETURNING id
     `;
 
     const orderRes = await client.query(insertOrder, [
       patientId,
       addressId,
-      JSON.stringify(address), // full address snapshot
+      JSON.stringify(address),
       paymentMethod,
       expectedDelivery,
       subtotal,
@@ -247,19 +252,21 @@ router.post("/checkout", async (req, res) => {
       tax,
       totalAmount,
       JSON.stringify(orderSummary),
+      otp // 👈 OTP stored here
     ]);
 
     const orderId = orderRes.rows[0].id;
 
-    // 5️⃣ Clear cart for the patient
+    // 6️⃣ Clear cart
     await client.query("DELETE FROM cart WHERE patient_id = $1", [patientId]);
 
     await client.query("COMMIT");
 
-    // 6️⃣ Respond with order summary
+    // 7️⃣ Response
     res.status(200).json({
       message: "Order placed successfully",
       order_id: orderId,
+      otp, // 👈 send OTP (for now)
       address,
       orderSummary,
       subtotal,
