@@ -327,6 +327,7 @@ router.post("/stock-details", async (req, res) => {
 
   page = parseInt(page, 10) || 1;
   limit = parseInt(limit, 10) || 100;
+  const offset = (page - 1) * limit;
 
   try {
     const apiKey = await getToken();
@@ -349,6 +350,9 @@ router.post("/stock-details", async (req, res) => {
       inputDateTime: formattedDateTime,
     };
 
+    // ===============================
+    // 1. FETCH FROM VENDOR
+    // ===============================
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
       {
@@ -370,7 +374,7 @@ router.post("/stock-details", async (req, res) => {
     const stockData = vendorData.data;
 
     // ===============================
-    // 🚀 BULK INSERT (CHUNKED SAFE)
+    // 2. BULK INSERT INTO DB
     // ===============================
     const chunkSize = 5000;
 
@@ -429,18 +433,31 @@ router.post("/stock-details", async (req, res) => {
     }
 
     // ===============================
-    // PAGINATION FOR FRONTEND ONLY
+    // 3. REAL DATABASE PAGINATION
     // ===============================
-    const start = (page - 1) * limit;
-    const paginatedData = stockData.slice(start, start + limit);
+    const dataResult = await pool.query(
+      `
+      SELECT *
+      FROM stock_batches
+      ORDER BY c_item_code
+      LIMIT $1 OFFSET $2
+      `,
+      [limit, offset]
+    );
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM stock_batches`
+    );
+
+    const totalItems = parseInt(countResult.rows[0].count);
 
     return res.status(200).json({
       message: "Stock fetched and stored successfully",
-      totalItems: stockData.length,
       page,
       limit,
-      totalPages: Math.ceil(stockData.length / limit),
-      stockItems: paginatedData,
+      totalItems,
+      totalPages: Math.ceil(totalItems / limit),
+      stockItems: dataResult.rows,
     });
 
   } catch (err) {
