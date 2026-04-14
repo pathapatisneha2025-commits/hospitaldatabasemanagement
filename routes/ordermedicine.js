@@ -266,7 +266,7 @@ router.post("/checkout", async (req, res) => {
     res.status(200).json({
       message: "Order placed successfully",
       order_id: orderId,
-      otp, // 👈 send OTP (for now)
+  otp: otp, // ✅ keep explicit
       address,
       orderSummary,
       subtotal,
