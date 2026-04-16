@@ -319,7 +319,7 @@ router.post("/stock-details", async (req, res) => {
     limit = 100,
   } = req.body;
 
-  if (!c2Code || !storeId || !prodCode ) {
+  if (!c2Code || !storeId || !prodCode || !itemCodes) {
     return res.status(400).json({
       error: "Required fields missing: c2Code, storeId, prodCode, itemCodes",
     });
@@ -487,6 +487,7 @@ router.get("/stock-details/all", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch stock batches" });
   }
 });
+
 router.put(
   "/stock-details/edit/:id",
   upload.single("image"),
