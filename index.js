@@ -65,6 +65,8 @@ const GetStock =   require("./routes/getstock");
 const EcogreenRoutes =   require("./routes/ecogreenroutes"); 
 const EcogreenBulkupload =   require("./routes/ecogreenbulkapiroutes"); 
 const EcogreenSingleapi =   require("./routes/ecogreensingleapisroutes"); 
+const ReserveToken =   require("./routes/reservetokens"); 
+
 
 
 
@@ -146,6 +148,8 @@ app.use("/Getstock",GetStock);
 app.use("/ecogreen",EcogreenRoutes); 
 app.use("/ecogreenbulkupload",EcogreenBulkupload); 
 app.use("/ecogreensingleapis",EcogreenSingleapi); 
+app.use("/reservetokens",ReserveToken); 
+
 
 
 
