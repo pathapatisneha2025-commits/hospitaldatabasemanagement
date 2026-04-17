@@ -6,28 +6,19 @@ const router = express.Router();
 // ➕ ADD RULE
 router.post("/add", async (req, res) => {
   try {
-    const {
-      doctor_id,
-      doctor_email,
-      reserved_count,
-      date
-    } = req.body;
+    const { doctor_name, doctor_email, reserved_count, date,doctor_id,
+ } = req.body;
 
     const result = await pool.query(
       `INSERT INTO reserve_rules 
-      (doctor_id, doctor_email, reserved_count, date)
-      VALUES ($1, $2, $3, $4)
+      (doctor_name, doctor_email, reserved_count, date,doctor_id,)
+      VALUES ($1, $2, $3, $4,$5)
       RETURNING *`,
-      [doctor_id, doctor_email, reserved_count, date]
+      [doctor_name, doctor_email, reserved_count, date,doctor_id]
     );
 
-    res.json({
-      message: "Rule created successfully",
-      data: result.rows[0]
-    });
-
+    res.json({ message: "Rule created", data: result.rows[0] });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
