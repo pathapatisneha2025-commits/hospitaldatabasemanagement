@@ -80,11 +80,11 @@ router.post("/add", async (req, res) => {
     );
 const reserveData = await pool.query(
   `SELECT reserved_count 
-   FROM  reserve_rules
+   FROM reserve_rules
    WHERE doctor_id = $1 
    AND date::date = TO_DATE($2, 'YYYY-MM-DD')
    LIMIT 1`,
-  [doctorEmail, appointmentDate]
+  [doctorId, appointmentDate]   // ✅ FIXED HERE
 );
 
 const reservedCount = reserveData.rows.length > 0
