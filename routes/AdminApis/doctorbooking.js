@@ -78,11 +78,26 @@ router.post("/add", async (req, res) => {
       `,
       [doctorId, appointmentDate]
     );
+const reserveData = await pool.query(
+  `SELECT reserved_count 
+   FROM reserve_rules
+   WHERE doctor_id = $1 
+   AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+   LIMIT 1`,
+  [doctorId, appointmentDate]   // ✅ FIXED HERE
+);
 
-    let nextDailyId = 1;
-    if (lastToken.rows[0].last_token) {
-      nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
-    }
+const reservedCount = reserveData.rows.length > 0
+  ? parseInt(reserveData.rows[0].reserved_count, 10)
+  : 0;
+   let nextDailyId;
+
+// 👉 if no tokens yet
+if (!lastToken.rows[0].last_token) {
+  nextDailyId = reservedCount + 1; // 🔥 start from 6
+} else {
+  nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
+}
 
   
    // ✅ Enforce daily limit
@@ -146,6 +161,7 @@ if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
