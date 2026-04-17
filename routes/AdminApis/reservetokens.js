@@ -6,19 +6,37 @@ const router = express.Router();
 // ➕ ADD RULE
 router.post("/add", async (req, res) => {
   try {
-    const { doctor_name, doctor_email, reserved_count, date,doctor_id,
- } = req.body;
+    const { doctor_id, reserved_count, date } = req.body;
 
-    const result = await pool.query(
-      `INSERT INTO reserve_rules 
-      (doctor_name, doctor_email, reserved_count, date,doctor_id)
-      VALUES ($1, $2, $3, $4,$5)
-      RETURNING *`,
-      [doctor_name, doctor_email, reserved_count, date,doctor_id]
+    // 1. Get doctor info from doctor_id
+    const doctorRes = await pool.query(
+      `SELECT name, email FROM doctors WHERE id = $1`,
+      [doctor_id]
     );
 
-    res.json({ message: "Rule created", data: result.rows[0] });
+    if (doctorRes.rows.length === 0) {
+      return res.status(400).json({ error: "Doctor not found" });
+    }
+
+    const doctor_name = doctorRes.rows[0].name;
+    const doctor_email = doctorRes.rows[0].email;
+
+    // 2. Insert rule
+    const result = await pool.query(
+      `INSERT INTO reserve_rules 
+      (doctor_id, doctor_name, doctor_email, reserved_count, date)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [doctor_id, doctor_name, doctor_email, reserved_count, date]
+    );
+
+    res.json({
+      message: "Rule created",
+      data: result.rows[0],
+    });
+
   } catch (err) {
+    console.error("ERROR:", err); // 👈 MUST SEE THIS IN LOGS
     res.status(500).json({ error: err.message });
   }
 });
