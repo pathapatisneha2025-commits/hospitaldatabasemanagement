@@ -177,7 +177,7 @@ const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
   `,
   [doctorId, formattedDate]
 );
-const reserveData = await pool.query(
+const reserveData = await db.query(
   `SELECT reserved_count 
    FROM reserve_rules
    WHERE doctor_id = $1 
