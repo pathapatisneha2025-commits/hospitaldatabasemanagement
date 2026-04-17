@@ -11,7 +11,7 @@ router.post("/add", async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO reserve_rules 
-      (doctor_name, doctor_email, reserved_count, date,doctor_id,)
+      (doctor_name, doctor_email, reserved_count, date,doctor_id)
       VALUES ($1, $2, $3, $4,$5)
       RETURNING *`,
       [doctor_name, doctor_email, reserved_count, date,doctor_id]
