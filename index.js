@@ -65,7 +65,7 @@ const GetStock =   require("./routes/getstock");
 const EcogreenRoutes =   require("./routes/ecogreenroutes"); 
 const EcogreenBulkupload =   require("./routes/ecogreenbulkapiroutes"); 
 const EcogreenSingleapi =   require("./routes/ecogreensingleapisroutes"); 
-const ReserveToken =   require("./routes/reservetokens"); 
+const ReserveToken =   require("./routes//AdminApis/reservetokens"); 
 
 
 
