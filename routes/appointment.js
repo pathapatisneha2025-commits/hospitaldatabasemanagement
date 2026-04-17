@@ -183,7 +183,7 @@ const reserveData = await db.query(
    WHERE doctor_id = $1 
    AND date::date = TO_DATE($2, 'YYYY-MM-DD')
    LIMIT 1`,
-  [doctorId, appointmentDate]   // ✅ FIXED HERE
+  [doctorId,formattedDate]   // ✅ FIXED HERE
 );
 
 const reservedCount = reserveData.rows.length > 0
