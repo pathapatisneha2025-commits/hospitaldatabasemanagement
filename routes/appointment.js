@@ -177,11 +177,36 @@ const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
   `,
   [doctorId, formattedDate]
 );
+const reserveData = await pool.query(
+  `SELECT reserved_count 
+   FROM reserve_rules
+   WHERE doctor_id = $1 
+   AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+   LIMIT 1`,
+  [doctorId, appointmentDate]   // ✅ FIXED HERE
+);
 
+const reservedCount = reserveData.rows.length > 0
+  ? parseInt(reserveData.rows[0].reserved_count, 10)
+  : 0;
 
-let nextTokenId = 1;
-if (lastToken.rows[0].last_token) {
-  nextTokenId = parseInt(lastToken.rows[0].last_token, 10) + 1;
+let nextTokenId;
+
+const last = lastToken.rows[0]?.last_token;
+
+// If no previous tokens
+if (!last) {
+  nextTokenId = reservedCount + 1;
+} else {
+  const lastNumber = parseInt(last, 10);
+
+  // IMPORTANT FIX:
+  // if last token is already below reserved range → start after reserved
+  if (lastNumber < reservedCount) {
+    nextTokenId = reservedCount + 1;
+  } else {
+    nextTokenId = lastNumber + 1;
+  }
 }
 
 
