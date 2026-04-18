@@ -1047,14 +1047,23 @@ router.post('/create_sales_order', async (req, res) => {
       }
     );
 
-    let data;
-    try {
-      data = await response.json();
-    } catch (err) {
-      console.error('ERP did not return JSON:', err);
-      data = await response.text();
-    }
+   let rawText = await response.text();
 
+console.log("=== ERP RAW RESPONSE ===");
+console.log(rawText);
+
+let data;
+
+try {
+  data = JSON.parse(rawText);
+} catch (err) {
+  console.error("❌ ERP returned invalid JSON:", rawText);
+
+  return res.status(500).json({
+    message: "ERP returned invalid response (not JSON)",
+    raw: rawText,
+  });
+}
     if (response.ok) {
       console.log('=== ERP Response OK ===');
       console.log(data);
