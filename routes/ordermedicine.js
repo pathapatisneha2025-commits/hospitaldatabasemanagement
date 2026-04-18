@@ -197,16 +197,16 @@ router.post("/create_sales_order", async (req, res) => {
 
     await client.query("BEGIN");
 
-    // ✅ Generate IDs
-    const localOrderId = Math.floor(Math.random() * 999999999);
+    // ✅ Generate ID (this goes into `id` column)
+    const localId = Math.floor(Math.random() * 999999999);
     const otp = Math.floor(1000 + Math.random() * 9000);
 
     // ==============================
-    // 🟢 INSERT INTO DATABASE FIRST
+    // 🟢 INSERT INTO DB
     // ==============================
     const insertOrder = `
       INSERT INTO orders (
-        order_id,
+        id,
         patient_id,
         address_id,
         address,
@@ -226,7 +226,7 @@ router.post("/create_sales_order", async (req, res) => {
     `;
 
     const dbResult = await client.query(insertOrder, [
-      localOrderId,
+      localId,
       order.userId || null,
       order.addressId || null,
       order.patientAddress || "",
@@ -242,18 +242,17 @@ router.post("/create_sales_order", async (req, res) => {
 
     const savedOrder = dbResult.rows[0];
 
-    console.log("=== ORDER SAVED IN DB ===", savedOrder);
+    console.log("=== ORDER SAVED ===", savedOrder);
 
     // ==============================
-    // 🟡 PREPARE ERP PAYLOAD
+    // 🟡 ERP PAYLOAD
     // ==============================
     if (!order.apiKey) {
       order.apiKey = await getToken();
     }
 
-    order.orderId = localOrderId;
-
-    console.log("=== SENDING TO ERP ===");
+    // IMPORTANT: still send ERP orderId separately
+    order.orderId = localId;
 
     const response = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_create_sale_order",
@@ -267,14 +266,15 @@ router.post("/create_sales_order", async (req, res) => {
     const rawText = await response.text();
 
     let erpData;
+
     try {
       erpData = JSON.parse(rawText);
     } catch (err) {
       console.error("❌ ERP invalid JSON:", rawText);
 
       await client.query(
-        `UPDATE orders SET status = $1 WHERE order_id = $2`,
-        ["failed", localOrderId]
+        `UPDATE orders SET status = $1 WHERE id = $2`,
+        ["failed", localId]
       );
 
       await client.query("COMMIT");
@@ -286,26 +286,26 @@ router.post("/create_sales_order", async (req, res) => {
     }
 
     // ==============================
-    // 🟣 UPDATE STATUS AFTER ERP
+    // 🟣 UPDATE STATUS
     // ==============================
     if (response.ok) {
       await client.query(
-        `UPDATE orders SET status = $1 WHERE order_id = $2`,
-        ["confirmed", localOrderId]
+        `UPDATE orders SET status = $1 WHERE id = $2`,
+        ["confirmed", localId]
       );
 
       await client.query("COMMIT");
 
       return res.status(200).json({
         message: "Order placed successfully",
-        order_id: localOrderId,
+        id: localId,   // ✅ IMPORTANT: return id, not order_id
         otp: otp,
         data: erpData,
       });
     } else {
       await client.query(
-        `UPDATE orders SET status = $1 WHERE order_id = $2`,
-        ["failed", localOrderId]
+        `UPDATE orders SET status = $1 WHERE id = $2`,
+        ["failed", localId]
       );
 
       await client.query("COMMIT");
