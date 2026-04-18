@@ -185,25 +185,42 @@ router.post("/create_sales_order", async (req, res) => {
   try {
     const order = req.body;
 
-    console.log("=== Incoming Order ===");
-    console.log(order);
+    console.log("=== Incoming Order ===", order);
 
-    // ✅ Validate required fields
+    // ✅ Required validation
     if (!order.c2Code || !order.storeId || !order.prodCode) {
       return res.status(400).json({
         message: "Required fields missing",
       });
     }
 
+    // =========================
+    // 🔒 SAFE HELPERS
+    // =========================
+    const safeNumber = (val) => {
+      const num = Number(val);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const safeJSON = (val) => {
+      try {
+        return JSON.stringify(val ?? {});
+      } catch {
+        return JSON.stringify({});
+      }
+    };
+
     await client.query("BEGIN");
 
-    // ✅ Generate ID (this goes into `id` column)
+    // =========================
+    // 🆔 IDs
+    // =========================
     const localId = Math.floor(Math.random() * 999999999);
     const otp = Math.floor(1000 + Math.random() * 9000);
 
-    // ==============================
-    // 🟢 INSERT INTO DB
-    // ==============================
+    // =========================
+    // 🟢 INSERT ORDER (SAFE)
+    // =========================
     const insertOrder = `
       INSERT INTO orders (
         id,
@@ -221,7 +238,7 @@ router.post("/create_sales_order", async (req, res) => {
         otp,
         created_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
       RETURNING *
     `;
 
@@ -229,14 +246,26 @@ router.post("/create_sales_order", async (req, res) => {
       localId,
       order.userId || null,
       order.addressId || null,
-      order.patientAddress || "",
+
+      // 🔥 FIXED JSON SAFE FIELD (this was causing your error)
+      safeJSON(order.patientAddress),
+
       order.paymentMethod || "",
+
       order.expectedDelivery || null,
-      order.subtotal || 0,
-      order.deliveryFee || 0,
-      order.tax || 0,
-      order.orderTotal || 0,
-      JSON.stringify(order.materialInfo || []),
+
+      // 🔥 FIXED numeric safety (prevents "34-31" crash)
+      safeNumber(order.subtotal),
+      safeNumber(order.deliveryFee),
+      safeNumber(order.tax),
+      safeNumber(order.orderTotal),
+
+      // 🔥 SAFE JSON ARRAY
+      safeJSON(order.materialInfo),
+
+      // status dynamic but safe
+      order.status || "pending",
+
       otp,
     ]);
 
@@ -244,14 +273,13 @@ router.post("/create_sales_order", async (req, res) => {
 
     console.log("=== ORDER SAVED ===", savedOrder);
 
-    // ==============================
-    // 🟡 ERP PAYLOAD
-    // ==============================
+    // =========================
+    // 🟡 ERP CALL
+    // =========================
     if (!order.apiKey) {
       order.apiKey = await getToken();
     }
 
-    // IMPORTANT: still send ERP orderId separately
     order.orderId = localId;
 
     const response = await fetch(
@@ -266,7 +294,6 @@ router.post("/create_sales_order", async (req, res) => {
     const rawText = await response.text();
 
     let erpData;
-
     try {
       erpData = JSON.parse(rawText);
     } catch (err) {
@@ -285,36 +312,26 @@ router.post("/create_sales_order", async (req, res) => {
       });
     }
 
-    // ==============================
-    // 🟣 UPDATE STATUS
-    // ==============================
-    if (response.ok) {
-      await client.query(
-        `UPDATE orders SET status = $1 WHERE id = $2`,
-        ["confirmed", localId]
-      );
+    // =========================
+    // 🟣 FINAL STATUS UPDATE
+    // =========================
+    const finalStatus = response.ok ? "confirmed" : "failed";
 
-      await client.query("COMMIT");
+    await client.query(
+      `UPDATE orders SET status = $1 WHERE id = $2`,
+      [finalStatus, localId]
+    );
 
-      return res.status(200).json({
-        message: "Order placed successfully",
-        id: localId,   // ✅ IMPORTANT: return id, not order_id
-        otp: otp,
-        data: erpData,
-      });
-    } else {
-      await client.query(
-        `UPDATE orders SET status = $1 WHERE id = $2`,
-        ["failed", localId]
-      );
+    await client.query("COMMIT");
 
-      await client.query("COMMIT");
-
-      return res.status(400).json({
-        message: "ERP failed",
-        data: erpData,
-      });
-    }
+    return res.status(response.ok ? 200 : 400).json({
+      message: response.ok
+        ? "Order placed successfully"
+        : "ERP failed",
+      id: localId,
+      otp: otp,
+      data: erpData,
+    });
   } catch (error) {
     await client.query("ROLLBACK");
 
