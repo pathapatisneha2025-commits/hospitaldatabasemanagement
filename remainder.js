@@ -3,8 +3,10 @@ const db = require("./db");
 const SendEmail = require("./utils/SenEmail");
 
 function startReminderJob() {
-  cron.schedule("45 18 * * *", async () => {
-    console.log("🔔 Running 1-day reminder job...");
+  console.log("🟢 Cron initialized");
+
+  cron.schedule("0 19 * * *", async () => {
+    console.log("🔔 Running reminder job at:", new Date());
 
     try {
       const tomorrow = new Date();
@@ -13,12 +15,16 @@ function startReminderJob() {
       const date = tomorrow.toISOString().split("T")[0];
 
       const result = await db.query(
-        `SELECT * FROM appointments WHERE date = $1`,
+        `SELECT * FROM appointments WHERE DATE(date) = $1`,
         [date]
       );
 
+      console.log("📊 Found:", result.rows.length);
+
       for (let appt of result.rows) {
         if (!appt.patientemail) continue;
+
+        console.log("📧 Sending to:", appt.patientemail);
 
         await SendEmail({
           to: appt.patientemail,
@@ -48,6 +54,8 @@ function startReminderJob() {
     } catch (err) {
       console.error("❌ Reminder error:", err.message);
     }
+  }, {
+    timezone: "Asia/Kolkata" // ✅ THIS IS IMPORTANT
   });
 }
 
