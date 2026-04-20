@@ -3,7 +3,7 @@ require("dotenv").config(); // Load env vars
 const express = require("express");
 const cors = require("cors");
 const path = require("path"); // ✅ ADD THIS LINE
-const startReminderJob = require("./reminderJob");
+const startReminderJob = require("./remainder");
 // Import routes
 const employeeRoutes = require("./routes/employee");
 const attendanceRoutes = require("./routes/attendance");
