@@ -1,7 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const pool = require("../db"); // ✅ PostgreSQL pool
-
+const QRCode = require("qrcode"); // ✅ ADD THIS
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
