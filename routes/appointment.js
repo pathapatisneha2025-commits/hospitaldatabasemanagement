@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
-const SendEmail = require("../utils/SendEmail");
+const SendEmail = require("../utils/SenEmail");
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
 
