@@ -5,7 +5,7 @@ const SendEmail = require("../utils/SenEmail");
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
 const HOSPITAL_LOGO =
-  "https://hospital-backend.onrender.com/assets/Logo.jpg";
+  "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
 router.get("/export", async (req, res) => {
   try {
     const query = `
