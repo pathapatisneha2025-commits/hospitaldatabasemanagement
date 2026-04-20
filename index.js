@@ -2,6 +2,7 @@ require("dotenv").config(); // Load env vars
 
 const express = require("express");
 const cors = require("cors");
+const path = require("path"); // ✅ ADD THIS LINE
 
 // Import routes
 const employeeRoutes = require("./routes/employee");
