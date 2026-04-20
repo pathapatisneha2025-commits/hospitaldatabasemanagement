@@ -112,6 +112,8 @@ router.post("/add", async (req, res) => {
     bloodGroup,
     reason,
     patientPhone,
+      patientEmail  , // ✅ ADD THIS
+
     doctorEmail, // 👈 include this to fetch visit limit
   } = req.body;
 
@@ -223,11 +225,12 @@ if (!last) {
 
     // ✅ Insert appointment
     const insertQuery = `
-      INSERT INTO appointments
-      (tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
-       paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, createdat)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'pending',
-              $9, $10, $11, $12, $13, $14, $15, NOW())
+  INSERT INTO appointments
+(tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
+ paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, patientemail, createdat)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        'pending', 'pending',
+        $9, $10, $11, $12, $13, $14, $15, $16, NOW())
       RETURNING *;
     `;
 
@@ -247,6 +250,8 @@ if (!last) {
       bloodGroup,
       reason,
       patientPhone,
+        patientEmail   // ✅ ADD THIS
+
     ];
 
     const result = await db.query(insertQuery, values);
