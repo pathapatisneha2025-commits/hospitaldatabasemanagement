@@ -269,7 +269,7 @@ router.post("/add", async (req, res) => {
     // =========================
     // 📧 SEND EMAIL AFTER BOOKING
     // =========================
-   const qrData = {
+  const qrData = {
       token: nextTokenId,
       patientId,
       name,
@@ -279,24 +279,30 @@ router.post("/add", async (req, res) => {
       hospital: "Your Hospital Name",
     };
 
-    const qrCodeImage = await QRCode.toDataURL(JSON.stringify(qrData));
+    const qrCodeBuffer = await QRCode.toBuffer(JSON.stringify(qrData));
 
-    // =========================
-    // HOSPITAL LOGO
-    // =========================
-   const HOSPITAL_LOGO =
-  "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
+    // convert to CID image
+    const qrBase64 = qrCodeBuffer.toString("base64");
 
-    // =========================
-    // EMAIL SEND
-    // =========================
+    // ================= HOSPITAL LOGO =================
+    const HOSPITAL_LOGO =
+      "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
+
+    // ================= EMAIL =================
     try {
       if (patientEmail) {
         await SendEmail({
           to: patientEmail,
           subject: `Appointment Confirmed - Dr. ${doctorName}`,
+          attachments: [
+            {
+              filename: "qr.png",
+              content: qrCodeBuffer,
+              cid: "qrimage", // IMPORTANT
+            },
+          ],
           html: `
-            <div style="font-family: Arial; padding:15px; text-align:center;">
+            <div style="font-family: Arial; text-align:center; padding:15px;">
 
               <img src="${HOSPITAL_LOGO}" style="width:120px;margin-bottom:10px"/>
 
@@ -317,7 +323,8 @@ router.post("/add", async (req, res) => {
               <hr/>
 
               <h3>📱 Scan QR at Hospital</h3>
-              <img src="${qrCodeImage}" style="width:180px"/>
+
+              <img src="cid:qrimage" style="width:180px"/>
 
               <p style="color:gray;font-size:12px">
                 Show this QR at reception
@@ -325,30 +332,24 @@ router.post("/add", async (req, res) => {
 
               <p style="margin-top:10px">
                 Please arrive 10–15 minutes early 🙏
-                Thankyoufor choosing our hospital
               </p>
 
             </div>
           `,
         });
-
-        console.log("📧 Email sent successfully");
       }
-    } catch (emailError) {
-      console.error("❌ Email failed:", emailError.message);
+    } catch (err) {
+      console.error("Email error:", err.message);
     }
 
-    // =========================
-    // RESPONSE
-    // =========================
+    // ================= RESPONSE =================
     return res.status(201).json({
       message: "Appointment booked successfully",
-      appointment: result.rows[0],
-      qrCode: qrCodeImage, // 👈 send to frontend too
+      appointment,
+      qrCode: `data:image/png;base64,${qrBase64}`,
     });
-
   } catch (err) {
-    console.error("❌ Error booking appointment:", err);
+    console.error(err);
     return res.status(500).json({ error: "Server error" });
   }
 });
