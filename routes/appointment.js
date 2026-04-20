@@ -93,6 +93,7 @@ router.get("/export", async (req, res) => {
 
 
 // -------------------- CREATE (POST) --------------------
+const sendEmail = require("../utils/sendEmail"); // ✅ IMPORT EMAIL
 
 router.post("/add", async (req, res) => {
   const {
@@ -327,6 +328,7 @@ router.post("/add", async (req, res) => {
     });
   }
 });
+
 
 
 router.post('/patient/add', async (req, res) => {
