@@ -259,7 +259,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
       // =========================
     // 📧 SEND EMAIL AFTER BOOKING
     // =========================
- const qrData = JSON.stringify({
+const qrData = JSON.stringify({
   token: nextTokenId,
   patientId,
   name,
@@ -270,6 +270,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
 });
 
 const qrImage = await QRCode.toDataURL(qrData);
+
 
 
     // convert to CID image
@@ -287,8 +288,8 @@ const qrImage = await QRCode.toDataURL(qrData);
           attachments: [
             {
               filename: "qr.png",
-              content: qrCodeBuffer,
-              cid: "qrimage", // IMPORTANT
+            content: Buffer.from(qrImage.split("base64,")[1], "base64"),
+cid: "qrimage",
             },
           ],
           html: `
@@ -339,10 +340,10 @@ const qrImage = await QRCode.toDataURL(qrData);
     }
 
     // ================= RESPONSE =================
-  return res.status(201).json({
+ return res.status(201).json({
   message: "Appointment booked successfully",
   appointment: result.rows[0],
-  qrCode: `data:image/png;base64,${qrBase64}`,
+  qrCode: qrImage, // ✅ correct
 });
   } catch (err) {
     console.error(err);
