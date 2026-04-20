@@ -41,28 +41,45 @@ function startReminderJob() {
         await SendEmail({
           to: appt.patientemail,
           subject: `⏰ Reminder: Appointment Tomorrow`,
-          html: `
-            <div style="font-family:Arial;text-align:center">
+       html: `
+  <div style="font-family:Arial;text-align:center;padding:15px">
 
-              <h2>⏰ Reminder</h2>
+    <h2 style="color:#1E3A8A">⏰ Appointment Reminder</h2>
 
-              <p>Dear ${appt.name}</p>
+    <p>Dear <b>${appt.name}</b>,</p>
 
-              <p>Your appointment is scheduled for TOMORROW</p>
+    <p style="font-size:15px">
+      This is a reminder that your appointment is scheduled for <b>TOMORROW</b>.
+    </p>
 
-              <h3>👨‍⚕️ Dr ${appt.doctorname}</h3>
-              <p><b>Date:</b> ${appt.date}</p>
-              <p><b>Time:</b> ${appt.timeslot}</p>
-              <p><b>Token:</b> ${appt.tokenid}</p>
+    <hr/>
 
-              <h3>📱 QR Code</h3>
-              <img src="${qrImage}" style="width:180px" />
+    <h3>👨‍⚕️ Doctor Details</h3>
+    <p><b>Dr:</b> ${appt.doctorname}</p>
+    <p><b>Date:</b> ${appt.date}</p>
+    <p><b>Time:</b> ${appt.timeslot}</p>
+    <p><b>Token Number:</b> ${appt.tokenid}</p>
 
-              <p style="color:gray;margin-top:10px">
-                Please arrive 10–15 minutes early.
-              </p>
-            </div>
-          `,
+    <hr/>
+
+    <h3>📱 Scan QR Code at Hospital</h3>
+
+    <img src="${qrImage}" style="width:180px;border-radius:10px" />
+
+    <p style="margin-top:15px;color:#444;font-size:14px">
+      ⏳ Please arrive <b>10–15 minutes before your appointment</b>.
+    </p>
+
+    <p style="color:#555;font-size:13px;margin-top:10px">
+      🙏 Thank you for choosing our hospital.
+    </p>
+
+    <p style="color:red;font-size:12px;margin-top:10px">
+      ⚠️ This is an automated message. Please do not reply.
+    </p>
+
+  </div>
+`,
         });
 
         await db.query(
