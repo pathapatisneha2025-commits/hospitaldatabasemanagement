@@ -1,12 +1,14 @@
 const cron = require("node-cron");
 const db = require("./db");
 const SendEmail = require("./utils/SenEmail");
+const QRCode = require("qrcode");
 
 function startReminderJob() {
   console.log("🟢 Cron initialized");
 
-  cron.schedule("*/1 * * * *", async () => {
-    console.log("🔔 Running reminder job at:", new Date());
+  // ✅ Runs every day at 6:00 PM IST
+  cron.schedule("0 18 * * *", async () => {
+    console.log("🔔 Running 1-day-before 6PM reminder:", new Date());
 
     try {
       const tomorrow = new Date();
@@ -14,7 +16,6 @@ function startReminderJob() {
 
       const date = tomorrow.toISOString().split("T")[0];
 
-      // ✅ ONLY NOT SENT APPOINTMENTS
       const result = await db.query(
         `SELECT * FROM appointments 
          WHERE DATE(date) = $1 
@@ -27,45 +28,54 @@ function startReminderJob() {
       for (let appt of result.rows) {
         if (!appt.patientemail) continue;
 
-        try {
-          await SendEmail({
-            to: appt.patientemail,
-            subject: `⏰ Reminder: Appointment Tomorrow`,
-            html: `
-              <div style="font-family:Arial;text-align:center">
-                <h2>⏰ Reminder</h2>
+        const qrImage = await QRCode.toDataURL(
+          appt.qr_data || JSON.stringify({
+            token: appt.tokenid,
+            name: appt.name,
+            doctorName: appt.doctorname,
+            date: appt.date,
+            time: appt.timeslot,
+          })
+        );
 
-                <p>Dear ${appt.name}</p>
+        await SendEmail({
+          to: appt.patientemail,
+          subject: `⏰ Reminder: Appointment Tomorrow`,
+          html: `
+            <div style="font-family:Arial;text-align:center">
 
-                <p>Your appointment is tomorrow</p>
+              <h2>⏰ Reminder</h2>
 
-                <h3>👨‍⚕️ Dr ${appt.doctorname}</h3>
-                <p><b>Date:</b> ${appt.date}</p>
-                <p><b>Time:</b> ${appt.timeslot}</p>
-                <p><b>Token:</b> ${appt.tokenid}</p>
+              <p>Dear ${appt.name}</p>
 
-                <p style="color:gray;margin-top:10px">
-                  Please arrive 10–15 minutes early.
-                </p>
-              </div>
-            `,
-          });
+              <p>Your appointment is scheduled for TOMORROW</p>
 
-          // ✅ MARK AS SENT (IMPORTANT)
-          await db.query(
-            `UPDATE appointments 
-             SET reminder_sent = true 
-             WHERE id = $1`,
-            [appt.id]
-          );
+              <h3>👨‍⚕️ Dr ${appt.doctorname}</h3>
+              <p><b>Date:</b> ${appt.date}</p>
+              <p><b>Time:</b> ${appt.timeslot}</p>
+              <p><b>Token:</b> ${appt.tokenid}</p>
 
-          console.log("✅ Sent to:", appt.patientemail);
-        } catch (mailErr) {
-          console.error("❌ Email failed for:", appt.patientemail, mailErr.message);
-        }
+              <h3>📱 QR Code</h3>
+              <img src="${qrImage}" style="width:180px" />
+
+              <p style="color:gray;margin-top:10px">
+                Please arrive 10–15 minutes early.
+              </p>
+            </div>
+          `,
+        });
+
+        await db.query(
+          `UPDATE appointments 
+           SET reminder_sent = true 
+           WHERE id = $1`,
+          [appt.id]
+        );
+
+        console.log("✅ Sent:", appt.patientemail);
       }
 
-      console.log("✅ Reminder cycle completed");
+      console.log("✅ Reminder job completed");
     } catch (err) {
       console.error("❌ Reminder error:", err.message);
     }
