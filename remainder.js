@@ -1,8 +1,9 @@
 const cron = require("node-cron");
 const db = require("./db");
-const SendEmail = require("../utils/SenEmail");
+const SendEmail = require("./utils/SenEmail");
 
-cron.schedule("30 18 * * *", async () => {
+// ⏰ 6:45 PM daily
+cron.schedule("45 18 * * *", async () => {
   console.log("🔔 Running 1-day reminder job...");
 
   try {
