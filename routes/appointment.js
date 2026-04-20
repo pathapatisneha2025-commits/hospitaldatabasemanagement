@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
 const SendEmail = require("../utils/SenEmail");
+const QRCode = require("qrcode"); // ✅ MUST IMPORT
+
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
-const QRCode = require("qrcode"); // ✅ MUST IMPORT
 
 router.get("/export", async (req, res) => {
   try {
@@ -94,7 +95,6 @@ router.get("/export", async (req, res) => {
 
 
 // -------------------- CREATE (POST) --------------------
-
 router.post("/add", async (req, res) => {
   const {
     doctorId,
@@ -111,122 +111,108 @@ router.post("/add", async (req, res) => {
     bloodGroup,
     reason,
     patientPhone,
-    patientEmail,   // ✅ IMPORTANT ADDED
-    doctorEmail,
+    doctorEmail, // 👈 include this to fetch visit limit
   } = req.body;
 
   try {
-    // 🗓️ Normalize date
+    // 🗓️ Normalize the date format (to YYYY-MM-DD)
     const formattedDate = date.includes("T") ? date.split("T")[0] : date;
 
-    // =========================
-    // ✅ VERIFY DOCTOR
-    // =========================
-    const doctorCheckQuery = `
-      SELECT doctor_id 
-      FROM doctor_consultant_fees 
-      WHERE doctor_id = $1
-    `;
-    const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
+    
 
+    // ✅ Verify doctor exists
+    const doctorCheckQuery = `SELECT doctor_id FROM  doctor_consultant_fees WHERE doctor_id = $1`;
+    const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
     if (doctorCheck.rows.length === 0) {
-      return res.status(404).json({
-        error: "Doctor ID not found in doctor_fees",
-      });
+      return res.status(404).json({ error: "Doctor ID not found in doctor_fees" });
     }
 
-    // =========================
-    // ❌ PREVENT DOUBLE BOOKING
-    // =========================
+    // ✅ Prevent double booking
     const existing = await db.query(
       `SELECT * FROM appointments 
        WHERE doctorid = $1 AND date = $2 AND timeslot = $3`,
       [doctorId, formattedDate, timeSlot]
     );
-
     if (existing.rows.length > 0) {
       return res.status(409).json({
         error: "This time slot is already booked for the selected doctor.",
       });
     }
 
-    // =========================
-    // 📊 GET DAILY LIMIT
-    // =========================
-    const visitData = await db.query(
-      `SELECT number_of_visits_per_day 
-       FROM doctor_visits 
-       WHERE LOWER(doctor_email) = LOWER($1)
-       LIMIT 1`,
-      [doctorEmail]
-    );
+   // ✅ Fetch doctor's static daily limit (applies every day)
+const visitData = await db.query(
+  `SELECT number_of_visits_per_day 
+   FROM doctor_visits 
+   WHERE LOWER(doctor_email) = LOWER($1)
+   LIMIT 1`,
+  [doctorEmail]
+);
 
-    if (visitData.rows.length === 0) {
-      return res.status(400).json({
-        error: `No visit limit set for Dr. ${doctorName}`,
-      });
-    }
+console.log("📊 Visit Limit Found:", visitData.rows);
 
-    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
-      visitData.rows[0].number_of_visits_per_day,
-      10
-    );
+if (visitData.rows.length === 0) {
+  return res.status(400).json({
+    error: `No visit limit set for Dr. ${doctorName}`,
+  });
+}
 
-    // =========================
-    // 🔢 GET LAST TOKEN
-    // =========================
-    const lastToken = await db.query(
-      `
-      SELECT MAX(tokenid) AS last_token
-      FROM (
-        SELECT tokenid 
-        FROM appointments 
-        WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
+  visitData.rows[0].number_of_visits_per_day,
+  10
+);
 
-        UNION ALL
 
-        SELECT daily_id AS tokenid 
-        FROM doctorbooking 
-        WHERE doctor_id::integer = $1 
-        AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
-      ) AS combined;
-      `,
-      [doctorId, formattedDate]
-    );
+   const lastToken = await db.query(
+  `
+  SELECT MAX(tokenid) AS last_token
+  FROM (
+    SELECT tokenid 
+    FROM appointments 
+    WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+    
+    UNION ALL
+    
+    SELECT daily_id AS tokenid 
+    FROM doctorbooking 
+    WHERE doctor_id::integer = $1 AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
+  ) AS combined;
+  `,
+  [doctorId, formattedDate]
+);
+const reserveData = await db.query(
+  `SELECT reserved_count 
+   FROM reserve_rules
+   WHERE doctor_id = $1 
+   AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+   LIMIT 1`,
+  [doctorId,formattedDate]   // ✅ FIXED HERE
+);
 
-    const reserveData = await db.query(
-      `SELECT reserved_count 
-       FROM reserve_rules
-       WHERE doctor_id = $1 
-       AND date::date = TO_DATE($2, 'YYYY-MM-DD')
-       LIMIT 1`,
-      [doctorId, formattedDate]
-    );
+const reservedCount = reserveData.rows.length > 0
+  ? parseInt(reserveData.rows[0].reserved_count, 10)
+  : 0;
 
-    const reservedCount =
-      reserveData.rows.length > 0
-        ? parseInt(reserveData.rows[0].reserved_count, 10)
-        : 0;
+let nextTokenId;
 
-    const last = lastToken.rows[0]?.last_token;
+const last = lastToken.rows[0]?.last_token;
 
-    let nextTokenId;
+// If no previous tokens
+if (!last) {
+  nextTokenId = reservedCount + 1;
+} else {
+  const lastNumber = parseInt(last, 10);
 
-    if (!last) {
-      nextTokenId = reservedCount + 1;
-    } else {
-      const lastNumber = parseInt(last, 10);
+  // IMPORTANT FIX:
+  // if last token is already below reserved range → start after reserved
+  if (lastNumber < reservedCount) {
+    nextTokenId = reservedCount + 1;
+  } else {
+    nextTokenId = lastNumber + 1;
+  }
+}
 
-      if (lastNumber < reservedCount) {
-        nextTokenId = reservedCount + 1;
-      } else {
-        nextTokenId = lastNumber + 1;
-      }
-    }
 
-    // =========================
-    // 🚫 DAILY LIMIT CHECK
-    // =========================
+    // ✅ Enforce daily limit
     if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
       return res.status(200).json({
         alert: true,
@@ -234,15 +220,13 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // =========================
-    // 💾 INSERT APPOINTMENT
-    // =========================
+    // ✅ Insert appointment
     const insertQuery = `
       INSERT INTO appointments
       (tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
        paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, createdat)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending','pending',
-              $9,$10,$11,$12,$13,$14,$15,NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'pending',
+              $9, $10, $11, $12, $13, $14, $15, NOW())
       RETURNING *;
     `;
 
@@ -266,7 +250,7 @@ router.post("/add", async (req, res) => {
 
     const result = await db.query(insertQuery, values);
 
-    // =========================
+      // =========================
     // 📧 SEND EMAIL AFTER BOOKING
     // =========================
   const qrData = {
@@ -318,22 +302,29 @@ router.post("/add", async (req, res) => {
               <h3>📅 Appointment Details</h3>
               <p><b>Date:</b> ${formattedDate}</p>
               <p><b>Time:</b> ${timeSlot}</p>
-              <p><b>Token:</b> ${nextTokenId}</p>
-
+<p style="font-size:16px; margin:10px 0;">
+  <b>🎟️ Token Number:</b> 
+  <span style="color:#d9534f; font-size:18px; font-weight:bold;">
+    ${nextTokenId}
+  </span>
+</p>
               <hr/>
 
-              <h3>📱 Scan QR at Hospital</h3>
+           <h3>📱 Scan QR at Hospital</h3>
 
-              <img src="cid:qrimage" style="width:180px"/>
+<img src="data:image/png;base64,${qrBase64}" style="width:180px"/>
 
-              <p style="color:gray;font-size:12px">
-                Show this QR at reception
-              </p>
+<p style="color:gray;font-size:12px">
+  Show this QR at reception
+</p>
 
-              <p style="margin-top:10px">
-                Please arrive 10–15 minutes early 🙏
-              </p>
+<p style="margin-top:10px;color:#333;font-size:14px">
+  📌 Please arrive 10–15 minutes before your appointment.
+</p>
 
+<p style="margin-top:5px;color:#333;font-size:14px">
+  🙏 Thank you for choosing our hospital. Wishing you good health!
+</p>
             </div>
           `,
         });
@@ -354,6 +345,7 @@ router.post("/add", async (req, res) => {
   }
 });
 
+ 
 
 
 
