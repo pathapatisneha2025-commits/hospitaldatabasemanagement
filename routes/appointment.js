@@ -343,11 +343,11 @@ router.post("/add", async (req, res) => {
     }
 
     // ================= RESPONSE =================
-    return res.status(201).json({
-      message: "Appointment booked successfully",
-      appointment,
-      qrCode: `data:image/png;base64,${qrBase64}`,
-    });
+  return res.status(201).json({
+  message: "Appointment booked successfully",
+  appointment: result.rows[0],
+  qrCode: `data:image/png;base64,${qrBase64}`,
+});
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server error" });
