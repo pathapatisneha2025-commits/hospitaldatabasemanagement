@@ -4,6 +4,8 @@ const db = require('../db'); // PostgreSQL client (from db.js)
 const SendEmail = require("../utils/SenEmail");
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
+const QRCode = require("qrcode"); // ✅ ADD THIS
+
 const HOSPITAL_LOGO =
   "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
 router.get("/export", async (req, res) => {
