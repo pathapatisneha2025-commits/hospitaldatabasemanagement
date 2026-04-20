@@ -4,7 +4,8 @@ const db = require('../db'); // PostgreSQL client (from db.js)
 const SendEmail = require("../utils/SenEmail");
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
-
+const HOSPITAL_LOGO =
+  "https://hospital-backend.onrender.com/assets/Logo.jpg";
 router.get("/export", async (req, res) => {
   try {
     const query = `
@@ -110,33 +111,24 @@ router.post("/add", async (req, res) => {
     bloodGroup,
     reason,
     patientPhone,
-    patientEmail,   // ✅ IMPORTANT ADDED
+    patientEmail,
     doctorEmail,
   } = req.body;
 
   try {
-    // 🗓️ Normalize date
     const formattedDate = date.includes("T") ? date.split("T")[0] : date;
 
-    // =========================
-    // ✅ VERIFY DOCTOR
-    // =========================
-    const doctorCheckQuery = `
-      SELECT doctor_id 
-      FROM doctor_consultant_fees 
-      WHERE doctor_id = $1
-    `;
-    const doctorCheck = await db.query(doctorCheckQuery, [doctorId]);
+    // ================= DOCTOR CHECK =================
+    const doctorCheck = await db.query(
+      `SELECT doctor_id FROM doctor_consultant_fees WHERE doctor_id = $1`,
+      [doctorId]
+    );
 
     if (doctorCheck.rows.length === 0) {
-      return res.status(404).json({
-        error: "Doctor ID not found in doctor_fees",
-      });
+      return res.status(404).json({ error: "Doctor not found" });
     }
 
-    // =========================
-    // ❌ PREVENT DOUBLE BOOKING
-    // =========================
+    // ================= SLOT CHECK =================
     const existing = await db.query(
       `SELECT * FROM appointments 
        WHERE doctorid = $1 AND date = $2 AND timeslot = $3`,
@@ -144,190 +136,110 @@ router.post("/add", async (req, res) => {
     );
 
     if (existing.rows.length > 0) {
-      return res.status(409).json({
-        error: "This time slot is already booked for the selected doctor.",
-      });
+      return res.status(409).json({ error: "Slot already booked" });
     }
 
-    // =========================
-    // 📊 GET DAILY LIMIT
-    // =========================
-    const visitData = await db.query(
-      `SELECT number_of_visits_per_day 
-       FROM doctor_visits 
-       WHERE LOWER(doctor_email) = LOWER($1)
-       LIMIT 1`,
-      [doctorEmail]
-    );
-
-    if (visitData.rows.length === 0) {
-      return res.status(400).json({
-        error: `No visit limit set for Dr. ${doctorName}`,
-      });
-    }
-
-    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
-      visitData.rows[0].number_of_visits_per_day,
-      10
-    );
-
-    // =========================
-    // 🔢 GET LAST TOKEN
-    // =========================
+    // ================= TOKEN =================
     const lastToken = await db.query(
-      `
-      SELECT MAX(tokenid) AS last_token
-      FROM (
-        SELECT tokenid 
-        FROM appointments 
-        WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
-
-        UNION ALL
-
-        SELECT daily_id AS tokenid 
-        FROM doctorbooking 
-        WHERE doctor_id::integer = $1 
-        AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
-      ) AS combined;
-      `,
+      `SELECT MAX(tokenid) AS last_token FROM appointments 
+       WHERE doctorid = $1 AND date::date = $2`,
       [doctorId, formattedDate]
     );
 
-    const reserveData = await db.query(
-      `SELECT reserved_count 
-       FROM reserve_rules
-       WHERE doctor_id = $1 
-       AND date::date = TO_DATE($2, 'YYYY-MM-DD')
-       LIMIT 1`,
-      [doctorId, formattedDate]
+    let nextTokenId = (lastToken.rows[0]?.last_token || 0) + 1;
+
+    // ================= INSERT =================
+    const insert = await db.query(
+      `INSERT INTO appointments
+      (tokenid, doctorid, doctorname, yearsofexperience, department, date,
+       timeslot, consultantfees, patientid, name, age, gender,
+       bloodgroup, reason, patientphone, createdat)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+       RETURNING *`,
+      [
+        nextTokenId,
+        doctorId,
+        doctorName,
+        experience,
+        department,
+        formattedDate,
+        timeSlot,
+        consultantFees,
+        patientId,
+        name,
+        age,
+        gender,
+        bloodGroup,
+        reason,
+        patientPhone,
+      ]
     );
 
-    const reservedCount =
-      reserveData.rows.length > 0
-        ? parseInt(reserveData.rows[0].reserved_count, 10)
-        : 0;
+    const appointment = insert.rows[0];
 
-    const last = lastToken.rows[0]?.last_token;
-
-    let nextTokenId;
-
-    if (!last) {
-      nextTokenId = reservedCount + 1;
-    } else {
-      const lastNumber = parseInt(last, 10);
-
-      if (lastNumber < reservedCount) {
-        nextTokenId = reservedCount + 1;
-      } else {
-        nextTokenId = lastNumber + 1;
-      }
-    }
-
-    // =========================
-    // 🚫 DAILY LIMIT CHECK
-    // =========================
-    if (nextTokenId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
-      return res.status(200).json({
-        alert: true,
-        message: `No bookings available for Dr. ${doctorName} today.`,
-      });
-    }
-
-    // =========================
-    // 💾 INSERT APPOINTMENT
-    // =========================
-    const insertQuery = `
-      INSERT INTO appointments
-      (tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
-       paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, createdat)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending','pending',
-              $9,$10,$11,$12,$13,$14,$15,NOW())
-      RETURNING *;
-    `;
-
-    const values = [
-      nextTokenId,
-      doctorId,
-      doctorName,
-      experience,
-      department,
-      formattedDate,
-      timeSlot,
-      consultantFees,
+    // ================= QR DATA =================
+    const qrData = {
+      token: nextTokenId,
       patientId,
       name,
-      age,
-      gender,
-      bloodGroup,
-      reason,
-      patientPhone,
-    ];
+      doctorName,
+      date: formattedDate,
+      time: timeSlot,
+      hospital: "Your Hospital Name",
+    };
 
-    const result = await db.query(insertQuery, values);
+    const qrCodeImage = await QRCode.toDataURL(JSON.stringify(qrData));
 
-    // =========================
-    // 📧 SEND EMAIL AFTER BOOKING
-    // =========================
+    // ================= EMAIL =================
     try {
       if (patientEmail) {
         await SendEmail({
           to: patientEmail,
           subject: `Appointment Confirmed - Dr. ${doctorName}`,
           html: `
-            <div style="font-family: Arial; padding:10px;">
+            <div style="font-family:Arial;text-align:center;padding:15px">
+
+              <img src="${HOSPITAL_LOGO}" style="width:120px;margin-bottom:10px"/>
+
               <h2>✅ Appointment Confirmed</h2>
 
               <p>Dear ${name},</p>
 
-              <h3>👨‍⚕️ Doctor Details</h3>
-              <p><b>Doctor:</b> Dr. ${doctorName}</p>
-              <p><b>Department:</b> ${department}</p>
-              <p><b>Experience:</b> ${experience} years</p>
+              <h3>👨‍⚕️ Doctor: Dr. ${doctorName}</h3>
+              <p>${department}</p>
 
-              <h3>📅 Appointment Details</h3>
-              <p><b>Date:</b> ${formattedDate}</p>
-              <p><b>Time Slot:</b> ${timeSlot}</p>
-              <p><b>Token Number:</b> ${nextTokenId}</p>
+              <h3>📅 ${formattedDate} | ${timeSlot}</h3>
+              <p><b>Token:</b> ${nextTokenId}</p>
 
-              <h3>👤 Patient Details</h3>
-              <p><b>Name:</b> ${name}</p>
-              <p><b>Age:</b> ${age}</p>
-              <p><b>Gender:</b> ${gender}</p>
-              <p><b>Blood Group:</b> ${bloodGroup}</p>
+              <hr/>
 
-              <p style="margin-top:15px;">
-                Please arrive 10–15 minutes early.
+              <h3>📱 Scan QR at Hospital</h3>
+              <img src="${qrCodeImage}" style="width:180px"/>
+
+              <p style="font-size:12px;color:gray">
+                Show this QR at reception
               </p>
 
-              <p>Thank you for choosing our hospital 🙏</p>
             </div>
           `,
         });
-
-        console.log("📧 Appointment email sent");
-      } else {
-        console.log("⚠️ No email provided, skipping email send");
       }
-    } catch (emailError) {
-      console.error("❌ Email failed:", emailError.message);
+    } catch (err) {
+      console.log("Email error:", err.message);
     }
 
-    // =========================
-    // ✅ RESPONSE
-    // =========================
+    // ================= RESPONSE =================
     return res.status(201).json({
-      message: `Appointment booked successfully for Dr. ${doctorName}`,
-      appointment: result.rows[0],
+      message: "Appointment booked successfully",
+      appointment,
+      qrCode: qrCodeImage,   // 👈 SEND TO FRONTEND DASHBOARD
     });
 
   } catch (err) {
-    console.error("❌ Error booking appointment:", err);
-    return res.status(500).json({
-      error: "Server error",
-    });
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 router.post('/patient/add', async (req, res) => {

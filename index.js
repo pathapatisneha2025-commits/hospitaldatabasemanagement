@@ -80,7 +80,10 @@ const clients = new Map();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+app.use(
+  "/assets",
+  express.static(path.join(__dirname, "assets"))
+);
 app.use(cors({
   origin: "*",              // Allow all domains (Web + Mobile)
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],
