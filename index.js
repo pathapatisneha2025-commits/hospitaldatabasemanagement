@@ -3,7 +3,7 @@ require("dotenv").config(); // Load env vars
 const express = require("express");
 const cors = require("cors");
 const path = require("path"); // ✅ ADD THIS LINE
-
+const startReminderJob = require("./reminderJob");
 // Import routes
 const employeeRoutes = require("./routes/employee");
 const attendanceRoutes = require("./routes/attendance");
@@ -165,6 +165,8 @@ app.use("/cron", cronRoutes);
 // Start HTTP server
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
+    startReminderJob();
+
 });
 
 // Attach WebSocket server to the same HTTP server

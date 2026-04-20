@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
 const SendEmail = require("../utils/SenEmail");
 const QRCode = require("qrcode"); // ✅ MUST IMPORT
+const cron = require("node-cron");
 
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
@@ -263,8 +264,7 @@ if (!last) {
       hospital: "Your Hospital Name",
     };
 
-    const qrCodeBuffer = await QRCode.toBuffer(JSON.stringify(qrData));
-
+const qrImage = await QRCode.toDataURL(qrData);
     // convert to CID image
     const qrBase64 = qrCodeBuffer.toString("base64");
 
@@ -312,8 +312,7 @@ if (!last) {
 
            <h3>📱 Scan QR at Hospital</h3>
 
-<img src="data:image/png;base64,${qrBase64}" style="width:180px"/>
-
+<img src="${qrImage}" style="width:180px" />
 <p style="color:gray;font-size:12px">
   Show this QR at reception
 </p>
