@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db'); // PostgreSQL client (from db.js)
-const sendEmail = require("../utils/sendEmail");
+const SendEmail = require("../utils/SendEmail");
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
 
@@ -93,7 +93,6 @@ router.get("/export", async (req, res) => {
 
 
 // -------------------- CREATE (POST) --------------------
-const sendEmail = require("../utils/sendEmail"); // ✅ IMPORT EMAIL
 
 router.post("/add", async (req, res) => {
   const {
@@ -271,7 +270,7 @@ router.post("/add", async (req, res) => {
     // =========================
     try {
       if (patientEmail) {
-        await sendEmail({
+        await SendEmail({
           to: patientEmail,
           subject: `Appointment Confirmed - Dr. ${doctorName}`,
           html: `
