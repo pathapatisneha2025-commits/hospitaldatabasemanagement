@@ -259,19 +259,20 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
       // =========================
     // 📧 SEND EMAIL AFTER BOOKING
     // =========================
-  const qrData = {
-      token: nextTokenId,
-      patientId,
-      name,
-      doctorName,
-      date: formattedDate,
-      time: timeSlot,
-      hospital: "Your Hospital Name",
-    };
+ const qrData = JSON.stringify({
+  token: nextTokenId,
+  patientId,
+  name,
+  doctorName,
+  date: formattedDate,
+  time: timeSlot,
+  hospital: "Your Hospital Name",
+});
 
 const qrImage = await QRCode.toDataURL(qrData);
+
+
     // convert to CID image
-    const qrBase64 = qrCodeBuffer.toString("base64");
 
     // ================= HOSPITAL LOGO =================
     const HOSPITAL_LOGO =
