@@ -364,11 +364,13 @@ router.get("/scan-appointment", async (req, res) => {
     const result = await db.query(
       `UPDATE appointments
        SET status = 'available'
-       WHERE tokenid = ? AND patientid = ? AND doctorid = ?`,
+       WHERE tokenid = $1 
+       AND patientid = $2 
+       AND doctorid = $3`,
       [tokenid, patientid, doctorid]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.send(`
         <h2>⚠️ No matching appointment found</h2>
       `);
@@ -377,7 +379,7 @@ router.get("/scan-appointment", async (req, res) => {
     return res.send(`
       <div style="text-align:center;font-family:sans-serif;padding:20px">
         <h2 style="color:green">✅ Appointment Marked as Available</h2>
-        <p>You can now proceed with booking.</p>
+        <p>QR scan successful ✔</p>
       </div>
     `);
 
@@ -386,7 +388,6 @@ router.get("/scan-appointment", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
-
 router.post('/patient/add', async (req, res) => {
   try {
     const {
