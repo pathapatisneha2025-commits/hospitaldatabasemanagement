@@ -1,16 +1,16 @@
 const cron = require("node-cron");
 const db = require("./db");
-const SendEmail = require("./utils/SenEmail");
 const QRCode = require("qrcode");
+const transporter = require("./utils/transpotar");
 
 function startReminderJob() {
-  console.log("🟢 Cron initialized (1-min test mode)");
+  console.log("🟢 Cron initialized (TEST MODE)");
 
-  // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
+  // ⏱️ 1 MINUTE TEST (change later)
   cron.schedule(
-"0 18 * * *", // 1-minute test
+    "*/1 * * * *",
     async () => {
-      console.log("🔔 Running test reminder job:", new Date());
+      console.log("🔔 Running reminder job:", new Date());
 
       try {
         const tomorrow = new Date();
@@ -28,34 +28,38 @@ function startReminderJob() {
         console.log("📊 Found:", result.rows.length);
 
         for (let appt of result.rows) {
-          if (!appt.patientemail) continue;
+          if (!appt.patientemail || !appt.qrdata) continue;
 
-          if (!appt.qrdata) {
-            console.log("❌ Missing QR data:", appt.id);
-            continue;
-          }
-
-          // ✅ Generate QR (base64 image)
+          // ✅ Generate QR
           const qrImage = await QRCode.toDataURL(appt.qrdata, {
             width: 300,
             margin: 2,
           });
 
-          // 🚀 EMAIL (NO CID, NO BUFFER)
-await transporter.sendMail({
-              to: appt.patientemail,
-            subject: `⏰ Reminder: Your Appointment is Tomorrow`,
+          // convert base64 → buffer
+          const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
+
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: appt.patientemail,
+            subject: "⏰ Appointment Reminder",
+
+            attachments: [
+              {
+                filename: "qr.png",
+                content: qrBuffer,
+                cid: "qrimage@pams",
+              },
+            ],
 
             html: `
               <div style="font-family:Arial;text-align:center;padding:15px">
 
-                <h2 style="color:#1E3A8A">⏰ Appointment Reminder</h2>
+                <h2>⏰ Appointment Reminder</h2>
 
                 <p>Dear <b>${appt.name}</b>,</p>
 
-                <p>
-                  This is a reminder that your appointment is scheduled for <b>TOMORROW</b>.
-                </p>
+                <p>Your appointment is scheduled for <b>TOMORROW</b>.</p>
 
                 <hr/>
 
@@ -67,21 +71,17 @@ await transporter.sendMail({
 
                 <hr/>
 
-                <h3>📱 Scan QR Code at Hospital</h3>
+                <h3>📱 Scan QR Code</h3>
 
-                <!-- ✅ DIRECT QR IMAGE (ALWAYS SHOWS) -->
-                <img src="${qrImage}" style="width:180px;border-radius:10px" />
+                <!-- ✅ THIS WILL SHOW LIKE GOOGLE PAY STYLE -->
+                <img src="cid:qrimage@pams" width="180" />
 
-                <p style="margin-top:15px;color:#444;font-size:14px">
+                <p style="margin-top:10px;color:#555;font-size:13px">
                   Please arrive 10–15 minutes early.
                 </p>
 
-                <p style="color:#555;font-size:13px">
-                  Thank you for choosing our hospital 🙏
-                </p>
-
                 <p style="color:red;font-size:12px">
-                  ⚠️ This is an automated message. Please do not reply.
+                  Automated message. Do not reply.
                 </p>
 
               </div>
@@ -89,9 +89,7 @@ await transporter.sendMail({
           });
 
           await db.query(
-            `UPDATE appointments 
-             SET reminder_sent = true 
-             WHERE id = $1`,
+            `UPDATE appointments SET reminder_sent = true WHERE id = $1`,
             [appt.id]
           );
 
