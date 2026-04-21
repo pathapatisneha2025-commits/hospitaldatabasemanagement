@@ -4,6 +4,7 @@ const db = require('../db'); // PostgreSQL client (from db.js)
 const SendEmail = require("../utils/SenEmail");
 const QRCode = require("qrcode"); // ✅ MUST IMPORT
 const cron = require("node-cron");
+const transporter = require("./utils/transpotar");
 
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
@@ -280,65 +281,78 @@ const qrImage = await QRCode.toDataURL(qrData, {
       "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
 
     // ================= EMAIL =================
-    try {
-      if (patientEmail) {
-        await SendEmail({
-          to: patientEmail,
-          subject: `Appointment Confirmed - Dr. ${doctorName}`,
-         attachments: [
-  {
-    filename: "qr.png",
-    content: Buffer.from(qrImage.split("base64,")[1], "base64"),
-    cid: "qrimage",
-  },
-],
-          html: `
-            <div style="font-family: Arial; text-align:center; padding:15px;">
+   // ================= EMAIL =================
+try {
+  if (patientEmail) {
+    const qrBuffer = Buffer.from(qrImage.split("base64,")[1], "base64");
 
-              <img src="${HOSPITAL_LOGO}" style="width:120px;margin-bottom:10px"/>
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: patientEmail,
+      subject: `Appointment Confirmed - Dr. ${doctorName}`,
 
-              <h2>✅ Appointment Confirmed</h2>
+      attachments: [
+        {
+          filename: "qr.png",
+          content: qrBuffer,
+          cid: "qrimage@pams", // ✅ keep same as cron & postpone
+        },
+      ],
 
-              <p>Dear ${name},</p>
+      html: `
+        <div style="font-family: Arial; text-align:center; padding:15px;">
 
-              <h3>👨‍⚕️ Doctor Details</h3>
-              <p><b>Dr:</b> ${doctorName}</p>
-              <p><b>Department:</b> ${department}</p>
-              <p><b>Experience:</b> ${experience} years</p>
+          <img src="${HOSPITAL_LOGO}" style="width:120px;margin-bottom:10px"/>
 
-              <h3>📅 Appointment Details</h3>
-              <p><b>Date:</b> ${formattedDate}</p>
-              <p><b>Time:</b> ${timeSlot}</p>
-<p style="font-size:16px; margin:10px 0;">
-  <b>🎟️ Token Number:</b> 
-  <span style="color:#d9534f; font-size:18px; font-weight:bold;">
-    ${nextTokenId}
-  </span>
-</p>
-              <hr/>
+          <h2 style="color:#16a34a">✅ Appointment Confirmed</h2>
 
-           <h3>📱 Scan QR at Hospital</h3>
+          <p>Dear <b>${name}</b>,</p>
 
-<img src="cid:qrimage" width="180" /><p style="color:gray;font-size:12px">
+          <h3>👨‍⚕️ Doctor Details</h3>
+          <p><b>Dr:</b> ${doctorName}</p>
+          <p><b>Department:</b> ${department}</p>
+          <p><b>Experience:</b> ${experience} years</p>
 
-  Show this QR at reception
-</p>
+          <h3>📅 Appointment Details</h3>
+          <p><b>Date:</b> ${formattedDate}</p>
+          <p><b>Time:</b> ${timeSlot}</p>
 
-<p style="margin-top:10px;color:#333;font-size:14px">
-  📌 Please arrive 10–15 minutes before your appointment.
-</p>
+          <p style="font-size:16px; margin:10px 0;">
+            <b>🎟️ Token Number:</b> 
+            <span style="color:#d9534f; font-size:18px; font-weight:bold;">
+              ${nextTokenId}
+            </span>
+          </p>
 
-<p style="margin-top:5px;color:#333;font-size:14px">
-  🙏 Thank you for choosing our hospital. Wishing you good health!
-</p>
-            </div>
-          `,
-        });
-      }
-    } catch (err) {
-      console.error("Email error:", err.message);
-    }
+          <hr/>
 
+          <h3>📱 Scan QR at Hospital</h3>
+
+          <img src="cid:qrimage@pams" width="180"/>
+
+          <p style="color:gray;font-size:12px">
+            Show this QR at reception
+          </p>
+
+          <p style="margin-top:10px;color:#333;font-size:14px">
+            📌 Please arrive 10–15 minutes before your appointment.
+          </p>
+
+          <p style="margin-top:5px;color:#333;font-size:14px">
+            🙏 Thank you for choosing our hospital. Wishing you good health!
+          </p>
+
+          <p style="color:red;font-size:12px">
+            ⚠️ This is an automated message. Please do not reply.
+          </p>
+
+        </div>
+      `,
+    });
+  }
+} catch (err) {
+  console.error("Email error:", err.message);
+}
     // ================= RESPONSE =================
  return res.status(201).json({
   message: "Appointment booked successfully",
@@ -461,41 +475,90 @@ router.put("/postpone", async (req, res) => {
 
     const patient = patientRes.rows[0];
 
-    // =========================
-    // 4. SEND EMAIL
-    // =========================
-    await SendEmail({
-      to: patient.email,   // ✅ FIXED HERE
-      subject: "📅 Appointment Rescheduled",
-      html: `
-        <div style="font-family:Arial;padding:20px;background:#f9fafb;border-radius:10px">
+  // =========================
+// 4. GENERATE NEW QR DATA
+// =========================
+const qrData = JSON.stringify({
+  token: appointment.tokenid || appointment.daily_id,
+  patientId: patientid,
+  doctorId: doctorid,
+  date: newDate,
+  time: newTime,
+});
 
-          <h2 style="color:#ef4444">⚠️ Appointment Rescheduled</h2>
+// ✅ Update QR in DB (important)
+if (tokenid) {
+  await db.query(
+    `UPDATE appointments SET qrdata = $1, reminder_sent = false WHERE tokenid = $2`,
+    [qrData, tokenid]
+  );
+}
 
-          <p>Dear <b>${patient.name}</b>,</p>
+// =========================
+// 5. GENERATE QR IMAGE
+// =========================
+const qrImage = await QRCode.toDataURL(qrData, {
+  width: 300,
+  margin: 2,
+});
 
-          <p>Your appointment has been <b>rescheduled by hospital staff</b>.</p>
+const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
-          <div style="background:#fff;padding:15px;border-radius:8px;margin-top:10px">
-            <h3>📅 New Schedule</h3>
-            <p><b>Date:</b> ${newDate}</p>
-            <p><b>Time:</b> ${newTime}</p>
-            ${reason ? `<p><b>Reason:</b> ${reason}</p>` : ""}
-          </div>
+// =========================
+// 6. SEND EMAIL USING TRANSPORTER
+// =========================
+await transporter.sendMail({
+  from: process.env.EMAIL_USER,
+  to: patient.email,
+  subject: "📅 Appointment Rescheduled",
 
-          <hr/>
+  attachments: [
+    {
+      filename: "qr.png",
+      content: qrBuffer,
+      cid: "qrimage@pams",
+    },
+  ],
 
-          <p style="color:#555">
-            ⚠️ Please arrive 10–15 minutes before your appointment time.
-          </p>
+  html: `
+    <div style="font-family:Arial;text-align:center;padding:15px">
 
-          <p style="color:green;font-weight:bold">
-            Thank you for choosing our hospital ❤️
-          </p>
+      <h2 style="color:#ef4444">⚠️ Appointment Rescheduled</h2>
 
-        </div>
-      `,
-    });
+      <p>Dear <b>${patient.first_name}</b>,</p>
+
+      <p>Your appointment has been <b>rescheduled</b>.</p>
+
+      <hr/>
+
+      <h3>📅 New Schedule</h3>
+      <p><b>Date:</b> ${newDate}</p>
+      <p><b>Time:</b> ${newTime}</p>
+      <p><b>Token:</b> ${appointment.tokenid || appointment.daily_id}</p>
+
+      ${reason ? `<p><b>Reason:</b> ${reason}</p>` : ""}
+
+      <hr/>
+
+      <h3>📱 Scan QR Code at Hospital</h3>
+
+      <img src="cid:qrimage@pams" width="180"/>
+
+      <p style="margin-top:10px;color:#444">
+        Please arrive 10–15 minutes early.
+      </p>
+
+      <p style="color:#555">
+        Thank you for choosing our hospital 🙏
+      </p>
+
+      <p style="color:red;font-size:12px">
+        ⚠️ This is an automated message. Please do not reply.
+      </p>
+
+    </div>
+  `,
+});
 
     return res.json({
       success: true,
