@@ -437,6 +437,8 @@ router.put("/postpone", async (req, res) => {
          RETURNING *`,
         [newDate, newTime, daily_id, doctorid]
       );
+    } else {
+      return res.status(400).json({ error: "tokenid or daily_id required" });
     }
 
     if (!updated || updated.rows.length === 0) {
@@ -460,10 +462,10 @@ router.put("/postpone", async (req, res) => {
     const patient = patientRes.rows[0];
 
     // =========================
-    // 4. SEND EMAIL (ONLY SendEmail USED)
+    // 4. SEND EMAIL
     // =========================
     await SendEmail({
-      to: patient.patientemail,
+      to: patient.email,   // ✅ FIXED HERE
       subject: "📅 Appointment Rescheduled",
       html: `
         <div style="font-family:Arial;padding:20px;background:#f9fafb;border-radius:10px">
@@ -495,12 +497,9 @@ router.put("/postpone", async (req, res) => {
       `,
     });
 
-    // =========================
-    // 5. RESPONSE
-    // =========================
     return res.json({
       success: true,
-      message: "Appointment postponed successfully and email sent",
+      message: "Appointment postponed successfully",
       data: appointment,
     });
 
