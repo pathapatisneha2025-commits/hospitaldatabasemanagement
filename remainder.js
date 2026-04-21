@@ -4,13 +4,12 @@ const SendEmail = require("./utils/SenEmail");
 const QRCode = require("qrcode");
 
 function startReminderJob() {
-  console.log("🟢 Cron initialized (1-min test mode)");
+  console.log("🟢 Cron initialized");
 
-  // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
   cron.schedule(
-   "0 18 * * *",
+    "* * * * *", // 1-minute test
     async () => {
-      console.log("🔔 Running test reminder job:", new Date());
+      console.log("🔔 Running reminder job:", new Date());
 
       try {
         const tomorrow = new Date();
@@ -28,61 +27,49 @@ function startReminderJob() {
         console.log("📊 Found:", result.rows.length);
 
         for (let appt of result.rows) {
-          if (!appt.patientemail) continue;
+          if (!appt.patientemail || !appt.qrdata) continue;
 
-          if (!appt.qrdata) {
-            console.log("❌ Missing QR data:", appt.id);
-            continue;
-          }
+          // ✅ QR GENERATION
+          const qrImage = await QRCode.toDataURL(appt.qrdata);
 
-          // ✅ Generate QR (base64 image)
-          const qrImage = await QRCode.toDataURL(appt.qrdata, {
-            width: 300,
-            margin: 2,
-          });
+          // ✅ IMPORTANT FIX: convert base64 → buffer for email attachment
+          const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
-          // 🚀 EMAIL (NO CID, NO BUFFER)
           await SendEmail({
             to: appt.patientemail,
-            subject: `⏰ Reminder: Your Appointment is Tomorrow`,
+            subject: "⏰ Reminder: Your Appointment is Tomorrow",
+
+            attachments: [
+              {
+                filename: "qr.png",
+                content: qrBuffer,
+                cid: "qrimage",
+                contentType: "image/png",
+              },
+            ],
 
             html: `
               <div style="font-family:Arial;text-align:center;padding:15px">
 
-                <h2 style="color:#1E3A8A">⏰ Appointment Reminder</h2>
+                <h2>⏰ Appointment Reminder</h2>
 
                 <p>Dear <b>${appt.name}</b>,</p>
 
-                <p>
-                  This is a reminder that your appointment is scheduled for <b>TOMORROW</b>.
-                </p>
+                <p>Your appointment is tomorrow.</p>
 
                 <hr/>
 
-                <h3>👨‍⚕️ Doctor Details</h3>
-                <p><b>Dr:</b> ${appt.doctorname}</p>
+                <p><b>Doctor:</b> ${appt.doctorname}</p>
                 <p><b>Date:</b> ${appt.date}</p>
                 <p><b>Time:</b> ${appt.timeslot}</p>
                 <p><b>Token:</b> ${appt.tokenid}</p>
 
                 <hr/>
 
-                <h3>📱 Scan QR Code at Hospital</h3>
+                <h3>📱 Scan QR Code</h3>
 
-                <!-- ✅ DIRECT QR IMAGE (ALWAYS SHOWS) -->
-                <img src="${qrImage}" style="width:180px;border-radius:10px" />
-
-                <p style="margin-top:15px;color:#444;font-size:14px">
-                  Please arrive 10–15 minutes early.
-                </p>
-
-                <p style="color:#555;font-size:13px">
-                  Thank you for choosing our hospital 🙏
-                </p>
-
-                <p style="color:red;font-size:12px">
-                  ⚠️ This is an automated message. Please do not reply.
-                </p>
+                <!-- ✅ THIS WILL WORK 100% -->
+                <img src="cid:qrimage" width="180" />
 
               </div>
             `,
@@ -97,14 +84,9 @@ function startReminderJob() {
 
           console.log("✅ Sent:", appt.patientemail);
         }
-
-        console.log("✅ Reminder job completed");
       } catch (err) {
-        console.error("❌ Reminder error:", err.message);
+        console.error("❌ Error:", err.message);
       }
-    },
-    {
-      timezone: "Asia/Kolkata",
     }
   );
 }
