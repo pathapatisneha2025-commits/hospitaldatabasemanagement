@@ -455,12 +455,11 @@ router.put("/postpone", async (req, res) => {
     const appointment = updated.rows[0];
 
     // =========================
-    // 2. GET PATIENT EMAIL FROM APPOINTMENT (PRIMARY)
+    // 2. GET PATIENT EMAIL
     // =========================
     let patientEmail = appointment.patientemail;
     let patientName = appointment.name;
 
-    // fallback only if missing
     if (!patientEmail && patientid) {
       const patientRes = await db.query(
         `SELECT first_name, email FROM patients WHERE id = $1`,
@@ -478,22 +477,19 @@ router.put("/postpone", async (req, res) => {
     }
 
     // =========================
-    // 3. GENERATE NEW TOKEN (PER DAY LOGIC)
+    // 3. 🔥 TOKEN LOGIC (FIXED - PER DAY SEQUENCE)
     // =========================
-    let newToken = appointment.tokenid;
+    const lastToken = await db.query(
+      `SELECT MAX(tokenid) AS last_token
+       FROM appointments
+       WHERE doctorid = $1 AND date::date = $2`,
+      [doctorid, newDate]
+    );
 
+    const newToken = (lastToken.rows[0]?.last_token || 0) + 1;
+
+    // update token + qrdata
     if (tokenid) {
-      const lastToken = await db.query(
-        `SELECT MAX(tokenid) AS last_token
-         FROM appointments
-         WHERE doctorid = $1 AND date::date = $2`,
-        [doctorid, newDate]
-      );
-
-      const last = lastToken.rows[0]?.last_token;
-
-      newToken = last ? parseInt(last, 10) + 1 : 1;
-
       await db.query(
         `UPDATE appointments
          SET tokenid = $1,
@@ -536,7 +532,7 @@ router.put("/postpone", async (req, res) => {
     const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
     // =========================
-    // 6. EMAIL (ALWAYS TO PATIENT)
+    // 6. EMAIL SEND
     // =========================
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -585,14 +581,13 @@ router.put("/postpone", async (req, res) => {
       `,
     });
 
-  appointment.tokenid = newToken; // ✅ FORCE UPDATED TOKEN IN RESPONSE
+    return res.json({
+      success: true,
+      message: "Appointment postponed successfully",
+      data: appointment,
+      newToken
+    });
 
-return res.json({
-  success: true,
-  message: "Appointment postponed successfully",
-  data: appointment,
-  newToken
-});
   } catch (err) {
     console.error("❌ Postpone Error:", err);
     return res.status(500).json({
