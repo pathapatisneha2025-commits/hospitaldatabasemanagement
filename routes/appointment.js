@@ -231,15 +231,15 @@ const qrData = JSON.stringify({
   time: timeSlot,
 });
     // ✅ Insert appointment
-    const insertQuery = `
-  INSERT INTO appointments
+  const insertQuery = `
+INSERT INTO appointments
 (tokenid, doctorid, doctorname, yearsofexperience, department, date, timeslot, consultantfees,
- paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, patientemail, createdat)
+ paymentstatus, status, patientid, name, age, gender, bloodgroup, reason, patientphone, patientemail, qrdata, createdat)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
         'pending', 'pending',
-        $9, $10, $11, $12, $13, $14, $15, $16, NOW())
-      RETURNING *;
-    `;
+        $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+RETURNING *;
+`;
 
     const values = [
       nextTokenId,
