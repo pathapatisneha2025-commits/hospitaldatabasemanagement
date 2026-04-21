@@ -4,13 +4,13 @@ const SendEmail = require("./utils/SenEmail");
 const QRCode = require("qrcode");
 
 function startReminderJob() {
-  console.log("🟢 Cron initialized");
+  console.log("🟢 Cron initialized (1-min test mode)");
 
-  // ✅ Runs every day at 6:00 PM IST
+  // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
   cron.schedule(
-    "0 18 * * *",
+    "* * * * *",
     async () => {
-      console.log("🔔 Running 1-day-before reminder:", new Date());
+      console.log("🔔 Running test reminder job:", new Date());
 
       try {
         const tomorrow = new Date();
@@ -30,30 +30,21 @@ function startReminderJob() {
         for (let appt of result.rows) {
           if (!appt.patientemail) continue;
 
-          // 🚨 SAFETY CHECK
           if (!appt.qrdata) {
-            console.log("❌ Missing QR data for appointment:", appt.id);
+            console.log("❌ Missing QR data:", appt.id);
             continue;
           }
 
-          // ✅ Generate QR from STORED DATA (IMPORTANT)
+          // ✅ Generate QR (base64 image)
           const qrImage = await QRCode.toDataURL(appt.qrdata, {
             width: 300,
             margin: 2,
           });
 
+          // 🚀 EMAIL (NO CID, NO BUFFER)
           await SendEmail({
             to: appt.patientemail,
             subject: `⏰ Reminder: Your Appointment is Tomorrow`,
-
-            // ✅ CID ATTACHMENT (correct for email clients)
-            attachments: [
-              {
-                filename: "qr.png",
-                content: Buffer.from(qrImage.split("base64,")[1], "base64"),
-                cid: "qrimage",
-              },
-            ],
 
             html: `
               <div style="font-family:Arial;text-align:center;padding:15px">
@@ -62,7 +53,7 @@ function startReminderJob() {
 
                 <p>Dear <b>${appt.name}</b>,</p>
 
-                <p style="font-size:15px">
+                <p>
                   This is a reminder that your appointment is scheduled for <b>TOMORROW</b>.
                 </p>
 
@@ -72,24 +63,24 @@ function startReminderJob() {
                 <p><b>Dr:</b> ${appt.doctorname}</p>
                 <p><b>Date:</b> ${appt.date}</p>
                 <p><b>Time:</b> ${appt.timeslot}</p>
-                <p><b>Token Number:</b> ${appt.tokenid}</p>
+                <p><b>Token:</b> ${appt.tokenid}</p>
 
                 <hr/>
 
                 <h3>📱 Scan QR Code at Hospital</h3>
 
-                <!-- ✅ FIXED QR DISPLAY -->
-                <img src="cid:qrimage" style="width:180px;border-radius:10px" />
+                <!-- ✅ DIRECT QR IMAGE (ALWAYS SHOWS) -->
+                <img src="${qrImage}" style="width:180px;border-radius:10px" />
 
                 <p style="margin-top:15px;color:#444;font-size:14px">
-                  ⏳ Please arrive <b>10–15 minutes before your appointment</b>.
+                  Please arrive 10–15 minutes early.
                 </p>
 
-                <p style="color:#555;font-size:13px;margin-top:10px">
-                  🙏 Thank you for choosing our hospital.
+                <p style="color:#555;font-size:13px">
+                  Thank you for choosing our hospital 🙏
                 </p>
 
-                <p style="color:red;font-size:12px;margin-top:10px">
+                <p style="color:red;font-size:12px">
                   ⚠️ This is an automated message. Please do not reply.
                 </p>
 
