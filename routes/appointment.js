@@ -399,7 +399,6 @@ router.get("/scan-appointment", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
-
 router.put("/postpone", async (req, res) => {
   const {
     tokenid,
@@ -421,7 +420,7 @@ router.put("/postpone", async (req, res) => {
     let updated;
 
     // =========================
-    // 1. UPDATE APPOINTMENTS
+    // 1. UPDATE APPOINTMENT / BOOKING
     // =========================
     if (tokenid) {
       updated = await db.query(
@@ -434,9 +433,6 @@ router.put("/postpone", async (req, res) => {
         [newDate, newTime, tokenid, doctorid]
       );
     } 
-    // =========================
-    // 2. UPDATE DOCTOR BOOKING
-    // =========================
     else if (daily_id) {
       updated = await db.query(
         `UPDATE doctorbooking
@@ -455,16 +451,14 @@ router.put("/postpone", async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    const appointment = updated.rows[0];
+    let appointment = updated.rows[0];
 
     // =========================
-    // 3. 🔥 IMPORTANT FIX: GET EMAIL FROM APPOINTMENTS FIRST
+    // 2. GET PATIENT EMAIL (PRIMARY FROM APPOINTMENT)
     // =========================
     let patientEmail = appointment.patientemail;
-
     let patientName = appointment.name;
 
-    // fallback only if missing
     if (!patientEmail && patientid) {
       const patientRes = await db.query(
         `SELECT first_name, email FROM patients WHERE id = $1`,
@@ -482,22 +476,53 @@ router.put("/postpone", async (req, res) => {
     }
 
     // =========================
+    // 3. 🔥 OPTIONAL: NEW TOKEN FOR NEW DATE (RECOMMENDED)
+    // =========================
+    let newToken = appointment.tokenid;
+
+    if (tokenid) {
+      const lastToken = await db.query(
+        `SELECT MAX(tokenid) AS last_token
+         FROM appointments
+         WHERE doctorid = $1 AND date::date = $2`,
+        [doctorid, newDate]
+      );
+
+      const last = lastToken.rows[0]?.last_token;
+
+      newToken = last ? parseInt(last, 10) + 1 : 1;
+
+      // update token in DB
+      await db.query(
+        `UPDATE appointments
+         SET tokenid = $1,
+             qrdata = $2
+         WHERE tokenid = $3 AND doctorid = $4`,
+        [
+          newToken,
+          JSON.stringify({
+            token: newToken,
+            patientId: patientid,
+            doctorId: doctorid,
+            date: newDate,
+            time: newTime,
+          }),
+          tokenid,
+          doctorid
+        ]
+      );
+    }
+
+    // =========================
     // 4. QR DATA
     // =========================
     const qrData = JSON.stringify({
-      token: appointment.tokenid || appointment.daily_id,
+      token: newToken,
       patientId: patientid,
       doctorId: doctorid,
       date: newDate,
       time: newTime,
     });
-
-    if (tokenid) {
-      await db.query(
-        `UPDATE appointments SET qrdata = $1, reminder_sent = false WHERE tokenid = $2`,
-        [qrData, tokenid]
-      );
-    }
 
     // =========================
     // 5. QR IMAGE
@@ -510,11 +535,11 @@ router.put("/postpone", async (req, res) => {
     const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
     // =========================
-    // 6. EMAIL (FIXED TO ACTUAL PATIENT EMAIL)
+    // 6. EMAIL
     // =========================
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: patientEmail,   // ✅ FIXED HERE
+      to: patientEmail,
       subject: "📅 Appointment Rescheduled",
 
       attachments: [
@@ -539,7 +564,7 @@ router.put("/postpone", async (req, res) => {
           <h3>📅 New Schedule</h3>
           <p><b>Date:</b> ${newDate}</p>
           <p><b>Time:</b> ${newTime}</p>
-          <p><b>Token:</b> ${appointment.tokenid || appointment.daily_id}</p>
+          <p><b>Token:</b> ${newToken}</p>
 
           ${reason ? `<p><b>Reason:</b> ${reason}</p>` : ""}
 
@@ -563,6 +588,7 @@ router.put("/postpone", async (req, res) => {
       success: true,
       message: "Appointment postponed successfully",
       data: appointment,
+      newToken
     });
 
   } catch (err) {
