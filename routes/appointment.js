@@ -399,9 +399,11 @@ router.get("/scan-appointment", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
+
 router.put("/postpone", async (req, res) => {
   const {
     tokenid,
+    daily_id,
     doctorid,
     patientid,
     newDate,
@@ -411,46 +413,65 @@ router.put("/postpone", async (req, res) => {
 
   console.log("📦 Postpone Request:", req.body);
 
-  if (!tokenid || !doctorid || !newDate || !newTime) {
-    return res.status(400).json({
-      error: "tokenid, doctorid, newDate and newTime are required"
-    });
+  if (!newDate || !newTime) {
+    return res.status(400).json({ error: "newDate and newTime are required" });
   }
 
   try {
+    let updated;
 
     // =========================
-    // 1. UPDATE APPOINTMENT ONLY
+    // 1. UPDATE APPOINTMENTS
     // =========================
-    const updated = await db.query(
-      `UPDATE appointments
-       SET date = $1,
-           timeslot = $2,
-           status = 'rescheduled'
-       WHERE tokenid = $3 AND doctorid = $4
-       RETURNING *`,
-      [newDate, newTime, tokenid, doctorid]
-    );
+    if (tokenid) {
+      updated = await db.query(
+        `UPDATE appointments
+         SET date = $1,
+             timeslot = $2,
+             status = 'rescheduled'
+         WHERE tokenid = $3 AND doctorid = $4
+         RETURNING *`,
+        [newDate, newTime, tokenid, doctorid]
+      );
+    } 
+    // =========================
+    // 2. UPDATE DOCTOR BOOKING
+    // =========================
+    else if (daily_id) {
+      updated = await db.query(
+        `UPDATE doctorbooking
+         SET appointment_date = $1,
+             appointment_time = $2,
+             status = 'rescheduled'
+         WHERE daily_id = $3 AND doctor_id = $4
+         RETURNING *`,
+        [newDate, newTime, daily_id, doctorid]
+      );
+    } else {
+      return res.status(400).json({ error: "tokenid or daily_id required" });
+    }
 
-    if (!updated.rows.length) {
+    if (!updated || updated.rows.length === 0) {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
     const appointment = updated.rows[0];
 
     // =========================
-    // 2. GET PATIENT EMAIL
+    // 3. 🔥 IMPORTANT FIX: GET EMAIL FROM APPOINTMENTS FIRST
     // =========================
     let patientEmail = appointment.patientemail;
+
     let patientName = appointment.name;
 
-    if (!patientEmail) {
+    // fallback only if missing
+    if (!patientEmail && patientid) {
       const patientRes = await db.query(
         `SELECT first_name, email FROM patients WHERE id = $1`,
         [patientid]
       );
 
-      if (patientRes.rows.length) {
+      if (patientRes.rows.length > 0) {
         patientEmail = patientRes.rows[0].email;
         patientName = patientRes.rows[0].first_name;
       }
@@ -461,47 +482,26 @@ router.put("/postpone", async (req, res) => {
     }
 
     // =========================
-    // 3. TOKEN LOGIC (PER DOCTOR + DATE)
-    // =========================
-    const lastToken = await db.query(
-      `SELECT COALESCE(MAX(tokenid), 0) AS last_token
-       FROM appointments
-       WHERE doctorid = $1 AND date::date = $2`,
-      [doctorid, newDate]
-    );
-
-    const newToken = lastToken.rows[0].last_token + 1;
-
-    await db.query(
-      `UPDATE appointments
-       SET tokenid = $1,
-           qrdata = $2
-       WHERE tokenid = $3 AND doctorid = $4`,
-      [
-        newToken,
-        JSON.stringify({
-          token: newToken,
-          patientId: patientid,
-          doctorId: doctorid,
-          date: newDate,
-          time: newTime,
-        }),
-        tokenid,
-        doctorid
-      ]
-    );
-
-    // =========================
     // 4. QR DATA
     // =========================
     const qrData = JSON.stringify({
-      token: newToken,
+      token: appointment.tokenid || appointment.daily_id,
       patientId: patientid,
       doctorId: doctorid,
       date: newDate,
       time: newTime,
     });
 
+    if (tokenid) {
+      await db.query(
+        `UPDATE appointments SET qrdata = $1, reminder_sent = false WHERE tokenid = $2`,
+        [qrData, tokenid]
+      );
+    }
+
+    // =========================
+    // 5. QR IMAGE
+    // =========================
     const qrImage = await QRCode.toDataURL(qrData, {
       width: 300,
       margin: 2,
@@ -510,11 +510,11 @@ router.put("/postpone", async (req, res) => {
     const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
     // =========================
-    // 5. EMAIL SEND
+    // 6. EMAIL (FIXED TO ACTUAL PATIENT EMAIL)
     // =========================
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: patientEmail,
+      to: patientEmail,   // ✅ FIXED HERE
       subject: "📅 Appointment Rescheduled",
 
       attachments: [
@@ -539,7 +539,7 @@ router.put("/postpone", async (req, res) => {
           <h3>📅 New Schedule</h3>
           <p><b>Date:</b> ${newDate}</p>
           <p><b>Time:</b> ${newTime}</p>
-          <p><b>Token:</b> ${newToken}</p>
+          <p><b>Token:</b> ${appointment.tokenid || appointment.daily_id}</p>
 
           ${reason ? `<p><b>Reason:</b> ${reason}</p>` : ""}
 
@@ -563,7 +563,6 @@ router.put("/postpone", async (req, res) => {
       success: true,
       message: "Appointment postponed successfully",
       data: appointment,
-      newToken
     });
 
   } catch (err) {
