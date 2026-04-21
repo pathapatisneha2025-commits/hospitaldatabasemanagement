@@ -585,13 +585,14 @@ router.put("/postpone", async (req, res) => {
       `,
     });
 
-    return res.json({
-      success: true,
-      message: "Appointment postponed successfully",
-      data: appointment,
-      newToken
-    });
+  appointment.tokenid = newToken; // ✅ FORCE UPDATED TOKEN IN RESPONSE
 
+return res.json({
+  success: true,
+  message: "Appointment postponed successfully",
+  data: appointment,
+  newToken
+});
   } catch (err) {
     console.error("❌ Postpone Error:", err);
     return res.status(500).json({
