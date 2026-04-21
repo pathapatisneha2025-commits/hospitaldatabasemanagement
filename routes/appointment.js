@@ -222,7 +222,14 @@ if (!last) {
         message: `No bookings available for Dr. ${doctorName} today.`,
       });
     }
-
+// ✅ CREATE QR DATA FIRST
+const qrData = JSON.stringify({
+  token: nextTokenId,
+  patientId,
+  doctorId,
+  date: formattedDate,
+  time: timeSlot,
+});
     // ✅ Insert appointment
     const insertQuery = `
   INSERT INTO appointments
@@ -250,27 +257,20 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
       bloodGroup,
       reason,
       patientPhone,
-        patientEmail   // ✅ ADD THIS
+        patientEmail,   // ✅ ADD THIS
+  qrData // ✅ NOW STORED
 
     ];
 
-    const result = await db.query(insertQuery, values);
-
+const result = await db.query(insertQuery, values);
       // =========================
     // 📧 SEND EMAIL AFTER BOOKING
     // =========================
-const qrData = JSON.stringify({
-  token: nextTokenId,
-  patientId,
-  name,
-  doctorName,
-  date: formattedDate,
-  time: timeSlot,
-  hospital: "Your Hospital Name",
+
+
+const qrImage = await QRCode.toDataURL(qrData, {
+  width: 300,
 });
-
-const qrImage = await QRCode.toDataURL(qrData);
-
 
 
     // convert to CID image
@@ -285,13 +285,13 @@ const qrImage = await QRCode.toDataURL(qrData);
         await SendEmail({
           to: patientEmail,
           subject: `Appointment Confirmed - Dr. ${doctorName}`,
-          attachments: [
-            {
-              filename: "qr.png",
-            content: Buffer.from(qrImage.split("base64,")[1], "base64"),
-cid: "qrimage",
-            },
-          ],
+         attachments: [
+  {
+    filename: "qr.png",
+    content: Buffer.from(qrImage.split("base64,")[1], "base64"),
+    cid: "qrimage",
+  },
+],
           html: `
             <div style="font-family: Arial; text-align:center; padding:15px;">
 
@@ -319,8 +319,8 @@ cid: "qrimage",
 
            <h3>📱 Scan QR at Hospital</h3>
 
-<img src="${qrImage}" style="width:180px" />
-<p style="color:gray;font-size:12px">
+<img src="cid:qrimage" width="180" /><p style="color:gray;font-size:12px">
+
   Show this QR at reception
 </p>
 
