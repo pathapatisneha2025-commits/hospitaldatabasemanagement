@@ -18,12 +18,12 @@ function startReminderJob() {
 
         const date = tomorrow.toISOString().split("T")[0];
 
-        const result = await db.query(
-          `SELECT * FROM appointments 
-           WHERE DATE(date) = $1 
-           AND (reminder_sent IS NULL OR reminder_sent = false)`,
-          [date]
-        );
+      const result = await db.query(
+  `SELECT * FROM appointments 
+   WHERE date::date = $1::date
+   AND (reminder_sent IS NULL OR reminder_sent = false)`,
+  [date]
+);
 
         console.log("📊 Found:", result.rows.length);
 
