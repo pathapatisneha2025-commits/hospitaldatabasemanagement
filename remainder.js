@@ -50,11 +50,22 @@ function startReminderJob() {
             width: 300,
             margin: 2,
           });
+          const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
           // 🚀 SEND EMAIL
           await transporter.sendMail({
-            to: appt.patientemail,
-            subject: `⏰ Reminder: Your Appointment is Tomorrow`,
+      from: process.env.EMAIL_USER,
+      to: appt.patientemail,
+      subject: "⏰ Appointment Reminder",
+
+              
+      attachments: [
+        {
+          filename: "qr.png",
+          content: qrBuffer,
+          cid: "qrimage@pams",
+        },
+      ],
 
             html: `
               <div style="font-family:Arial;text-align:center;padding:15px">
@@ -79,8 +90,7 @@ function startReminderJob() {
 
                 <h3>📱 Scan QR Code at Hospital</h3>
 
-                <img src="${qrImage}" style="width:180px;border-radius:10px" />
-
+          <img src="cid:qrimage@pams" width="180"/>
                 <p style="margin-top:15px;color:#444;font-size:14px">
                   Please arrive 10–15 minutes early.
                 </p>
