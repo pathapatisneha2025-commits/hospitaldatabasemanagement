@@ -353,7 +353,39 @@ const qrImage = await QRCode.toDataURL(qrData, {
 
  
 
+router.get("/scan-appointment", async (req, res) => {
+  const { tokenid, patientid, doctorid } = req.query;
 
+  if (!tokenid || !patientid || !doctorid) {
+    return res.status(400).send("Missing parameters");
+  }
+
+  try {
+    const result = await db.query(
+      `UPDATE appointments
+       SET status = 'available'
+       WHERE tokenid = ? AND patientid = ? AND doctorid = ?`,
+      [tokenid, patientid, doctorid]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.send(`
+        <h2>⚠️ No matching appointment found</h2>
+      `);
+    }
+
+    return res.send(`
+      <div style="text-align:center;font-family:sans-serif;padding:20px">
+        <h2 style="color:green">✅ Appointment Marked as Available</h2>
+        <p>You can now proceed with booking.</p>
+      </div>
+    `);
+
+  } catch (err) {
+    console.log("Scan error:", err);
+    res.status(500).send("Server error");
+  }
+});
 
 router.post('/patient/add', async (req, res) => {
   try {
