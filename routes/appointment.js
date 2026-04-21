@@ -4,7 +4,7 @@ const db = require('../db'); // PostgreSQL client (from db.js)
 const SendEmail = require("../utils/SenEmail");
 const QRCode = require("qrcode"); // ✅ MUST IMPORT
 const cron = require("node-cron");
-const transporter = require("./utils/transpotar");
+const transporter = require("../utils/transpotar");
 
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
