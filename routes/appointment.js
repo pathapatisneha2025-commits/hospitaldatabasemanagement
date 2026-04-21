@@ -271,8 +271,6 @@ const result = await db.query(insertQuery, values);
 
 const qrImage = await QRCode.toDataURL(qrData, {
   width: 300,
-  margin: 2,
-
 });
 
 
@@ -286,17 +284,16 @@ const qrImage = await QRCode.toDataURL(qrData, {
    // ================= EMAIL =================
 try {
   if (patientEmail) {
-     const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
-
+    const qrBuffer = Buffer.from(qrImage.split("base64,")[1], "base64");
    await transporter.sendMail({
   from: process.env.EMAIL_USER,
   to: patientEmail,
   subject: `Appointment Confirmed - Dr. ${doctorName}`,
 
-  attachments: [
+ attachments: [
     {
       filename: "qr.png",
-          content: qrBuffer,
+      content: Buffer.from(qrImage.split("base64,")[1], "base64"),
       cid: "qrimage@pams",
     },
   ],
@@ -323,9 +320,8 @@ try {
 
       <hr/>
 
-      <h3>📱 Scan QR</h3>
-     <img src="cid:qrimage@pams" width="180"/>
-                <p style="margin-top:15px;color:#444;font-size:14px">
+     <h3>📱 Scan QR</h3>
+      <img src="cid:qrimage@pams" width="180"/>
 
       <p>Arrive 10–15 minutes early</p>
 
