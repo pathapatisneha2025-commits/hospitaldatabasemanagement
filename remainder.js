@@ -8,7 +8,7 @@ function startReminderJob() {
 
   // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
   cron.schedule(
-   "0 18 * * *",
+"* * * * *", // 1-minute test
     async () => {
       console.log("🔔 Running test reminder job:", new Date());
 
@@ -42,8 +42,8 @@ function startReminderJob() {
           });
 
           // 🚀 EMAIL (NO CID, NO BUFFER)
-          await SendEmail({
-            to: appt.patientemail,
+await transporter.sendMail({
+              to: appt.patientemail,
             subject: `⏰ Reminder: Your Appointment is Tomorrow`,
 
             html: `
