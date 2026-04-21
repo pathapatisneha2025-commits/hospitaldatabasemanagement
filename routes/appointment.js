@@ -451,7 +451,7 @@ router.put("/postpone", async (req, res) => {
     // 3. GET PATIENT DETAILS
     // =========================
     const patientRes = await db.query(
-      `SELECT name, email FROM patients WHERE id = $1`,
+      `SELECT first_name, email FROM patients WHERE id = $1`,
       [patientid]
     );
 
