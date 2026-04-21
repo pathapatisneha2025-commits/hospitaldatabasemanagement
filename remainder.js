@@ -1,16 +1,16 @@
 const cron = require("node-cron");
 const db = require("./db");
-const QRCode = require("qrcode");
 const transporter = require("./utils/transpotar");
+const QRCode = require("qrcode");
 
 function startReminderJob() {
-  console.log("🟢 Cron initialized (TEST MODE)");
+  console.log("🟢 Cron initialized (1-min test mode)");
 
-  // ⏱️ 1 MINUTE TEST (change later)
+  // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
   cron.schedule(
-    "*/1 * * * *",
+"0 18 * * *", // 1-minute test
     async () => {
-      console.log("🔔 Running reminder job:", new Date());
+      console.log("🔔 Running test reminder job:", new Date());
 
       try {
         const tomorrow = new Date();
@@ -18,78 +18,86 @@ function startReminderJob() {
 
         const date = tomorrow.toISOString().split("T")[0];
 
-      const result = await db.query(
-  `SELECT * FROM appointments 
-   WHERE date::date = $1::date
-   AND (reminder_sent IS NULL OR reminder_sent = false)`,
-  [date]
-);
+        const result = await db.query(
+          `SELECT * FROM appointments 
+           WHERE DATE(date) = $1 
+           AND (reminder_sent IS NULL OR reminder_sent = false)`,
+          [date]
+        );
 
         console.log("📊 Found:", result.rows.length);
 
-       for (let appt of result.rows) {
-  try {
-    console.log("📨 Processing:", appt.patientemail);
+        for (let appt of result.rows) {
+          if (!appt.patientemail) continue;
 
-    if (!appt.patientemail) {
-      console.log("❌ Missing email for:", appt.id);
-      continue;
-    }
+          if (!appt.qrdata) {
+            console.log("❌ Missing QR data:", appt.id);
+            continue;
+          }
 
-    if (!appt.qrdata) {
-      console.log("❌ Missing QR data for:", appt.id);
-      continue;
-    }
+          // ✅ Generate QR (base64 image)
+          const qrImage = await QRCode.toDataURL(appt.qrdata, {
+            width: 300,
+            margin: 2,
+          });
 
-    // QR generate
-    const qrImage = await QRCode.toDataURL(appt.qrdata, {
-      width: 300,
-      margin: 2,
-    });
+          // 🚀 EMAIL (NO CID, NO BUFFER)
+await transporter.sendMail({
+              to: appt.patientemail,
+            subject: `⏰ Reminder: Your Appointment is Tomorrow`,
 
-    const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
+            html: `
+              <div style="font-family:Arial;text-align:center;padding:15px">
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: appt.patientemail,
-      subject: "⏰ Appointment Reminder",
+                <h2 style="color:#1E3A8A">⏰ Appointment Reminder</h2>
 
-      attachments: [
-        {
-          filename: "qr.png",
-          content: qrBuffer,
-          cid: "qrimage@pams",
-        },
-      ],
+                <p>Dear <b>${appt.name}</b>,</p>
 
-      html: `
-        <div style="text-align:center;font-family:Arial">
-          <h2>⏰ Reminder</h2>
+                <p>
+                  This is a reminder that your appointment is scheduled for <b>TOMORROW</b>.
+                </p>
 
-          <p>Dear <b>${appt.name}</b></p>
+                <hr/>
 
-          <p>Doctor: ${appt.doctorname}</p>
-          <p>Date: ${appt.date}</p>
-          <p>Token: ${appt.tokenid}</p>
+                <h3>👨‍⚕️ Doctor Details</h3>
+                <p><b>Dr:</b> ${appt.doctorname}</p>
+                <p><b>Date:</b> ${appt.date}</p>
+                <p><b>Time:</b> ${appt.timeslot}</p>
+                <p><b>Token:</b> ${appt.tokenid}</p>
 
-          <h3>QR Code</h3>
-          <img src="cid:qrimage@pams" width="180"/>
+                <hr/>
 
-        </div>
-      `,
-    });
+                <h3>📱 Scan QR Code at Hospital</h3>
 
-    console.log("✅ EMAIL SENT TO:", appt.patientemail);
+                <!-- ✅ DIRECT QR IMAGE (ALWAYS SHOWS) -->
+                <img src="${qrImage}" style="width:180px;border-radius:10px" />
 
-    await db.query(
-      `UPDATE appointments SET reminder_sent = true WHERE id = $1`,
-      [appt.id]
-    );
+                <p style="margin-top:15px;color:#444;font-size:14px">
+                  Please arrive 10–15 minutes early.
+                </p>
 
-  } catch (err) {
-    console.log("❌ EMAIL FAILED:", appt.patientemail, err.message);
-  }
-}
+                <p style="color:#555;font-size:13px">
+                  Thank you for choosing our hospital 🙏
+                </p>
+
+                <p style="color:red;font-size:12px">
+                  ⚠️ This is an automated message. Please do not reply.
+                </p>
+
+              </div>
+            `,
+          });
+
+          await db.query(
+            `UPDATE appointments 
+             SET reminder_sent = true 
+             WHERE id = $1`,
+            [appt.id]
+          );
+
+          console.log("✅ Sent:", appt.patientemail);
+        }
+
         console.log("✅ Reminder job completed");
       } catch (err) {
         console.error("❌ Reminder error:", err.message);
