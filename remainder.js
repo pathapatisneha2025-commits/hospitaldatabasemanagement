@@ -8,7 +8,7 @@ function startReminderJob() {
 
   // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
   cron.schedule(
-    "* * * * *",
+   "0 18 * * *",
     async () => {
       console.log("🔔 Running test reminder job:", new Date());
 
