@@ -6,23 +6,33 @@ const QRCode = require("qrcode");
 function startReminderJob() {
   console.log("🟢 Cron initialized (1-min test mode)");
 
-  // ⏱️ RUN EVERY 1 MINUTE (TESTING ONLY)
   cron.schedule(
-"* * * * *", // 1-minute test
+    "* * * * *", // every 1 minute (testing)
     async () => {
       console.log("🔔 Running test reminder job:", new Date());
 
       try {
+        // ==============================
+        // ✅ FIX: NO toISOString(), NO UTC shift
+        // ==============================
+
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const date = tomorrow.toISOString().split("T")[0];
+        const yyyy = tomorrow.getFullYear();
+        const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+        const dd = String(tomorrow.getDate()).padStart(2, "0");
 
+        const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+        // ==============================
+        // ✅ FIX: Remove DATE() usage in SQL
+        // ==============================
         const result = await db.query(
           `SELECT * FROM appointments 
-           WHERE DATE(date) = $1 
+           WHERE date = $1
            AND (reminder_sent IS NULL OR reminder_sent = false)`,
-          [date]
+          [formattedDate]
         );
 
         console.log("📊 Found:", result.rows.length);
@@ -41,9 +51,9 @@ function startReminderJob() {
             margin: 2,
           });
 
-          // 🚀 EMAIL (NO CID, NO BUFFER)
-await transporter.sendMail({
-              to: appt.patientemail,
+          // 🚀 SEND EMAIL
+          await transporter.sendMail({
+            to: appt.patientemail,
             subject: `⏰ Reminder: Your Appointment is Tomorrow`,
 
             html: `
@@ -69,7 +79,6 @@ await transporter.sendMail({
 
                 <h3>📱 Scan QR Code at Hospital</h3>
 
-                <!-- ✅ DIRECT QR IMAGE (ALWAYS SHOWS) -->
                 <img src="${qrImage}" style="width:180px;border-radius:10px" />
 
                 <p style="margin-top:15px;color:#444;font-size:14px">
@@ -88,6 +97,7 @@ await transporter.sendMail({
             `,
           });
 
+          // ✅ mark as sent
           await db.query(
             `UPDATE appointments 
              SET reminder_sent = true 

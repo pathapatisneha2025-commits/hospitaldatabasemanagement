@@ -388,6 +388,129 @@ router.get("/scan-appointment", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
+
+router.put("/postpone", async (req, res) => {
+  const {
+    tokenid,
+    daily_id,
+    doctorid,
+    patientid,
+    newDate,
+    newTime,
+    reason
+  } = req.body;
+
+  console.log("📦 Postpone Request:", req.body);
+
+  if (!newDate || !newTime) {
+    return res.status(400).json({ error: "newDate and newTime are required" });
+  }
+
+  try {
+    let updated;
+
+    // =========================
+    // 1. UPDATE APPOINTMENTS
+    // =========================
+    if (tokenid) {
+      updated = await db.query(
+        `UPDATE appointments
+         SET date = $1,
+             timeslot = $2,
+             status = 'rescheduled'
+         WHERE tokenid = $3 AND doctorid = $4
+         RETURNING *`,
+        [newDate, newTime, tokenid, doctorid]
+      );
+    }
+
+    // =========================
+    // 2. UPDATE DOCTOR BOOKING
+    // =========================
+    else if (daily_id) {
+      updated = await db.query(
+        `UPDATE doctorbooking
+         SET appointment_date = $1,
+             appointment_time = $2,
+             status = 'rescheduled'
+         WHERE daily_id = $3 AND doctor_id = $4
+         RETURNING *`,
+        [newDate, newTime, daily_id, doctorid]
+      );
+    }
+
+    if (!updated || updated.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const appointment = updated.rows[0];
+
+    // =========================
+    // 3. GET PATIENT DETAILS
+    // =========================
+    const patientRes = await db.query(
+      `SELECT name, email FROM patients WHERE id = $1`,
+      [patientid]
+    );
+
+    if (patientRes.rows.length === 0) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    const patient = patientRes.rows[0];
+
+    // =========================
+    // 4. SEND EMAIL (ONLY SendEmail USED)
+    // =========================
+    await SendEmail({
+      to: patient.patientemail,
+      subject: "📅 Appointment Rescheduled",
+      html: `
+        <div style="font-family:Arial;padding:20px;background:#f9fafb;border-radius:10px">
+
+          <h2 style="color:#ef4444">⚠️ Appointment Rescheduled</h2>
+
+          <p>Dear <b>${patient.name}</b>,</p>
+
+          <p>Your appointment has been <b>rescheduled by hospital staff</b>.</p>
+
+          <div style="background:#fff;padding:15px;border-radius:8px;margin-top:10px">
+            <h3>📅 New Schedule</h3>
+            <p><b>Date:</b> ${newDate}</p>
+            <p><b>Time:</b> ${newTime}</p>
+            ${reason ? `<p><b>Reason:</b> ${reason}</p>` : ""}
+          </div>
+
+          <hr/>
+
+          <p style="color:#555">
+            ⚠️ Please arrive 10–15 minutes before your appointment time.
+          </p>
+
+          <p style="color:green;font-weight:bold">
+            Thank you for choosing our hospital ❤️
+          </p>
+
+        </div>
+      `,
+    });
+
+    // =========================
+    // 5. RESPONSE
+    // =========================
+    return res.json({
+      success: true,
+      message: "Appointment postponed successfully and email sent",
+      data: appointment,
+    });
+
+  } catch (err) {
+    console.error("❌ Postpone Error:", err);
+    return res.status(500).json({
+      error: "Server error while rescheduling appointment",
+    });
+  }
+});
 router.post('/patient/add', async (req, res) => {
   try {
     const {
