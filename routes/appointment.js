@@ -443,7 +443,8 @@ router.put("/postpone", async (req, res) => {
          RETURNING *`,
         [newDate, newTime, daily_id, doctorid]
       );
-    } else {
+    } 
+    else {
       return res.status(400).json({ error: "tokenid or daily_id required" });
     }
 
@@ -451,14 +452,15 @@ router.put("/postpone", async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    let appointment = updated.rows[0];
+    const appointment = updated.rows[0];
 
     // =========================
-    // 2. GET PATIENT EMAIL (PRIMARY FROM APPOINTMENT)
+    // 2. GET PATIENT EMAIL FROM APPOINTMENT (PRIMARY)
     // =========================
     let patientEmail = appointment.patientemail;
     let patientName = appointment.name;
 
+    // fallback only if missing
     if (!patientEmail && patientid) {
       const patientRes = await db.query(
         `SELECT first_name, email FROM patients WHERE id = $1`,
@@ -476,7 +478,7 @@ router.put("/postpone", async (req, res) => {
     }
 
     // =========================
-    // 3. 🔥 OPTIONAL: NEW TOKEN FOR NEW DATE (RECOMMENDED)
+    // 3. GENERATE NEW TOKEN (PER DAY LOGIC)
     // =========================
     let newToken = appointment.tokenid;
 
@@ -492,7 +494,6 @@ router.put("/postpone", async (req, res) => {
 
       newToken = last ? parseInt(last, 10) + 1 : 1;
 
-      // update token in DB
       await db.query(
         `UPDATE appointments
          SET tokenid = $1,
@@ -535,7 +536,7 @@ router.put("/postpone", async (req, res) => {
     const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
     // =========================
-    // 6. EMAIL
+    // 6. EMAIL (ALWAYS TO PATIENT)
     // =========================
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
