@@ -286,69 +286,49 @@ try {
   if (patientEmail) {
     const qrBuffer = Buffer.from(qrImage.split("base64,")[1], "base64");
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: patientEmail,
-      subject: `Appointment Confirmed - Dr. ${doctorName}`,
+   await transporter.sendMail({
+  from: process.env.EMAIL_USER,
+  to: patientEmail,
+  subject: `Appointment Confirmed - Dr. ${doctorName}`,
 
-      attachments: [
-        {
-          filename: "qr.png",
-          content: qrBuffer,
-          cid: "qrimage@pams", // ✅ keep same as cron & postpone
-        },
-      ],
+  attachments: [
+    {
+      filename: "qr.png",
+      content: Buffer.from(qrImage.split("base64,")[1], "base64"),
+      cid: "qrimage@pams",
+    },
+  ],
 
-      html: `
-        <div style="font-family: Arial; text-align:center; padding:15px;">
+  html: `
+    <div style="font-family:Arial; text-align:center; padding:15px;">
 
-          <img src="${HOSPITAL_LOGO}" style="width:120px;margin-bottom:10px"/>
+      <img src="${HOSPITAL_LOGO}" style="width:120px;margin-bottom:10px"/>
 
-          <h2 style="color:#16a34a">✅ Appointment Confirmed</h2>
+      <h2 style="color:#16a34a">✅ Appointment Confirmed</h2>
 
-          <p>Dear <b>${name}</b>,</p>
+      <p>Dear <b>${name}</b>,</p>
 
-          <h3>👨‍⚕️ Doctor Details</h3>
-          <p><b>Dr:</b> ${doctorName}</p>
-          <p><b>Department:</b> ${department}</p>
-          <p><b>Experience:</b> ${experience} years</p>
+      <h3>👨‍⚕️ Doctor Details</h3>
+      <p><b>Dr:</b> ${doctorName}</p>
+      <p><b>Department:</b> ${department}</p>
+      <p><b>Experience:</b> ${experience} years</p>
 
-          <h3>📅 Appointment Details</h3>
-          <p><b>Date:</b> ${formattedDate}</p>
-          <p><b>Time:</b> ${timeSlot}</p>
+      <h3>📅 Appointment Details</h3>
+      <p><b>Date:</b> ${formattedDate}</p>
+      <p><b>Time:</b> ${timeSlot}</p>
 
-          <p style="font-size:16px; margin:10px 0;">
-            <b>🎟️ Token Number:</b> 
-            <span style="color:#d9534f; font-size:18px; font-weight:bold;">
-              ${nextTokenId}
-            </span>
-          </p>
+      <p><b>🎟️ Token:</b> ${nextTokenId}</p>
 
-          <hr/>
+      <hr/>
 
-          <h3>📱 Scan QR at Hospital</h3>
+      <h3>📱 Scan QR</h3>
+      <img src="cid:qrimage@pams" width="180"/>
 
-          <img src="cid:qrimage@pams" width="180"/>
+      <p>Arrive 10–15 minutes early</p>
 
-          <p style="color:gray;font-size:12px">
-            Show this QR at reception
-          </p>
-
-          <p style="margin-top:10px;color:#333;font-size:14px">
-            📌 Please arrive 10–15 minutes before your appointment.
-          </p>
-
-          <p style="margin-top:5px;color:#333;font-size:14px">
-            🙏 Thank you for choosing our hospital. Wishing you good health!
-          </p>
-
-          <p style="color:red;font-size:12px">
-            ⚠️ This is an automated message. Please do not reply.
-          </p>
-
-        </div>
-      `,
-    });
+    </div>
+  `,
+});
   }
 } catch (err) {
   console.error("Email error:", err.message);
