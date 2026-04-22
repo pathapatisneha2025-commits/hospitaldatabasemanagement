@@ -43,19 +43,20 @@ router.get("/messages/all", async (req, res) => {
 
 router.post("/messages/add", upload.single("image"), async (req, res) => {
   try {
-    const { senderId, receiverId, text } = req.body;
+    const { senderId, receiverId, text, senderName } = req.body;
 
     let imageUrl = null;
 
     if (req.file) {
-      imageUrl = req.file.path; // cloudinary URL
+      imageUrl = req.file.path;
     }
 
     const result = await pool.query(
-      `INSERT INTO messages (sender_id, receiver_id, text, image)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [senderId, receiverId || null, text, imageUrl]
+      `INSERT INTO messages 
+      (sender_id, sender_name, receiver_id, text, image)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [senderId, senderName, receiverId || null, text, imageUrl]
     );
 
     res.json({ success: true, message: result.rows[0] });
