@@ -1,7 +1,126 @@
 const express = require("express");
 const pool = require("../../db");
 const router = express.Router();
+const QRCode = require("qrcode"); // ✅ MUST IMPORT
+const cron = require("node-cron");
+const transporter = require("../utils/transpotar");
 
+
+
+const sendSMS = async (phone, message) => {
+  try {
+    const res = await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE,
+      to: phone,
+    });
+
+    console.log("📩 SMS Sent:", res.sid);
+    return true;
+  } catch (err) {
+    console.log("❌ SMS Error:", err.message);
+    return false;
+  }
+};
+
+
+const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
+  try {
+    await client.calls.create({
+      to: phone,
+      from: process.env.TWILIO_PHONE,
+  twiml: `
+<Response>
+
+  <Say voice="alice">
+    Hello. Your appointment is confirmed.
+    Doctor ${doctorName}.
+    Date ${date}.
+    Time ${timeSlot}.
+    Token number ${token}.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice">
+    नमस्ते। आपका अपॉइंटमेंट कन्फर्म हो गया है।
+    डॉक्टर ${doctorName}.
+    दिनांक ${date}.
+    समय ${timeSlot}.
+    टोकन नंबर ${token} है।
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice">
+    Please arrive 10 to 15 minutes early. Thank you.
+  </Say>
+
+</Response>
+`,
+    });
+
+    console.log("📞 Voice call sent successfully");
+  } catch (err) {
+    console.log("❌ Call error:", err.message);
+  }
+};
+
+const makeRescheduleCall = async (phone, name, doctorId, newDate, newTime, token) => {
+  try {
+    const twiml = `
+<Response>
+
+  <Say voice="alice" language="en-IN">
+    Hello ${name}. Your appointment has been rescheduled.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice" language="en-IN">
+    Doctor ID ${doctorId}.
+    New date ${newDate}.
+    New time ${newTime}.
+    Token number ${token}.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice" language="hi-IN">
+    नमस्ते ${name}.
+    आपकी अपॉइंटमेंट बदल दी गई है।
+    कृपया समय पर अस्पताल पहुंचे।
+    धन्यवाद।
+  </Say>
+
+</Response>`;
+
+    await client.calls.create({
+      to: phone,
+      from: process.env.TWILIO_PHONE,
+      twiml,
+    });
+
+    console.log("📞 Reschedule call sent");
+  } catch (err) {
+    console.log("❌ Call error:", err.message);
+  }
+};
+const formatPhone = (num) => {
+  if (!num) return null;
+
+  let cleaned = num.toString().replace(/\D/g, "");
+
+  if (cleaned.length === 10) {
+    return `+91${cleaned}`;
+  }
+
+  if (cleaned.startsWith("91") && cleaned.length === 12) {
+    return `+${cleaned}`;
+  }
+
+  return `+${cleaned}`;
+};
 router.post("/add", async (req, res) => {
   try {
     const {
@@ -10,8 +129,8 @@ router.post("/add", async (req, res) => {
       patientId,
       patientName,
       patientAge,
-      patientGender,          
-      patientBloodGroup,      
+      patientGender,
+      patientBloodGroup,
       patientPhone,
       doctorName,
       specialization,
@@ -25,9 +144,10 @@ router.post("/add", async (req, res) => {
       paymentType,
       doctorConsultantFee,
       doctorEmail,
+      patientEmail,
     } = req.body;
 
-    // ✅ Prevent duplicate booking for same doctor/date/time
+    // ================= DUPLICATE CHECK =================
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
        WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3`,
@@ -35,13 +155,13 @@ router.post("/add", async (req, res) => {
     );
 
     if (existingAppointment.rows.length > 0) {
-      return res
-        .status(400)
-        .json({ error: "Doctor is already booked for this time slot" });
+      return res.status(400).json({
+        error: "Doctor is already booked for this time slot",
+      });
     }
 
-    // ✅ Get doctor's max visits for the day
-      const visitData = await pool.query(
+    // ================= VISIT LIMIT =================
+    const visitData = await pool.query(
       `SELECT number_of_visits_per_day 
        FROM doctor_visits
        WHERE LOWER(doctor_email) = LOWER($1)
@@ -51,7 +171,7 @@ router.post("/add", async (req, res) => {
 
     if (visitData.rows.length === 0) {
       return res.status(400).json({
-        error: `No visit limit set for Dr. ${doctorName} on ${appointmentDate}`,
+        error: `No visit limit set for Dr. ${doctorName}`,
       });
     }
 
@@ -60,7 +180,7 @@ router.post("/add", async (req, res) => {
       10
     );
 
-    // ✅ Shared token logic between appointments + doctorbooking
+    // ================= TOKEN LOGIC =================
     const lastToken = await pool.query(
       `
       SELECT MAX(tokenid) AS last_token
@@ -68,9 +188,9 @@ router.post("/add", async (req, res) => {
         SELECT tokenid 
         FROM appointments 
         WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
-        
+
         UNION ALL
-        
+
         SELECT daily_id AS tokenid 
         FROM doctorbooking 
         WHERE doctor_id::integer = $1 AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
@@ -78,38 +198,37 @@ router.post("/add", async (req, res) => {
       `,
       [doctorId, appointmentDate]
     );
-const reserveData = await pool.query(
-  `SELECT reserved_count 
-   FROM reserve_rules
-   WHERE doctor_id = $1 
-   AND date::date = TO_DATE($2, 'YYYY-MM-DD')
-   LIMIT 1`,
-  [doctorId, appointmentDate]   // ✅ FIXED HERE
-);
 
-const reservedCount = reserveData.rows.length > 0
-  ? parseInt(reserveData.rows[0].reserved_count, 10)
-  : 0;
-   let nextDailyId;
+    const reserveData = await pool.query(
+      `SELECT reserved_count 
+       FROM reserve_rules
+       WHERE doctor_id = $1 
+       AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+       LIMIT 1`,
+      [doctorId, appointmentDate]
+    );
 
-// 👉 if no tokens yet
-if (!lastToken.rows[0].last_token) {
-  nextDailyId = reservedCount + 1; // 🔥 start from 6
-} else {
-  nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
-}
+    const reservedCount =
+      reserveData.rows.length > 0
+        ? parseInt(reserveData.rows[0].reserved_count, 10)
+        : 0;
 
-  
-   // ✅ Enforce daily limit
-if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
-  return res.status(200).json({
-    alert: true,
+    let nextDailyId;
+
+    if (!lastToken.rows[0].last_token) {
+      nextDailyId = reservedCount + 1;
+    } else {
+      nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
+    }
+
+    if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
+      return res.status(200).json({
+        alert: true,
         message: `No bookings available for Dr. ${doctorName} today.`,
-  });
-}
+      });
+    }
 
-
-    // ✅ Insert new doctor booking (added gender & blood group)
+    // ================= INSERT BOOKING =================
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         daily_id, employee_id, doctor_id, patient_id,
@@ -135,8 +254,8 @@ if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
         patientId,
         patientName,
         patientAge,
-        patientGender,        // 👈 added
-        patientBloodGroup,    // 👈 added
+        patientGender,
+        patientBloodGroup,
         patientPhone,
         doctorName,
         specialization,
@@ -152,16 +271,136 @@ if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
       ]
     );
 
+    const appointment = result.rows[0];
+
+    // ================= QR DATA =================
+    const qrData = JSON.stringify({
+      token: nextDailyId,
+      patientId,
+      doctorId,
+      date: appointmentDate,
+      time: appointmentTime,
+    });
+
+    const qrImage = await QRCode.toDataURL(qrData, { width: 300 });
+
+    const HOSPITAL_LOGO =
+      "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
+
+    // ================= PHONE FORMAT =================
+    const formatPhone = (num) => {
+      if (!num) return null;
+      let cleaned = num.toString().replace(/\D/g, "");
+      return cleaned.length === 10 ? `+91${cleaned}` : `+${cleaned}`;
+    };
+
+    const phone = formatPhone(patientPhone);
+
+    // ================= EMAIL =================
+    try {
+      if (patientEmail) {
+        const qrBuffer = Buffer.from(
+          qrImage.split("base64,")[1],
+          "base64"
+        );
+
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: patientEmail,
+          subject: `Appointment Confirmed - Dr. ${doctorName}`,
+
+          attachments: [
+            {
+              filename: "qr.png",
+              content: qrBuffer,
+              cid: "qrimage@pams",
+            },
+          ],
+
+          html: `
+          <div style="max-width:600px;margin:auto;background:#fff;padding:20px;text-align:center;font-family:Arial;">
+
+            <img src="${HOSPITAL_LOGO}" style="width:120px"/>
+
+            <h2 style="color:green">✅ Appointment Confirmed</h2>
+
+            <p>Dear <b>${patientName}</b>,</p>
+
+            <p><b>Doctor:</b> ${doctorName}</p>
+            <p><b>Specialization:</b> ${specialization}</p>
+            <p><b>Date:</b> ${appointmentDate}</p>
+            <p><b>Time:</b> ${appointmentTime}</p>
+            <p><b>Token:</b> ${nextDailyId}</p>
+
+            <h3>QR Code</h3>
+            <img src="cid:qrimage@pams" width="180"/>
+
+            <p>Arrive 10–15 minutes early</p>
+
+          </div>
+        `,
+        });
+      }
+    } catch (err) {
+      console.error("Email error:", err.message);
+    }
+
+    // ================= SMS =================
+    try {
+      if (phone) {
+        await client.messages.create({
+          body: `🏥 Appointment Confirmed
+Doctor: ${doctorName}
+Date: ${appointmentDate}
+Time: ${appointmentTime}
+Token: ${nextDailyId}`,
+          from: process.env.TWILIO_PHONE,
+          to: phone,
+        });
+      }
+    } catch (err) {
+      console.error("SMS error:", err.message);
+    }
+
+    // ================= VOICE CALL =================
+    try {
+      if (phone) {
+        await client.calls.create({
+          to: phone,
+          from: process.env.TWILIO_PHONE,
+          twiml: `
+<Response>
+  <Say voice="alice">
+    Hello ${patientName}. Your appointment is confirmed.
+    Doctor ${doctorName}.
+    Date ${appointmentDate}.
+    Time ${appointmentTime}.
+    Token number ${nextDailyId}.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice">
+    कृपया समय पर अस्पताल पहुंचे। धन्यवाद।
+  </Say>
+</Response>
+          `,
+        });
+      }
+    } catch (err) {
+      console.error("Call error:", err.message);
+    }
+
+    // ================= RESPONSE =================
     res.json({
       message: `Appointment created successfully for Dr. ${doctorName}`,
-      appointment: result.rows[0],
+      appointment,
     });
   } catch (err) {
     console.error("❌ Error booking appointment:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 
