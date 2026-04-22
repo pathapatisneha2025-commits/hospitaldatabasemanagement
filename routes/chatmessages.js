@@ -88,5 +88,22 @@ router.get("/messages/:user1/:user2", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+router.post("/messages/mark-seen", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    await pool.query(
+      `UPDATE messages
+       SET seen_by = array_append(seen_by, $1)
+       WHERE NOT ($1 = ANY(seen_by))`,
+      [userId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 module.exports = router;
