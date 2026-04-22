@@ -23,7 +23,7 @@ const upload = multer({ storage });
    (Employee ↔ Admin + Employee ↔ Employee)
 ========================= */
 
-router.get("/messages", async (req, res) => {
+router.get("/messages/all", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM messages ORDER BY created_at DESC"
@@ -41,7 +41,7 @@ router.get("/messages", async (req, res) => {
    (text + image upload)
 ========================= */
 
-router.post("/messages", upload.single("image"), async (req, res) => {
+router.post("/messages/add", upload.single("image"), async (req, res) => {
   try {
     const { senderId, receiverId, text } = req.body;
 
