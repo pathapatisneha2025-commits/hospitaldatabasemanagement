@@ -29,6 +29,21 @@ const sendSMS = async (phone, message) => {
     return false;
   }
 };
+const formatPhone = (num) => {
+  if (!num) return null;
+
+  let cleaned = num.toString().replace(/\D/g, "");
+
+  if (cleaned.length === 10) {
+    return `+91${cleaned}`;
+  }
+
+  if (cleaned.startsWith("91") && cleaned.length === 12) {
+    return `+${cleaned}`;
+  }
+
+  return `+${cleaned}`;
+};
 router.get("/export", async (req, res) => {
   try {
     const query = `
@@ -372,11 +387,12 @@ try {
 // 📲 SEND SMS AFTER BOOKING SUCCESS
 
 
-try {
-  if (patientPhone) {
-    await sendSMS(
-      patientPhone,
-      `🏥 Appointment Confirmed
+if (patientPhone) {
+  const phone = formatPhone(patientPhone);
+
+  await sendSMS(
+    phone,
+    `🏥 Appointment Confirmed
 
 Dr: ${doctorName}
 Date: ${formattedDate}
@@ -384,10 +400,7 @@ Time: ${timeSlot}
 Token: ${nextTokenId}
 
 Please arrive 10–15 mins early.`
-    );
-  }
-} catch (err) {
-  console.error("SMS error:", err.message);
+  );
 }
     // ================= RESPONSE =================
  return res.status(201).json({
