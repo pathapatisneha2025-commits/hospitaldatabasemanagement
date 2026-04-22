@@ -485,7 +485,8 @@ router.put("/postpone", async (req, res) => {
          RETURNING *`,
         [newDate, newTime, tokenid, doctorid]
       );
-    } 
+    }
+
     // =========================
     // 2. UPDATE DOCTOR BOOKING
     // =========================
@@ -510,22 +511,22 @@ router.put("/postpone", async (req, res) => {
     const appointment = updated.rows[0];
 
     // =========================
-    // 3. 🔥 IMPORTANT FIX: GET EMAIL FROM APPOINTMENTS FIRST
+    // 3. PATIENT DETAILS (EMAIL + PHONE)
     // =========================
     let patientEmail = appointment.patientemail;
-
     let patientName = appointment.name;
+    let patientPhone = appointment.patientphone;
 
-    // fallback only if missing
     if (!patientEmail && patientid) {
       const patientRes = await db.query(
-        `SELECT first_name, email FROM patients WHERE id = $1`,
+        `SELECT first_name, email, phone FROM patients WHERE id = $1`,
         [patientid]
       );
 
       if (patientRes.rows.length > 0) {
         patientEmail = patientRes.rows[0].email;
         patientName = patientRes.rows[0].first_name;
+        patientPhone = patientRes.rows[0].phone;
       }
     }
 
@@ -562,11 +563,11 @@ router.put("/postpone", async (req, res) => {
     const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
     // =========================
-    // 6. EMAIL (FIXED TO ACTUAL PATIENT EMAIL)
+    // 6. EMAIL NOTIFICATION
     // =========================
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: patientEmail,   // ✅ FIXED HERE
+      to: patientEmail,
       subject: "📅 Appointment Rescheduled",
 
       attachments: [
@@ -611,6 +612,38 @@ router.put("/postpone", async (req, res) => {
       `,
     });
 
+    // =========================
+    // 7. SMS NOTIFICATION
+    // =========================
+    if (patientPhone) {
+      try {
+        const phone = formatPhone(patientPhone);
+
+        await sendSMS(
+          phone,
+          `🏥 Appointment Rescheduled
+
+Dear ${patientName},
+
+Dr ID: ${doctorid}
+New Date: ${newDate}
+New Time: ${newTime}
+Token: ${appointment.tokenid || appointment.daily_id}
+
+Please arrive 10–15 mins early.
+
+- Hospital Management`
+        );
+
+        console.log("📲 SMS sent successfully");
+      } catch (smsErr) {
+        console.error("❌ SMS failed:", smsErr.message);
+      }
+    }
+
+    // =========================
+    // RESPONSE
+    // =========================
     return res.json({
       success: true,
       message: "Appointment postponed successfully",

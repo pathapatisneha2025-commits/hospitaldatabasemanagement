@@ -3,19 +3,36 @@ const db = require("./db");
 const transporter = require("./utils/transpotar");
 const QRCode = require("qrcode");
 
+// =========================
+// SMS FUNCTION (use your provider here)
+// =========================
+async function sendSMS(phone, message) {
+  // 👉 Replace with Twilio / MSG91 / Fast2SMS
+  console.log("📲 SMS sent to:", phone);
+}
+
+// =========================
+// PHONE FORMATTER
+// =========================
+function formatPhone(phone) {
+  return phone.startsWith("+") ? phone : "+91" + phone;
+}
+
+// =========================
+// CRON JOB
+// =========================
 function startReminderJob() {
-  console.log("🟢 Cron initialized (1-min test mode)");
+  console.log("🟢 Cron initialized (Daily 6 PM IST)");
 
   cron.schedule(
-    "0 18 * * *", // every 1 minute (testing)
+    "0 18 * * *", // every day 6:00 PM IST
     async () => {
-      console.log("🔔 Running test reminder job:", new Date());
+      console.log("🔔 Running reminder job:", new Date());
 
       try {
         // ==============================
-        // ✅ FIX: NO toISOString(), NO UTC shift
+        // GET TOMORROW DATE (IST SAFE)
         // ==============================
-
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -26,7 +43,7 @@ function startReminderJob() {
         const formattedDate = `${yyyy}-${mm}-${dd}`;
 
         // ==============================
-        // ✅ FIX: Remove DATE() usage in SQL
+        // FETCH APPOINTMENTS
         // ==============================
         const result = await db.query(
           `SELECT * FROM appointments 
@@ -40,32 +57,36 @@ function startReminderJob() {
         for (let appt of result.rows) {
           if (!appt.patientemail) continue;
 
+          // ==============================
+          // QR GENERATION
+          // ==============================
           if (!appt.qrdata) {
             console.log("❌ Missing QR data:", appt.id);
             continue;
           }
 
-          // ✅ Generate QR (base64 image)
           const qrImage = await QRCode.toDataURL(appt.qrdata, {
             width: 300,
             margin: 2,
           });
+
           const qrBuffer = Buffer.from(qrImage.split(",")[1], "base64");
 
-          // 🚀 SEND EMAIL
+          // ==============================
+          // EMAIL REMINDER
+          // ==============================
           await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: appt.patientemail,
-      subject: "⏰ Appointment Reminder",
+            from: process.env.EMAIL_USER,
+            to: appt.patientemail,
+            subject: "⏰ Appointment Reminder",
 
-              
-      attachments: [
-        {
-          filename: "qr.png",
-          content: qrBuffer,
-          cid: "qrimage@pams",
-        },
-      ],
+            attachments: [
+              {
+                filename: "qr.png",
+                content: qrBuffer,
+                cid: "qrimage@pams",
+              },
+            ],
 
             html: `
               <div style="font-family:Arial;text-align:center;padding:15px">
@@ -74,40 +95,60 @@ function startReminderJob() {
 
                 <p>Dear <b>${appt.name}</b>,</p>
 
-                <p>
-                  This is a reminder that your appointment is scheduled for <b>TOMORROW</b>.
-                </p>
+                <p>This is a reminder for your <b>TOMORROW</b> appointment.</p>
 
                 <hr/>
 
-                <h3>👨‍⚕️ Doctor Details</h3>
-                <p><b>Dr:</b> ${appt.doctorname}</p>
+                <p><b>Doctor:</b> ${appt.doctorname}</p>
                 <p><b>Date:</b> ${appt.date}</p>
                 <p><b>Time:</b> ${appt.timeslot}</p>
                 <p><b>Token:</b> ${appt.tokenid}</p>
 
                 <hr/>
 
-                <h3>📱 Scan QR Code at Hospital</h3>
+                <h3>📱 QR Code</h3>
+                <img src="cid:qrimage@pams" width="180"/>
 
-          <img src="cid:qrimage@pams" width="180"/>
-                <p style="margin-top:15px;color:#444;font-size:14px">
-                  Please arrive 10–15 minutes early.
-                </p>
-
-                <p style="color:#555;font-size:13px">
-                  Thank you for choosing our hospital 🙏
-                </p>
+                <p>Please arrive 10–15 minutes early.</p>
 
                 <p style="color:red;font-size:12px">
-                  ⚠️ This is an automated message. Please do not reply.
+                  ⚠️ Do not reply to this email
                 </p>
 
               </div>
             `,
           });
 
-          // ✅ mark as sent
+          // ==============================
+          // 📲 SMS REMINDER (NEW)
+          // ==============================
+          if (appt.patientphone) {
+            try {
+              const phone = formatPhone(appt.patientphone);
+
+              await sendSMS(
+                phone,
+                `⏰ Appointment Reminder
+
+Dear ${appt.name},
+
+Doctor: ${appt.doctorname}
+Date: ${appt.date}
+Time: ${appt.timeslot}
+Token: ${appt.tokenid}
+
+Please arrive 10–15 mins early.
+
+- Hospital Management`
+              );
+            } catch (smsErr) {
+              console.error("❌ SMS Error:", smsErr.message);
+            }
+          }
+
+          // ==============================
+          // MARK AS SENT
+          // ==============================
           await db.query(
             `UPDATE appointments 
              SET reminder_sent = true 
@@ -115,7 +156,7 @@ function startReminderJob() {
             [appt.id]
           );
 
-          console.log("✅ Sent:", appt.patientemail);
+          console.log("✅ Sent reminder:", appt.patientemail);
         }
 
         console.log("✅ Reminder job completed");
