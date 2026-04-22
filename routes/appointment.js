@@ -36,11 +36,10 @@ const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
     await client.calls.create({
       to: phone,
       from: process.env.TWILIO_PHONE,
-      twiml: `
+  twiml: `
 <Response>
 
-  <!-- ENGLISH -->
-  <Say voice="alice" language="en-IN">
+  <Say voice="alice">
     Hello. Your appointment is confirmed.
     Doctor ${doctorName}.
     Date ${date}.
@@ -50,23 +49,22 @@ const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
 
   <Pause length="1"/>
 
-  <!-- HINDI -->
-  <Say voice="alice" language="hi-IN">
+  <Say voice="alice">
     नमस्ते। आपका अपॉइंटमेंट कन्फर्म हो गया है।
     डॉक्टर ${doctorName}.
     दिनांक ${date}.
     समय ${timeSlot}.
-    आपका टोकन नंबर ${token} है।
+    टोकन नंबर ${token} है।
   </Say>
 
   <Pause length="1"/>
 
-  <Say voice="alice" language="en-IN">
+  <Say voice="alice">
     Please arrive 10 to 15 minutes early. Thank you.
   </Say>
 
 </Response>
-      `,
+`,
     });
 
     console.log("📞 Voice call sent successfully");
