@@ -29,6 +29,51 @@ const sendSMS = async (phone, message) => {
     return false;
   }
 };
+
+
+const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
+  try {
+    await client.calls.create({
+      to: phone,
+      from: process.env.TWILIO_PHONE,
+      twiml: `
+<Response>
+
+  <!-- ENGLISH -->
+  <Say voice="alice" language="en-IN">
+    Hello. Your appointment is confirmed.
+    Doctor ${doctorName}.
+    Date ${date}.
+    Time ${timeSlot}.
+    Token number ${token}.
+  </Say>
+
+  <Pause length="1"/>
+
+  <!-- HINDI -->
+  <Say voice="alice" language="hi-IN">
+    नमस्ते। आपका अपॉइंटमेंट कन्फर्म हो गया है।
+    डॉक्टर ${doctorName}.
+    दिनांक ${date}.
+    समय ${timeSlot}.
+    आपका टोकन नंबर ${token} है।
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice" language="en-IN">
+    Please arrive 10 to 15 minutes early. Thank you.
+  </Say>
+
+</Response>
+      `,
+    });
+
+    console.log("📞 Voice call sent successfully");
+  } catch (err) {
+    console.log("❌ Call error:", err.message);
+  }
+};
 const formatPhone = (num) => {
   if (!num) return null;
 
@@ -402,6 +447,20 @@ Token: ${nextTokenId}
 Please arrive 10–15 mins early.`
   );
 }
+
+
+// 📞 VOICE CALL AFTER BOOKING
+if (patientPhone) {
+  const phone = formatPhone(patientPhone);
+
+  await makeVoiceCall(
+    phone,
+    doctorName,
+    formattedDate,
+    timeSlot,
+    nextTokenId
+  );
+}
     // ================= RESPONSE =================
  return res.status(201).json({
   message: "Appointment booked successfully",
@@ -640,7 +699,27 @@ Please arrive 10–15 mins early.
         console.error("❌ SMS failed:", smsErr.message);
       }
     }
+    // =========================
+    // 📞 VOICE CALL NOTIFICATION
+    // =========================
+    if (patientPhone) {
+      try {
+        const phone = formatPhone(patientPhone);
 
+        await makeRescheduleCall(
+          phone,
+          patientName,
+          doctorid,
+          newDate,
+          newTime,
+          appointment.tokenid || appointment.daily_id
+        );
+
+        console.log("📞 Voice call triggered");
+      } catch (callErr) {
+        console.error("❌ Voice call failed:", callErr.message);
+      }
+    }
     // =========================
     // RESPONSE
     // =========================

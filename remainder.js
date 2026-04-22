@@ -10,7 +10,47 @@ async function sendSMS(phone, message) {
   // 👉 Replace with Twilio / MSG91 / Fast2SMS
   console.log("📲 SMS sent to:", phone);
 }
+async function makeReminderCall(phone, name, doctor, date, time, token) {
+  try {
+    await client.calls.create({
+      to: phone,
+      from: process.env.TWILIO_PHONE,
+      twiml: `
+<Response>
 
+  <Say voice="alice" language="en-IN">
+    Hello ${name}. This is a reminder for your appointment.
+    Doctor ${doctor}.
+    Date ${date}.
+    Time ${time}.
+    Token number ${token}.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice" language="hi-IN">
+    नमस्ते ${name}. यह आपके अपॉइंटमेंट का रिमाइंडर है।
+    डॉक्टर ${doctor}.
+    दिनांक ${date}.
+    समय ${time}.
+    आपका टोकन नंबर ${token} है।
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice" language="en-IN">
+    Please arrive 10 to 15 minutes early. Thank you.
+  </Say>
+
+</Response>
+      `,
+    });
+
+    console.log("📞 Reminder call sent");
+  } catch (err) {
+    console.log("❌ Reminder call error:", err.message);
+  }
+}
 // =========================
 // PHONE FORMATTER
 // =========================
@@ -145,6 +185,22 @@ Please arrive 10–15 mins early.
               console.error("❌ SMS Error:", smsErr.message);
             }
           }
+           if (appt.patientphone) {
+            try {
+              const phone = formatPhone(appt.patientphone);
+
+              await makeReminderCall(
+                phone,
+                appt.name,
+                appt.doctorname,
+                appt.date,
+                appt.timeslot,
+                appt.tokenid
+              );
+            } catch (callErr) {
+              console.error("❌ Reminder Call Error:", callErr.message);
+            }
+          }
 
           // ==============================
           // MARK AS SENT
@@ -163,6 +219,12 @@ Please arrive 10–15 mins early.
       } catch (err) {
         console.error("❌ Reminder error:", err.message);
       }
+
+
+                // ==============================
+          // 📞 VOICE REMINDER CALL
+          // ==============================
+         
     },
     {
       timezone: "Asia/Kolkata",
