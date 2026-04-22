@@ -8,7 +8,27 @@ const transporter = require("../utils/transpotar");
 
 const { Parser } = require("json2csv");
 const ExcelJS = require("exceljs");
+const twilio = require("twilio");
+const client = twilio(
+  process.env.TWILIO_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 
+const sendSMS = async (phone, message) => {
+  try {
+    const res = await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE,
+      to: phone,
+    });
+
+    console.log("📩 SMS Sent:", res.sid);
+    return true;
+  } catch (err) {
+    console.log("❌ SMS Error:", err.message);
+    return false;
+  }
+};
 router.get("/export", async (req, res) => {
   try {
     const query = `
@@ -280,7 +300,6 @@ const qrImage = await QRCode.toDataURL(qrData, {
     const HOSPITAL_LOGO =
       "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
 
-    // ================= EMAIL =================
    // ================= EMAIL =================
 try {
   if (patientEmail) {
@@ -349,6 +368,26 @@ try {
   }
 } catch (err) {
   console.error("Email error:", err.message);
+}
+// 📲 SEND SMS AFTER BOOKING SUCCESS
+
+
+try {
+  if (patientPhone) {
+    await sendSMS(
+      patientPhone,
+      `🏥 Appointment Confirmed
+
+Dr: ${doctorName}
+Date: ${formattedDate}
+Time: ${timeSlot}
+Token: ${nextTokenId}
+
+Please arrive 10–15 mins early.`
+    );
+  }
+} catch (err) {
+  console.error("SMS error:", err.message);
 }
     // ================= RESPONSE =================
  return res.status(201).json({
