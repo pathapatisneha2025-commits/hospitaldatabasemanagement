@@ -12,41 +12,22 @@ async function sendSMS(phone, message) {
 }
 async function makeReminderCall(phone, name, doctor, date, time, token) {
   try {
-    await client.calls.create({
+    const twiml =
+`<Response>
+<Say voice="alice">Hello ${name}. This is a reminder for your appointment. Doctor ${doctor}. Date ${date}. Time ${time}. Token number ${token}.</Say>
+<Pause length="1"/>
+<Say voice="alice">Namaste ${name}. Yeh aapka appointment reminder hai. Doctor ${doctor}. Dinank ${date}. Samay ${time}. Token number ${token}.</Say>
+<Pause length="1"/>
+<Say voice="alice">Please arrive 10 to 15 minutes early. Thank you.</Say>
+</Response>`;
+
+    const call = await client.calls.create({
       to: phone,
       from: process.env.TWILIO_PHONE,
-      twiml: `
-<Response>
-
-  <Say voice="alice" language="en-IN">
-    Hello ${name}. This is a reminder for your appointment.
-    Doctor ${doctor}.
-    Date ${date}.
-    Time ${time}.
-    Token number ${token}.
-  </Say>
-
-  <Pause length="1"/>
-
-  <Say voice="alice" language="hi-IN">
-    नमस्ते ${name}. यह आपके अपॉइंटमेंट का रिमाइंडर है।
-    डॉक्टर ${doctor}.
-    दिनांक ${date}.
-    समय ${time}.
-    आपका टोकन नंबर ${token} है।
-  </Say>
-
-  <Pause length="1"/>
-
-  <Say voice="alice" language="en-IN">
-    Please arrive 10 to 15 minutes early. Thank you.
-  </Say>
-
-</Response>
-      `,
+      twiml,
     });
 
-    console.log("📞 Reminder call sent");
+    console.log("📞 Reminder call SID:", call.sid);
   } catch (err) {
     console.log("❌ Reminder call error:", err.message);
   }
