@@ -72,6 +72,43 @@ const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
     console.log("❌ Call error:", err.message);
   }
 };
+
+const makeRescheduleCall = async (phone, name, doctorId, newDate, newTime, token) => {
+  try {
+    const call = await client.calls.create({
+      to: phone,
+      from: process.env.TWILIO_PHONE,
+      twiml: `
+<Response>
+
+  <Say voice="alice">
+    Hello ${name}. Your appointment has been rescheduled.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice">
+    Doctor ID ${doctorId}.
+    New date ${newDate}.
+    New time ${newTime}.
+    Token number ${token}.
+  </Say>
+
+  <Pause length="1"/>
+
+  <Say voice="alice">
+    कृपया समय पर अस्पताल पहुंचे। धन्यवाद।
+  </Say>
+
+</Response>
+      `,
+    });
+
+    console.log("📞 Reschedule Call SID:", call.sid);
+  } catch (err) {
+    console.log("❌ Call error:", err.message);
+  }
+};
 const formatPhone = (num) => {
   if (!num) return null;
 
