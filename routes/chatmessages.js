@@ -94,8 +94,11 @@ router.post("/messages/mark-seen", async (req, res) => {
 
     await pool.query(
       `UPDATE messages
-       SET seen_by = array_append(seen_by, $1)
-       WHERE NOT ($1 = ANY(seen_by))`,
+       SET seen_by = CASE 
+         WHEN seen_by IS NULL THEN ARRAY[$1]
+         WHEN NOT ($1 = ANY(seen_by)) THEN array_append(seen_by, $1)
+         ELSE seen_by
+       END`,
       [userId]
     );
 
