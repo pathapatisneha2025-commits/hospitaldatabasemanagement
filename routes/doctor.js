@@ -30,7 +30,22 @@ const translateClient = new Translate();
 
 const streamifier = require("streamifier");
 const cloudinary = require("../cloudinary");
+const uploadAudioToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "voice_recordings",
+        resource_type: "video", // REQUIRED for audio
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
 
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
 function uploadPdfToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -585,62 +600,106 @@ router.put("/update-status/:id", async (req, res) => {
 });
 router.post("/voice-prescription", upload.single("audio"), async (req, res) => {
   try {
-    const { doctorId, patientId, doctorName, patientName, department } = req.body;
+    const {
+      doctorId,
+      patientId,
+      doctorName,
+      patientName,
+      department,
+    } = req.body;
 
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       return res.status(400).json({ error: "Audio file missing" });
     }
 
-    // 1. Speech → Text
+    // =========================
+    // 1. Upload AUDIO to Cloudinary
+    // =========================
+    let audioUrl;
+    try {
+      const audioResult = await uploadAudioToCloudinary(req.file.buffer);
+      audioUrl = audioResult.secure_url;
+    } catch (err) {
+      console.error("Audio upload failed:", err);
+      return res.status(500).json({ error: "Audio upload failed" });
+    }
+
+    // =========================
+    // 2. Speech to Text
+    // =========================
     const originalText = await speechToText(req.file.buffer);
 
-    // 2. Translate → English
+    // =========================
+    // 3. Translate
+    // =========================
     const translatedText = await translateToEnglish(originalText);
 
-    // 3. Create PDF in memory
+    // =========================
+    // 4. Create PDF
+    // =========================
     const doc = new PDFDocument();
     const buffers = [];
 
     doc.on("data", buffers.push.bind(buffers));
 
     doc.on("end", async () => {
-      const pdfBuffer = Buffer.concat(buffers);
+      try {
+        const pdfBuffer = Buffer.concat(buffers);
 
-      // 4. Upload to Cloudinary
-      const cloudResult = await uploadPdfToCloudinary(pdfBuffer);
+        const pdfResult = await uploadPdfToCloudinary(pdfBuffer);
+        const pdfUrl = pdfResult.secure_url;
 
-      const pdfUrl = cloudResult.secure_url;
+        // =========================
+        // 5. SAVE TO DATABASE
+        // =========================
+        await db.query(
+          `INSERT INTO prescriptions 
+          (
+            doctor_id,
+            patient_id,
+            doctor_name,
+            patient_name,
+            department,
+            audio_url,
+            original_text,
+            translated_text,
+            pdf_url
+          )
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [
+            doctorId,
+            patientId,
+            doctorName,
+            patientName,
+            department,
+            audioUrl,
+            originalText,
+            translatedText,
+            pdfUrl,
+          ]
+        );
 
-      // 5. Save to PostgreSQL
-      await db.query(
-        `INSERT INTO prescriptions 
-        (doctor_id, patient_id, doctor_name, original_text, translated_text, pdf_url)
-        VALUES ($1,$2,$3,$4,$5,$6)`,
-        [
-          doctorId,
-          patientId,
-          doctorName,
+        return res.json({
+          success: true,
+          message: "Prescription generated successfully",
+          audioUrl,
+          pdfUrl,
           originalText,
           translatedText,
-          pdfUrl,
-        ]
-      );
-
-      res.json({
-        success: true,
-        message: "Prescription generated successfully",
-        pdfUrl,
-        originalText,
-        translatedText,
-      });
+        });
+      } catch (err) {
+        console.error("PDF/DB error:", err);
+      }
     });
 
-    // 6. PDF DESIGN (TOP HEADER IMPORTANT)
+    // =========================
+    // 6. PDF CONTENT
+    // =========================
     doc.fontSize(18).text("🏥 Bharat Medical Hospital", { align: "center" });
     doc.fontSize(10).text("Andhra Pradesh, India", { align: "center" });
     doc.moveDown();
 
-    doc.fontSize(14).text(`Doctor: Dr. ${doctorName}`);
+    doc.text(`Doctor: Dr. ${doctorName}`);
     doc.text(`Department: ${department || "General"}`);
     doc.text(`Doctor ID: ${doctorId}`);
     doc.moveDown();
@@ -649,11 +708,8 @@ router.post("/voice-prescription", upload.single("audio"), async (req, res) => {
     doc.text(`Patient Name: ${patientName || "N/A"}`);
     doc.moveDown();
 
-    doc.fontSize(14).text("Prescription (Auto Generated):");
-    doc.fontSize(12).text(translatedText);
-
-    doc.moveDown();
-    doc.text("------ End of Prescription ------");
+    doc.fontSize(14).text("Prescription:");
+    doc.text(translatedText);
 
     doc.end();
   } catch (err) {
