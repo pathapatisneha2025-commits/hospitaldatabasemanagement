@@ -11,6 +11,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/speech": "^7.3.0",
+    "@google-cloud/translate": "^9.3.0",
     "@tensorflow/tfjs": "^4.22.0",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.11.0",
