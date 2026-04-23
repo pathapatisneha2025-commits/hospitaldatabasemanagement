@@ -1431,7 +1431,7 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
   }
 });
 
-router.get("/ecogreen/sales-invoice/by-delivery-boy/:id", async (req, res) => {
+router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
