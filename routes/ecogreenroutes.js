@@ -1122,53 +1122,54 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
     // =========================
     // 🟢 INSERT ORDER (SAFE)
     // =========================
-    const insertOrder = `
-      INSERT INTO orders (
-        id,
-        patient_id,
-        address_id,
-        address,
-        payment_method,
-        expected_delivery,
-        subtotal,
-        delivery_fee,
-        tax,
-        total,
-        order_summary,
-        status,
-        otp,
-        created_at
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
-      RETURNING *
-    `;
+   const insertOrder = `
+  INSERT INTO orders (
+    id,
+    patient_id,
+    patient_name,
+    patient_email,
+    mobile_no,
+    address_id,
+    address,
+    payment_method,
+    expected_delivery,
+    subtotal,
+    delivery_fee,
+    tax,
+    total,
+    order_summary,
+    status,
+    otp,
+    created_at
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+  RETURNING *
+`;
+   const dbResult = await client.query(insertOrder, [
+  localId,
+  order.userId || null,
 
-    const dbResult = await client.query(insertOrder, [
-      localId,
-      order.userId || null,
-      order.addressId || null,
+  order.patientName || null,
+  order.patientEmail || null,
+  order.mobileNo || null,
 
-      // 🔥 FIXED JSON SAFE FIELD (this was causing your error)
-      safeJSON(order.patientAddress),
+  order.addressId || null,
 
-      order.paymentMethod || "",
+  safeJSON(order.patientAddress),
 
-      order.expectedDelivery || null,
+  order.paymentMethod || "",
+  order.expectedDelivery || null,
 
-      // 🔥 FIXED numeric safety (prevents "34-31" crash)
-      safeNumber(order.subtotal),
-      safeNumber(order.deliveryFee),
-      safeNumber(order.tax),
-      safeNumber(order.orderTotal),
+  safeNumber(order.subtotal),
+  safeNumber(order.deliveryFee),
+  safeNumber(order.tax),
+  safeNumber(order.orderTotal),
 
-      // 🔥 SAFE JSON ARRAY
-      safeJSON(order.materialInfo),
+  safeJSON(order.materialInfo),
 
-      // status dynamic but safe
-      order.status || "pending",
-
-      otp,
-    ]);
+  order.status || "pending",
+  otp,
+]);
 
     const savedOrder = dbResult.rows[0];
 
