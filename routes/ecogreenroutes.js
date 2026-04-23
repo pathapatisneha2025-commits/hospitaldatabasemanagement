@@ -1430,6 +1430,30 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+router.get("/ecogreen/sales-invoice/by-delivery-boy/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM ecogreensales_invoices
+      WHERE delivered_by_id = $1
+      ORDER BY created_at DESC
+      `,
+      [id]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error("Fetch by delivery boy error:", err);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
 router.post('/sales-order-status', async (req, res) => {
   const { orderNo } = req.body;
 
