@@ -3,7 +3,7 @@ const pool = require("../../db");
 const router = express.Router();
 const QRCode = require("qrcode"); // ✅ MUST IMPORT
 const cron = require("node-cron");
-const transporter = require("../utils/transpotar");
+const transporter = require("../../utils/transpotar");
 
 
 
