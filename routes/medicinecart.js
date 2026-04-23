@@ -32,6 +32,7 @@ router.post("/add", async (req, res) => {
     patient_id,
     employeeid,
     subadmin_id,
+    item_code, // ✅ ADDED
     name,
     category,
     manufacturer,
@@ -41,10 +42,11 @@ router.post("/add", async (req, res) => {
     price,
     stock,
     quantity,
-    images, // ✅ Cloudinary URLs array
+    images,
   } = req.body;
 
   const providedIds = [patient_id, employeeid, subadmin_id].filter(Boolean);
+
   if (providedIds.length !== 1) {
     return res.status(400).json({
       error: "Provide exactly one of patient_id, employeeid, or subadmin_id",
@@ -54,14 +56,15 @@ router.post("/add", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO cart
-      (patient_id, employeeid, subadmin_id, name, category, manufacturer,
+      (patient_id, employeeid, subadmin_id, item_code, name, category, manufacturer,
        batch_number, pack_size, description, price, stock, quantity, images)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       RETURNING *`,
       [
         patient_id || null,
         employeeid || null,
         subadmin_id || null,
+        item_code || null, // ✅ ADDED
         name,
         category || null,
         manufacturer || null,
@@ -71,7 +74,7 @@ router.post("/add", async (req, res) => {
         price,
         stock,
         quantity,
-        images, // ✅ stored as TEXT[] / JSON
+        images,
       ]
     );
 
@@ -84,7 +87,6 @@ router.post("/add", async (req, res) => {
     res.status(500).json({ error: "Cart item creation failed" });
   }
 });
-
 
 
 
@@ -252,12 +254,18 @@ router.put("/:id", upload.array("images", 5), async (req, res) => {
     price,
     stock,
     quantity,
+    item_code, // ✅ ADDED
   } = req.body;
+
   const files = req.files || [];
 
   try {
     // Get existing cart item
-    const existing = await pool.query("SELECT * FROM cart WHERE id = $1", [id]);
+    const existing = await pool.query(
+      "SELECT * FROM cart WHERE id = $1",
+      [id]
+    );
+
     if (existing.rowCount === 0) {
       return res.status(404).json({ error: "Cart item not found" });
     }
@@ -267,7 +275,6 @@ router.put("/:id", upload.array("images", 5), async (req, res) => {
 
     // If new images uploaded, replace old ones in Cloudinary
     if (files.length > 0) {
-      // Delete old images from Cloudinary
       const getPublicIdFromUrl = (url) => {
         const parts = url.split("/");
         const filename = parts[parts.length - 1].split(".")[0];
@@ -281,17 +288,27 @@ router.put("/:id", upload.array("images", 5), async (req, res) => {
         })
       );
 
-      // Save new image URLs
       imageUrls = files.map((file) => file.path);
     }
 
-    // Update DB
+    // UPDATE DB
     const result = await pool.query(
       `UPDATE cart
-       SET name=$1, category=$2, manufacturer=$3, batch_number=$4, pack_size=$5,
-           description=$6, price=$7, stock=$8, quantity=$9, images=$10
-       WHERE id=$11 RETURNING *`,
+       SET item_code=$1,
+           name=$2,
+           category=$3,
+           manufacturer=$4,
+           batch_number=$5,
+           pack_size=$6,
+           description=$7,
+           price=$8,
+           stock=$9,
+           quantity=$10,
+           images=$11
+       WHERE id=$12
+       RETURNING *`,
       [
+        item_code || oldItem.item_code, // ✅ ADDED
         name || oldItem.name,
         category || oldItem.category,
         manufacturer || oldItem.manufacturer,
@@ -310,6 +327,7 @@ router.put("/:id", upload.array("images", 5), async (req, res) => {
       message: "Cart item updated successfully",
       item: result.rows[0],
     });
+
   } catch (err) {
     console.error("Error updating cart item:", err.message);
     res.status(500).json({ error: "Failed to update cart item" });
