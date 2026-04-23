@@ -1397,6 +1397,39 @@ router.get("/sales-invoice/all", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+router.post("/sales-invoice/assign-delivery", async (req, res) => {
+  const { order_id, delivered_by_id, delivered_by_name } = req.body;
+
+  if (!order_id || !delivered_by_id) {
+    return res.status(400).json({
+      error: "order_id and delivered_by_id are required",
+    });
+  }
+
+  try {
+    const query = `
+      UPDATE ecogreensales_invoices
+      SET 
+        delivered_by_id = $1,
+        delivered_by = $2
+      WHERE order_id = $3
+      RETURNING *
+    `;
+
+    const values = [delivered_by_id, delivered_by_name, order_id];
+
+    const result = await pool.query(query, values);
+
+    res.status(200).json({
+      message: "Delivery boy assigned successfully",
+      data: result.rows[0],
+    });
+  } catch (err) {
+    console.error("Assign delivery error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 router.post('/sales-order-status', async (req, res) => {
   const { orderNo } = req.body;
 
