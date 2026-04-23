@@ -1,11 +1,100 @@
 // routes/doctorRoutes.js
+// routes/doctorRoutes.js
 const express = require("express");
 const bcrypt = require("bcrypt");
 const db = require("../db");
+const multer = require("multer"); // ✅ REQUIRED
 
 const router = express.Router();
 
+// PDF
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
 
+// =======================
+// MULTER CONFIG (VOICE UPLOAD)
+// =======================
+const upload = multer({
+  storage: multer.memoryStorage(), // important for voice buffer
+});
+
+// =======================
+// GOOGLE SPEECH + TRANSLATE (REQUIRED)
+// =======================
+const speech = require("@google-cloud/speech");
+const { Translate } = require("@google-cloud/translate").v2;
+
+const speechClient = new speech.SpeechClient();
+const translateClient = new Translate();
+
+const streamifier = require("streamifier");
+const cloudinary = require("../cloudinary");
+
+function uploadPdfToCloudinary(buffer) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "prescriptions",
+        resource_type: "raw", // REQUIRED for PDF
+        format: "pdf",
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+}
+function generatePrescriptionPDF(data, filePath) {
+  const doc = new PDFDocument();
+
+  doc.pipe(fs.createWriteStream(filePath));
+
+  // HOSPITAL HEADER
+  doc.fontSize(18).text("🏥 Bharat Medical Hospital", { align: "center" });
+  doc.fontSize(10).text("Andhra Pradesh, India", { align: "center" });
+  doc.moveDown();
+
+  doc.fontSize(14).text(`Dr. ${data.doctorName}`);
+  doc.text(`Department: ${data.department || "General"}`);
+  doc.text(`Doctor ID: ${data.doctorId}`);
+  doc.text(`Reg No: ${data.registrationNumber || "N/A"}`);
+  doc.moveDown();
+
+  doc.text(`Patient ID: ${data.patientId}`);
+  doc.text(`Patient Name: ${data.patientName || ""}`);
+  doc.moveDown();
+
+  doc.fontSize(14).text("Prescription:", { underline: true });
+  doc.fontSize(12).text(data.translatedText);
+
+  doc.end();
+}
+async function speechToText(audioBuffer) {
+  const request = {
+    audio: {
+      content: audioBuffer.toString("base64"),
+    },
+    config: {
+      encoding: "LINEAR16",
+      sampleRateHertz: 16000,
+      languageCode: "te-IN", // can change dynamically
+    },
+  };
+
+  const [response] = await speechClient.recognize(request);
+
+  return response.results
+    .map((r) => r.alternatives[0].transcript)
+    .join(" ");
+}
+async function translateToEnglish(text) {
+  const [translation] = await translateClient.translate(text, "en");
+  return translation;
+}
 // -------------------
 // Doctor Registration
 // -------------------
@@ -494,6 +583,83 @@ router.put("/update-status/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+router.post("/voice-prescription", upload.single("audio"), async (req, res) => {
+  try {
+    const { doctorId, patientId, doctorName, patientName, department } = req.body;
 
+    if (!req.file) {
+      return res.status(400).json({ error: "Audio file missing" });
+    }
+
+    // 1. Speech → Text
+    const originalText = await speechToText(req.file.buffer);
+
+    // 2. Translate → English
+    const translatedText = await translateToEnglish(originalText);
+
+    // 3. Create PDF in memory
+    const doc = new PDFDocument();
+    const buffers = [];
+
+    doc.on("data", buffers.push.bind(buffers));
+
+    doc.on("end", async () => {
+      const pdfBuffer = Buffer.concat(buffers);
+
+      // 4. Upload to Cloudinary
+      const cloudResult = await uploadPdfToCloudinary(pdfBuffer);
+
+      const pdfUrl = cloudResult.secure_url;
+
+      // 5. Save to PostgreSQL
+      await db.query(
+        `INSERT INTO prescriptions 
+        (doctor_id, patient_id, doctor_name, original_text, translated_text, pdf_url)
+        VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          doctorId,
+          patientId,
+          doctorName,
+          originalText,
+          translatedText,
+          pdfUrl,
+        ]
+      );
+
+      res.json({
+        success: true,
+        message: "Prescription generated successfully",
+        pdfUrl,
+        originalText,
+        translatedText,
+      });
+    });
+
+    // 6. PDF DESIGN (TOP HEADER IMPORTANT)
+    doc.fontSize(18).text("🏥 Bharat Medical Hospital", { align: "center" });
+    doc.fontSize(10).text("Andhra Pradesh, India", { align: "center" });
+    doc.moveDown();
+
+    doc.fontSize(14).text(`Doctor: Dr. ${doctorName}`);
+    doc.text(`Department: ${department || "General"}`);
+    doc.text(`Doctor ID: ${doctorId}`);
+    doc.moveDown();
+
+    doc.text(`Patient ID: ${patientId}`);
+    doc.text(`Patient Name: ${patientName || "N/A"}`);
+    doc.moveDown();
+
+    doc.fontSize(14).text("Prescription (Auto Generated):");
+    doc.fontSize(12).text(translatedText);
+
+    doc.moveDown();
+    doc.text("------ End of Prescription ------");
+
+    doc.end();
+  } catch (err) {
+    console.error("❌ Voice Prescription Error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 module.exports = router;
