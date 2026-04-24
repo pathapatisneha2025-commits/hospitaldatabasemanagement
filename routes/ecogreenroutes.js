@@ -1015,29 +1015,49 @@ router.put("/mark-completed/:srno", async (req, res) => {
   }
 });
 router.post('/create_sales_order', async (req, res) => {
+  const client = await pool.connect();
+
   try {
+    await client.query("BEGIN");
+
     const salesOrderData = req.body;
 
     console.log('=== Incoming Request Body ===');
     console.log(salesOrderData);
 
-    // Validate required fields
-    if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode) {
-      console.warn('Missing required fields:', {
-        c2Code: salesOrderData.c2Code,
-        storeId: salesOrderData.storeId,
-        prodCode: salesOrderData.prodCode,
+    if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode || !salesOrderData.patientId) {
+      return res.status(400).json({
+        message: 'Required fields missing: c2Code, storeId, prodCode, patientId'
       });
-      return res.status(400).json({ message: 'Required fields missing: c2Code, storeId, prodCode' });
     }
 
-    // 🔐 Generate API token automatically if not provided
+    const patientId = salesOrderData.patientId;
+
+    // 1️⃣ FETCH CART ITEMS
+    const cartRes = await client.query(
+      `SELECT id, name, quantity, price
+       FROM cart
+       WHERE patient_id = $1`,
+      [patientId]
+    );
+
+    const cartItems = cartRes.rows;
+
+    if (cartItems.length === 0) {
+      return res.status(400).json({ message: "Cart is empty" });
+    }
+
+    console.log("Cart Items:", cartItems);
+
+    // 2️⃣ Optional: attach cart to payload
+    salesOrderData.cartItems = cartItems;
+
+    // 3️⃣ Auto token
     if (!salesOrderData.apiKey) {
       salesOrderData.apiKey = await getToken();
-      console.log('Generated API Key:', salesOrderData.apiKey);
     }
 
-    console.log('=== Forwarding to ERP ===');
+    // 4️⃣ SEND TO ERP
     const response = await fetch(
       'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
       {
@@ -1047,36 +1067,54 @@ router.post('/create_sales_order', async (req, res) => {
       }
     );
 
-   let rawText = await response.text();
+    const rawText = await response.text();
 
-console.log("=== ERP RAW RESPONSE ===");
-console.log(rawText);
-
-let data;
-
-try {
-  data = JSON.parse(rawText);
-} catch (err) {
-  console.error("❌ ERP returned invalid JSON:", rawText);
-
-  return res.status(500).json({
-    message: "ERP returned invalid response (not JSON)",
-    raw: rawText,
-  });
-}
-    if (response.ok) {
-      console.log('=== ERP Response OK ===');
-      console.log(data);
-      res.status(200).json({ message: 'Sales order submitted successfully!', data });
-    } else {
-      console.error('=== ERP Response ERROR ===');
-      console.error(data);
-      res.status(response.status).json({ message: 'Failed to submit sales order', data });
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      return res.status(500).json({
+        message: "ERP returned invalid response",
+        raw: rawText,
+      });
     }
+
+    // 5️⃣ SUCCESS → CLEAR CART
+    if (response.ok) {
+
+      await client.query(
+        `DELETE FROM cart WHERE patient_id = $1`,
+        [patientId]
+      );
+
+      await client.query("COMMIT");
+
+      return res.status(200).json({
+        message: "Sales order created & cart cleared",
+        data
+      });
+    }
+
+    // 6️⃣ FAIL → NO CLEAR
+    await client.query("ROLLBACK");
+
+    return res.status(response.status).json({
+      message: "Failed to submit sales order",
+      data
+    });
+
   } catch (error) {
-    console.error('=== SERVER ERROR ===');
+    await client.query("ROLLBACK");
     console.error(error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+
+  } finally {
+    client.release();
   }
 });
 
