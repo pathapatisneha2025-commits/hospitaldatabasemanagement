@@ -74,7 +74,41 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch medicines" });
   }
 });
+router.put("/stock-batches/bulk-visibility", async (req, res) => {
+  const { ids, is_visible_to_customer } = req.body;
 
+  try {
+    // ✅ validation
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids must be a non-empty array" });
+    }
+
+    if (typeof is_visible_to_customer !== "boolean") {
+      return res.status(400).json({
+        error: "is_visible_to_customer must be true or false",
+      });
+    }
+
+    // ✅ update query
+    const result = await pool.query(
+      `
+      UPDATE stock_batches
+      SET is_visible_to_customer = $1
+      WHERE id = ANY($2)
+      RETURNING id
+      `,
+      [is_visible_to_customer, ids]
+    );
+
+    res.json({
+      success: true,
+      updatedCount: result.rowCount,
+      updatedIds: result.rows.map((r) => r.id),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 router.get("/stock-details/customer", async (req, res) => {
   try {
     let { page = 1, limit = 20, search = "" } = req.query;
