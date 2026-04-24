@@ -1412,14 +1412,18 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     // ==============================
     // CASE 1: MANUAL ASSIGN
     // ==============================
-    if (delivered_by_id) {
-      const emp = await client.query(
-        `SELECT id, full_name FROM employees WHERE id = $1`,
-        [delivered_by_id]
-      );
+    if (delivered_by_id !== undefined && delivered_by_id !== null && delivered_by_id !== "") {
+  const emp = await client.query(
+    `SELECT id, full_name FROM employees WHERE id = $1`,
+    [delivered_by_id]
+  );
 
-      selectedBoy = emp.rows[0];
-    }
+  if (!emp.rows.length) {
+    return res.status(400).json({ error: "Invalid delivery boy" });
+  }
+
+  selectedBoy = emp.rows[0];
+} 
 
     // ==============================
     // CASE 2: AUTO ASSIGN
