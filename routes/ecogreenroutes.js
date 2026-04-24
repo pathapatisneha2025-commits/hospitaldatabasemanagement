@@ -1423,7 +1423,48 @@ router.post("/sales-invoice", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.get("/sales-invoice/by-order/:order_id", async (req, res) => {
+  const { order_id } = req.params;
 
+  try {
+    const query = `
+      SELECT *
+      FROM ecogreensales_invoices
+      WHERE order_id = $1
+      LIMIT 1
+    `;
+
+    const result = await pool.query(query, [order_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found for this order_id",
+      });
+    }
+
+    const invoice = result.rows[0];
+
+    // parse JSON fields safely
+    invoice.patient_address =
+      typeof invoice.patient_address === "string"
+        ? JSON.parse(invoice.patient_address)
+        : invoice.patient_address;
+
+    invoice.order_items =
+      typeof invoice.order_items === "string"
+        ? JSON.parse(invoice.order_items)
+        : invoice.order_items;
+
+    res.status(200).json({
+      success: true,
+      data: invoice,
+    });
+  } catch (err) {
+    console.error("Error fetching sales invoice:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 // Fetch all sales invoices
 router.get("/sales-invoice/all", async (req, res) => {
   try {
