@@ -1432,6 +1432,72 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
   }
 });
 
+router.post("/sales-invoice/auto-assign", async (req, res) => {
+  const { order_id } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // 1. Get all delivery boys
+    const empRes = await client.query(`
+      SELECT id, full_name
+      FROM employees
+      WHERE role = 'Hd delivery'
+      ORDER BY id ASC
+    `);
+
+    const boys = empRes.rows;
+
+    if (boys.length === 0) {
+      return res.status(400).json({ error: "No delivery boys found" });
+    }
+
+    // 2. Count total assigned orders (for rotation)
+    const countRes = await client.query(`
+      SELECT COUNT(*)::int AS count
+      FROM ecogreensales_invoices
+      WHERE delivered_by_id IS NOT NULL
+    `);
+
+    const totalAssigned = countRes.rows[0].count;
+
+    // 3. Round robin logic
+    const index = totalAssigned % boys.length;
+    const selected = boys[index];
+
+    // 4. Assign order
+    const update = await client.query(
+      `
+      UPDATE ecogreensales_invoices
+      SET 
+        delivered_by_id = $1,
+        delivered_by = $2,
+        assigned_at = NOW(),
+        status = 'assigned'
+      WHERE order_id = $3
+      RETURNING *
+      `,
+      [selected.id, selected.full_name, order_id]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      success: true,
+      assigned_to: selected,
+      data: update.rows[0],
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Auto assign error:", err);
+    res.status(500).json({ error: "Auto assign failed" });
+  } finally {
+    client.release();
+  }
+});
 router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
   const { id } = req.params;
 
