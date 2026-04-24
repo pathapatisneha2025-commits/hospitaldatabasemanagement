@@ -83,27 +83,27 @@ router.get("/stock-details/customer", async (req, res) => {
     limit = parseInt(limit);
     const offset = (page - 1) * limit;
 
-    const result = await pool.query(
-      `
-      SELECT 
-        id,
-        c_item_code,
-        item_name,
-        stock_bal_qty,
-        mrp,
-        sale_rate,
-        expiry_date,
-        image,
-        description
-      FROM stock_batches
-      WHERE 
-        ($1 = '' OR item_name ILIKE $1 OR c_item_code ILIKE $1)
-      ORDER BY item_name ASC
-      LIMIT $2 OFFSET $3
-      `,
-      [`%${search}%`, limit, offset]
-    );
-
+   const result = await pool.query(
+  `
+  SELECT 
+    id,
+    c_item_code,
+    item_name,
+    stock_bal_qty,
+    mrp,
+    sale_rate,
+    expiry_date,
+    image,
+    description
+  FROM stock_batches
+  WHERE 
+    is_visible_to_customer IS NOT false
+    AND ($1 = '' OR item_name ILIKE $1 OR c_item_code ILIKE $1)
+  ORDER BY item_name ASC
+  LIMIT $2 OFFSET $3
+  `,
+  [`%${search}%`, limit, offset]
+);
     const formatted = result.rows.map((item) => {
       const mrp = parseFloat(item.mrp || 0);
       const sale = parseFloat(item.sale_rate || 0);
