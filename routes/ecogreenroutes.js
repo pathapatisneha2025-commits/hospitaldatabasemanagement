@@ -1587,6 +1587,63 @@ router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
     res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
+
+router.post("/sales-invoice/payment/collect", async (req, res) => {
+  const {
+    order_id,
+    amount_collected,
+    payment_mode_collected,
+    collected_by,
+    remarks = null,
+  } = req.body;
+
+  try {
+    const paymentDetails = {
+      payment_mode_collected,
+    };
+
+    const query = `
+      UPDATE ecogreensales_invoices
+      SET 
+        payment_collected = true,
+        amount_collected = $1,
+        payment_collection_details = $2,
+        collected_by = $3,
+        collection_remarks = $4,
+        collected_at = NOW()
+      WHERE order_no = $5
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      amount_collected,
+      JSON.stringify(paymentDetails),
+      collected_by,
+      remarks,
+      order_id,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment collected successfully",
+      data: result.rows[0],
+    });
+
+  } catch (err) {
+    console.error("Payment collect error:", err);
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
+  }
+});
 router.post('/sales-order-status', async (req, res) => {
   const { orderNo } = req.body;
 
