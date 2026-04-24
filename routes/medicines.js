@@ -147,7 +147,7 @@ router.get("/stock-details/customer", async (req, res) => {
 });
 
 router.put("/stock-batches/bulk-visibility", async (req, res) => {
-  const { ids, is_visible_to_customer } = req.body;
+  const { ids } = req.body;
 
   try {
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -157,11 +157,11 @@ router.put("/stock-batches/bulk-visibility", async (req, res) => {
     const result = await pool.query(
       `
       UPDATE stock_batches
-      SET is_visible_to_customer = $1
-      WHERE id = ANY($2)
+      SET is_visible_to_customer = false
+      WHERE id = ANY($1)
       RETURNING id
       `,
-      [is_visible_to_customer, ids]
+      [ids]
     );
 
     res.json({
