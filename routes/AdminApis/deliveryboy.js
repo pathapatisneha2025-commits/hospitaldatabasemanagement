@@ -114,6 +114,116 @@ router.post("/login", async (req, res) => {
   }
 });
 // ✅ Assign Delivery Boy to an Order
+// router.post("/assign-delivery", async (req, res) => {
+//   const { orderId, employee_id } = req.body;
+
+//   if (!orderId || !employee_id) {
+//     return res.status(400).json({
+//       error: "Order ID and Employee ID are required.",
+//     });
+//   }
+
+//   const client = await pool.connect();
+
+//   try {
+//     await client.query("BEGIN");
+
+//     // =========================
+//     // FETCH ORDER
+//     // =========================
+//     const orderRes = await client.query(
+//       "SELECT id, order_summary FROM orders WHERE id = $1",
+//       [orderId]
+//     );
+
+//     if (orderRes.rows.length === 0) {
+//       await client.query("ROLLBACK");
+//       return res.status(404).json({ error: "Order not found." });
+//     }
+
+//     const order = orderRes.rows[0];
+
+//     // =========================
+//     // PARSE ORDER ITEMS
+//     // =========================
+//     const orderItems =
+//       typeof order.order_summary === "string"
+//         ? JSON.parse(order.order_summary)
+//         : order.order_summary;
+
+//     // =========================
+//     // STOCK REDUCTION (BATCH WISE)
+//     // =========================
+//     for (const item of orderItems) {
+//       const itemCode = item.itemcode.toString();
+//       const qty = Number(item.totalLooseQty || 0);
+
+//       // 🔒 LOCK STOCK ROW
+//       const stockRes = await client.query(
+//         `SELECT id, stock_bal_qty 
+//          FROM stock_batches 
+//          WHERE c_item_code = $1 
+//          FOR UPDATE`,
+//         [itemCode]
+//       );
+
+//       if (stockRes.rows.length === 0) {
+//         await client.query("ROLLBACK");
+//         return res.status(404).json({
+//           error: `Stock not found for itemcode: ${itemCode}`,
+//         });
+//       }
+
+//       const stock = stockRes.rows[0];
+
+//       // =========================
+//       // STOCK CHECK
+//       // =========================
+//       if (Number(stock.stock_bal_qty) < qty) {
+//         await client.query("ROLLBACK");
+//         return res.status(400).json({
+//           error: `Insufficient stock for itemcode ${itemCode}. Available: ${stock.stock_bal_qty}, Required: ${qty}`,
+//         });
+//       }
+
+//       // =========================
+//       // UPDATE STOCK
+//       // =========================
+//       await client.query(
+//         `UPDATE stock_batches 
+//          SET stock_bal_qty = stock_bal_qty - $1 
+//          WHERE id = $2`,
+//         [qty, stock.id]
+//       );
+//     }
+
+//     // =========================
+//     // ASSIGN DELIVERY BOY
+//     // =========================
+//     await client.query(
+//       `UPDATE orders 
+//        SET deliveryboy_id = $1, status = 'assigned' 
+//        WHERE id = $2`,
+//       [employee_id, orderId]
+//     );
+
+//     await client.query("COMMIT");
+
+//     return res.json({
+//       success: true,
+//       message: "Delivery assigned and stock updated successfully.",
+//     });
+//   } catch (error) {
+//     await client.query("ROLLBACK");
+//     console.error("Assign delivery error:", error);
+
+//     return res.status(500).json({
+//       error: "Failed to assign delivery or reduce stock.",
+//     });
+//   } finally {
+//     client.release();
+//   }
+// });
 router.post("/assign-delivery", async (req, res) => {
   const { orderId, employee_id } = req.body;
 
@@ -129,10 +239,10 @@ router.post("/assign-delivery", async (req, res) => {
     await client.query("BEGIN");
 
     // =========================
-    // FETCH ORDER
+    // CHECK ORDER EXISTS
     // =========================
     const orderRes = await client.query(
-      "SELECT id, order_summary FROM orders WHERE id = $1",
+      "SELECT id FROM orders WHERE id = $1",
       [orderId]
     );
 
@@ -141,68 +251,14 @@ router.post("/assign-delivery", async (req, res) => {
       return res.status(404).json({ error: "Order not found." });
     }
 
-    const order = orderRes.rows[0];
-
     // =========================
-    // PARSE ORDER ITEMS
-    // =========================
-    const orderItems =
-      typeof order.order_summary === "string"
-        ? JSON.parse(order.order_summary)
-        : order.order_summary;
-
-    // =========================
-    // STOCK REDUCTION (BATCH WISE)
-    // =========================
-    for (const item of orderItems) {
-      const itemCode = item.itemcode.toString();
-      const qty = Number(item.totalLooseQty || 0);
-
-      // 🔒 LOCK STOCK ROW
-      const stockRes = await client.query(
-        `SELECT id, stock_bal_qty 
-         FROM stock_batches 
-         WHERE c_item_code = $1 
-         FOR UPDATE`,
-        [itemCode]
-      );
-
-      if (stockRes.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({
-          error: `Stock not found for itemcode: ${itemCode}`,
-        });
-      }
-
-      const stock = stockRes.rows[0];
-
-      // =========================
-      // STOCK CHECK
-      // =========================
-      if (Number(stock.stock_bal_qty) < qty) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({
-          error: `Insufficient stock for itemcode ${itemCode}. Available: ${stock.stock_bal_qty}, Required: ${qty}`,
-        });
-      }
-
-      // =========================
-      // UPDATE STOCK
-      // =========================
-      await client.query(
-        `UPDATE stock_batches 
-         SET stock_bal_qty = stock_bal_qty - $1 
-         WHERE id = $2`,
-        [qty, stock.id]
-      );
-    }
-
-    // =========================
-    // ASSIGN DELIVERY BOY
+    // ASSIGN DELIVERY + TIMESTAMP
     // =========================
     await client.query(
       `UPDATE orders 
-       SET deliveryboy_id = $1, status = 'assigned' 
+       SET deliveryboy_id = $1, 
+           status = 'assigned',
+           assigned_at = NOW()
        WHERE id = $2`,
       [employee_id, orderId]
     );
@@ -211,20 +267,20 @@ router.post("/assign-delivery", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Delivery assigned and stock updated successfully.",
+      message: "Delivery assigned successfully.",
     });
+
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Assign delivery error:", error);
 
     return res.status(500).json({
-      error: "Failed to assign delivery or reduce stock.",
+      error: "Failed to assign delivery.",
     });
   } finally {
     client.release();
   }
 });
-
 // -------------------- GET ALL DELIVERY BOYS --------------------
 router.get("/all", async (req, res) => {
   try {
