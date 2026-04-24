@@ -1590,7 +1590,7 @@ router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
 
 router.post("/sales-invoice/payment/collect", async (req, res) => {
   const {
-    order_id,
+    order_no,
     amount_collected,
     payment_mode_collected,
     collected_by,
@@ -1620,7 +1620,7 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
       JSON.stringify(paymentDetails),
       collected_by,
       remarks,
-      order_id,
+      order_no,   // ✅ FIXED HERE
     ]);
 
     if (result.rows.length === 0) {
