@@ -1,5 +1,5 @@
 const cron = require("node-cron");
-const pool = require("../db"); // adjust path if needed
+const pool = require("../../db"); // adjust path if needed
 const { DateTime } = require("luxon");
 
 cron.schedule("5 0 * * *", async () => {
