@@ -578,7 +578,51 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       // ✅ DIGITAL ONLY (UPI / Card / Online)
       total_digital += Number(order.amount_received) || 0;
     });
+/* ======================================================
+   2.5️⃣ ECOGREEN INVOICES (NEW ADDED)
+====================================================== */
 
+const invoiceResult = await pool.query(
+  `
+  SELECT payment_mode_collected, amount_collected
+  FROM ecogreensales_invoices
+  WHERE collected_by = $1
+    AND payment_collected = true
+    AND collected_at BETWEEN $2 AND $3
+  `,
+  [deliveryBoyId, start, end]
+);
+
+invoiceResult.rows.forEach(inv => {
+  const amount = Number(inv.amount_collected) || 0;
+  if (!inv.payment_mode_collected) return;
+
+  const mode = inv.payment_mode_collected.toLowerCase();
+
+  // ✅ SPLIT PAYMENT (Cash:500, UPI:500)
+  if (mode.includes(':')) {
+    inv.payment_mode_collected.split(',').forEach(part => {
+      const [type, val] = part.split(':');
+      const amt = Number(val) || 0;
+
+      if (type.toLowerCase().includes('cash')) {
+        total_cash += amt;
+      } else {
+        total_digital += amt;
+      }
+    });
+    return;
+  }
+
+  // ✅ CASH ONLY
+  if (mode.includes('cash')) {
+    total_cash += amount;
+    return;
+  }
+
+  // ✅ DIGITAL (UPI / Card / Net Banking etc)
+  total_digital += amount;
+});
     /* ======================================================
        3️⃣ CREDIT ORDERS
     ====================================================== */
