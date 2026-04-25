@@ -4,7 +4,11 @@ const router = express.Router();
 const QRCode = require("qrcode"); // ✅ MUST IMPORT
 const cron = require("node-cron");
 const transporter = require("../../utils/transpotar");
-
+const twilio = require("twilio");
+const client = twilio(
+  process.env.TWILIO_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 
 
 const sendSMS = async (phone, message) => {
