@@ -1626,7 +1626,7 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
       SET 
         payment_collected = true,
         amount_collected = $1,
-        payment_collection_details = $2,
+        payment_mode_collected = $2,
         collected_by = $3,
         collection_remarks = $4,
         collected_at = NOW()
