@@ -9,12 +9,12 @@ router.post("/add", async (req, res) => {
       title,
       startDate,
       endDate,
-      assignedTo, 
+      assignedTo,
       priority,
       attachment,
       description,
       recurringType = "Not Recurring",
-      status = "Pending"   // ✅ Default status added
+      status = "Pending"
     } = req.body;
 
     if (!title || !startDate || !endDate) {
@@ -24,13 +24,20 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // 1️⃣ Fetch employee IDs from emails
+    // 1️⃣ Convert emails → employee IDs
     let employeeIds = [];
-    if (assignedTo && assignedTo.length > 0) {
+
+    if (Array.isArray(assignedTo) && assignedTo.length > 0) {
       const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
-      const employeeQuery = `SELECT id, email FROM employees WHERE email IN (${placeholders})`;
+
+      const employeeQuery = `
+        SELECT id
+        FROM employees
+        WHERE email IN (${placeholders})
+      `;
+
       const employeeResult = await pool.query(employeeQuery, assignedTo);
-      
+
       employeeIds = employeeResult.rows.map(row => row.id);
 
       if (employeeIds.length === 0) {
@@ -41,11 +48,11 @@ router.post("/add", async (req, res) => {
       }
     }
 
-    // 2️⃣ Insert task with status
+    // 2️⃣ Insert task (FIXED COLUMN NAMES - LOWERCASE SAFE)
     const query = `
       INSERT INTO Admintasks
-      (Title, StartDate, DueDate, AssignedTo, EmployeeIDs, Priority, Attachment, Description, RecurringType, Status)
-      VALUES ($1, $2, $3, $4::text[], $5::int[], $6, $7, $8, $9, $10)
+      (title, startdate, duedate, assignedto, employeeids, priority, attachment, description, recurringtype, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *;
     `;
 
@@ -53,13 +60,13 @@ router.post("/add", async (req, res) => {
       title,
       startDate,
       endDate,
-      Array.isArray(assignedTo) ? assignedTo : null,
+      assignedTo || null,
       employeeIds.length ? employeeIds : null,
       priority || null,
       attachment || null,
       description || null,
       recurringType,
-      status                   // ✅ inserted
+      status
     ];
 
     const result = await pool.query(query, values);
@@ -132,25 +139,34 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
     const {
       title,
       startDate,
       endDate,
-      assignedTo, 
+      assignedTo,
       priority,
       attachment,
       description,
-      recurringType,
-      status = "Pending"   // ✅ added status update
+      recurringType = "Not Recurring",
+      status = "Pending"
     } = req.body;
 
-    // 1️⃣ Fetch employee IDs
+    // 1️⃣ Convert emails → employee IDs
     let employeeIds = [];
-    if (assignedTo && assignedTo.length > 0) {
+
+    if (Array.isArray(assignedTo) && assignedTo.length > 0) {
       const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
-      const employeeQuery = `SELECT id, email FROM Employees WHERE email IN (${placeholders})`;
+
+      const employeeQuery = `
+        SELECT id
+        FROM employees
+        WHERE email IN (${placeholders})
+      `;
+
       const employeeResult = await pool.query(employeeQuery, assignedTo);
-      employeeIds = employeeResult.rows.map(row => row.id);
+
+      employeeIds = employeeResult.rows.map(r => r.id);
 
       if (employeeIds.length === 0) {
         return res.status(400).json({
@@ -160,20 +176,21 @@ router.put("/update/:id", async (req, res) => {
       }
     }
 
-    // 2️⃣ Update query including status
+    // 2️⃣ UPDATE QUERY (FIXED COLUMN CASE)
     const query = `
       UPDATE Admintasks
       SET 
-        Title = $1,
-        StartDate = $2,
-        DueDate = $3,
-        AssignedTo = $4::text[],
-        EmployeeIDs = $5::int[],
-        Priority = $6,
-        Attachment = $7,
-        Description = $8,
-        RecurringType = $9,
-        Status = $10
+        title = $1,
+        startdate = $2,
+        duedate = $3,
+        assignedto = $4,
+        employeeids = $5,
+        priority = $6,
+        attachment = $7,
+        description = $8,
+        recurringtype = $9,
+        status = $10,
+        updatedat = NOW()
       WHERE id = $11
       RETURNING *;
     `;
@@ -182,13 +199,13 @@ router.put("/update/:id", async (req, res) => {
       title,
       startDate,
       endDate,
-      Array.isArray(assignedTo) ? assignedTo : null,
+      assignedTo || null,
       employeeIds.length ? employeeIds : null,
       priority || null,
       attachment || null,
       description || null,
-      recurringType || "Not Recurring",
-      status,      // ✅ updated
+      recurringType,
+      status,
       id
     ];
 
@@ -201,7 +218,7 @@ router.put("/update/:id", async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Task updated successfully",
       data: result.rows[0]
@@ -216,7 +233,6 @@ router.put("/update/:id", async (req, res) => {
     });
   }
 });
-
 
 // -------------------- GET TASKS BY EMPLOYEE ID --------------------
 router.get("/employee/:employeeId", async (req, res) => {

@@ -7,49 +7,49 @@ cron.schedule("* * * * *", async () => {
 
     const tasks = await db.query(`
       SELECT 
-        "Title",
-        "DueDate",
-        "RecurringType",
-        "AssignedTo",
-        "EmployeeIDs",
-        "Priority",
-        "Description"
+        title,
+        duedate,
+        recurringtype,
+        assignedto,
+        employeeids,
+        priority,
+        description
       FROM Admintasks
-      WHERE "RecurringType" IN ('Daily', 'Weekly', 'Monthly')
-      AND "DueDate" <= NOW()
+      WHERE recurringtype IN ('Daily', 'Weekly', 'Monthly')
+      AND duedate <= NOW()
     `);
 
     for (const task of tasks.rows) {
-      let nextDate = new Date(task.DueDate);
+      let nextDate = new Date(task.duedate);
 
-      // 👉 DAILY
-      if (task.RecurringType === "Daily") {
+      // DAILY
+      if (task.recurringtype === "Daily") {
         nextDate.setDate(nextDate.getDate() + 1);
       }
 
-      // 👉 WEEKLY
-      if (task.RecurringType === "Weekly") {
+      // WEEKLY
+      if (task.recurringtype === "Weekly") {
         nextDate.setDate(nextDate.getDate() + 7);
       }
 
-      // 👉 MONTHLY
-      if (task.RecurringType === "Monthly") {
+      // MONTHLY
+      if (task.recurringtype === "Monthly") {
         nextDate.setMonth(nextDate.getMonth() + 1);
       }
 
       await db.query(`
         INSERT INTO Admintasks
-        ("Title","StartDate","DueDate","AssignedTo","EmployeeIDs","Priority","Description","RecurringType","Status")
+        (title, startdate, duedate, assignedto, employeeids, priority, description, recurringtype, status)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [
-        task.Title,
+        task.title,
         nextDate,
         nextDate,
-        task.AssignedTo,
-        task.EmployeeIDs,
-        task.Priority,
-        task.Description,
-        task.RecurringType,
+        task.assignedto,
+        task.employeeids,
+        task.priority,
+        task.description,
+        task.recurringtype,
         "Pending"
       ]);
     }
