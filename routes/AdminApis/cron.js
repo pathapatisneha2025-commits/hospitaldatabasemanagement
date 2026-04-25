@@ -1,24 +1,25 @@
 const cron = require("node-cron");
 const db = require("../../db");
 
-cron.schedule("* * * * *", async () => {
+cron.schedule("0 5 * * *", async () => {
   try {
     console.log("🔁 Running recurring task generator...");
 
     const tasks = await db.query(`
-      SELECT 
-        title,
-        duedate,
-        recurringtype,
-        assignedto,
-        employeeids,
-        priority,
-        description
-      FROM Admintasks
-      WHERE recurringtype IN ('Daily', 'Weekly', 'Monthly')
-      AND duedate <= NOW()
-    `);
-
+  INSERT INTO Admintasks
+  ("title","startdate","duedate","assignedto","employeeids","priority","description","recurringtype","status")
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+`, [
+  task.title,
+  nextDate,
+  nextDate,
+  task.assignedto,
+  task.employeeids,
+  task.priority,
+  task.description,
+  task.recurringtype,
+  "Pending"
+]);
     for (const task of tasks.rows) {
       let nextDate = new Date(task.duedate);
 
