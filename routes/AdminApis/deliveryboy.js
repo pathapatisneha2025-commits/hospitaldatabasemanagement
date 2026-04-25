@@ -474,14 +474,13 @@ router.post("/verify-delivery-otp", async (req, res) => {
 // Get collections by delivery boy for today
 router.get('/:deliveryBoyId/collections', async (req, res) => {
   const { deliveryBoyId } = req.params;
-  const { date } = req.query;
+  let { date } = req.query;
 
   try {
+    // ✅ If no date provided → use TODAY automatically
     if (!date) {
-      return res.status(400).json({
-        success: false,
-        message: "Date is required (YYYY-MM-DD)",
-      });
+      const today = new Date();
+      date = today.toISOString().split("T")[0]; // YYYY-MM-DD
     }
 
     const start = `${date} 00:00:00`;
@@ -491,7 +490,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     let total_digital = 0;
 
     /* ======================================================
-       1️⃣ SALES ORDERS (unchanged – already correct)
+       1️⃣ SALES ORDERS
     ====================================================== */
 
     const salesResult = await pool.query(
@@ -534,7 +533,7 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     });
 
     /* ======================================================
-       2️⃣ MEDICINE ORDERS (FIXED – split-safe)
+       2️⃣ MEDICINE ORDERS
     ====================================================== */
 
     const ordersResult = await pool.query(
@@ -554,7 +553,6 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       const rawMode = order.payment_mode;
       const mode = rawMode.toLowerCase();
 
-      // ✅ SPLIT PAYMENTS (Cash:500, UPI:500)
       if (mode.includes(':')) {
         rawMode.split(',').forEach(part => {
           const [type, val] = part.split(':');
@@ -569,62 +567,59 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
         return;
       }
 
-      // ✅ CASH ONLY
       if (mode.includes('cash')) {
         total_cash += Number(order.amount_received) || 0;
         return;
       }
 
-      // ✅ DIGITAL ONLY (UPI / Card / Online)
       total_digital += Number(order.amount_received) || 0;
     });
-/* ======================================================
-   2.5️⃣ ECOGREEN INVOICES (NEW ADDED)
-====================================================== */
 
-const invoiceResult = await pool.query(
-  `
-  SELECT payment_mode_collected, amount_collected
-  FROM ecogreensales_invoices
-  WHERE collected_by = $1
-    AND payment_collected = true
-    AND collected_at BETWEEN $2 AND $3
-  `,
-  [deliveryBoyId, start, end]
-);
-
-invoiceResult.rows.forEach(inv => {
-  const amount = Number(inv.amount_collected) || 0;
-  if (!inv.payment_mode_collected) return;
-
-  const mode = inv.payment_mode_collected.toLowerCase();
-
-  // ✅ SPLIT PAYMENT (Cash:500, UPI:500)
-  if (mode.includes(':')) {
-    inv.payment_mode_collected.split(',').forEach(part => {
-      const [type, val] = part.split(':');
-      const amt = Number(val) || 0;
-
-      if (type.toLowerCase().includes('cash')) {
-        total_cash += amt;
-      } else {
-        total_digital += amt;
-      }
-    });
-    return;
-  }
-
-  // ✅ CASH ONLY
-  if (mode.includes('cash')) {
-    total_cash += amount;
-    return;
-  }
-
-  // ✅ DIGITAL (UPI / Card / Net Banking etc)
-  total_digital += amount;
-});
     /* ======================================================
-       3️⃣ CREDIT ORDERS
+       3️⃣ ECOGREEN INVOICES
+    ====================================================== */
+
+    const invoiceResult = await pool.query(
+      `
+      SELECT payment_mode_collected, amount_collected
+      FROM ecogreensales_invoices
+      WHERE collected_by = $1
+        AND payment_collected = true
+        AND collected_at BETWEEN $2 AND $3
+      `,
+      [deliveryBoyId, start, end]
+    );
+
+    invoiceResult.rows.forEach(inv => {
+      const amount = Number(inv.amount_collected) || 0;
+      if (!inv.payment_mode_collected) return;
+
+      const mode = inv.payment_mode_collected.toLowerCase();
+
+      if (mode.includes(':')) {
+        inv.payment_mode_collected.split(',').forEach(part => {
+          const [type, val] = part.split(':');
+          const amt = Number(val) || 0;
+
+          if (type.toLowerCase().includes('cash')) {
+            total_cash += amt;
+          } else {
+            total_digital += amt;
+          }
+        });
+        return;
+      }
+
+      if (mode.includes('cash')) {
+        total_cash += amount;
+        return;
+      }
+
+      total_digital += amount;
+    });
+
+    /* ======================================================
+       4️⃣ CREDIT ORDERS
     ====================================================== */
 
     const creditResult = await pool.query(
@@ -637,8 +632,9 @@ invoiceResult.rows.forEach(inv => {
       [deliveryBoyId]
     );
 
-    res.json({
+    return res.json({
       success: true,
+      date,
       total_cash,
       total_digital,
       total_collected: total_cash + total_digital,
@@ -653,7 +649,6 @@ invoiceResult.rows.forEach(inv => {
     });
   }
 });
-
 
 
 // 2️⃣ Submit cash handover
