@@ -18,7 +18,7 @@ cron.schedule("* * * * *", async () => {
         priority,
         description,
         recurringtype
-      FROM "Admintasks"
+      FROM "admintasks"
       WHERE recurringtype IN ('Daily', 'Weekly', 'Monthly')
     `);
 
@@ -45,7 +45,7 @@ cron.schedule("* * * * *", async () => {
 
       // 3. INSERT NEW TASK
       await db.query(`
-        INSERT INTO "Admintasks"
+        INSERT INTO "admintasks"
         ("title","startdate","duedate","assignedto","employeeids","priority","description","recurringtype","status")
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [

@@ -50,7 +50,7 @@ router.post("/add", async (req, res) => {
 
     // 2️⃣ Insert task (FIXED COLUMN NAMES - LOWERCASE SAFE)
     const query = `
-      INSERT INTO Admintasks
+      INSERT INTO admintasks
       (title, startdate, duedate, assignedto, employeeids, priority, attachment, description, recurringtype, status)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *;
@@ -91,7 +91,7 @@ router.post("/add", async (req, res) => {
 // -------------------- GET ALL TASKS --------------------
 router.get("/all", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM Admintasks ORDER BY id DESC");
+    const result = await pool.query("SELECT * FROM admintasks ORDER BY id DESC");
     res.status(200).json({
       success: true,
       data: result.rows
@@ -111,7 +111,7 @@ router.get("/all", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query("SELECT * FROM Admintasks WHERE id = $1", [id]);
+    const result = await pool.query("SELECT * FROM admintasks WHERE id = $1", [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -178,7 +178,7 @@ router.put("/update/:id", async (req, res) => {
 
     // 2️⃣ UPDATE QUERY (FIXED COLUMN CASE)
     const query = `
-      UPDATE Admintasks
+      UPDATE admintasks
       SET 
         title = $1,
         startdate = $2,
@@ -241,7 +241,7 @@ router.get("/employee/:employeeId", async (req, res) => {
 
     const query = `
       SELECT *
-      FROM Admintasks
+      FROM admintasks
       WHERE $1 = ANY(EmployeeIDs)
       ORDER BY id DESC
     `;
@@ -276,7 +276,7 @@ router.delete("/delete/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
-      "DELETE FROM Admintasks WHERE id = $1 RETURNING *",
+      "DELETE FROM admintasks WHERE id = $1 RETURNING *",
       [id]
     );
 
