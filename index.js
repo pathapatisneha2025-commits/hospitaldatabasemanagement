@@ -4,7 +4,8 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path"); // ✅ ADD THIS LINE
 const startReminderJob = require("./remainder");
-// Import routes
+// server.js
+require("./routes/AdminApis/corn");// Import routes
 const employeeRoutes = require("./routes/employee");
 const attendanceRoutes = require("./routes/attendance");
 const taskRoutes = require("./routes/task");
