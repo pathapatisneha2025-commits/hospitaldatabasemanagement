@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const db = require("../../db");
 
 // runs daily at 5 AM
-cron.schedule("* * * * *", async () => {
+cron.schedule("0 5 * * *", async () => {
   try {
     console.log("🔁 Running recurring task generator...");
 
