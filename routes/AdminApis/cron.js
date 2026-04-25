@@ -2,62 +2,57 @@ const cron = require("node-cron");
 const db = require("../../db");
 
 // runs daily at 5 AM
-cron.schedule("0 5 * * *", async () => {
-  try {
+cron.schedule("*/5 * * * *", async () => {  try {
     console.log("🔁 Running recurring task generator...");
 
-    // 1. GET EXISTING RECURRING TASKS
+    // ONLY ORIGINAL TASKS
     const result = await db.query(`
-      SELECT 
-        id,
-        title,
-        startdate,
-        duedate,
-        assignedto,
-        employeeids,
-        priority,
-        description,
-        recurringtype
-      FROM "admintasks"
-      WHERE recurringtype IN ('Daily', 'Weekly', 'Monthly')
+      SELECT *
+      FROM admintasks
+      WHERE recurringtype IN ('Daily','Weekly','Monthly')
+      AND parent_task_id IS NULL
     `);
 
-    console.log("Tasks found:", result.rows.length);
-
-    // 2. LOOP TASKS
     for (const task of result.rows) {
-      let nextDate = new Date(task.duedate);
+
+      // 👉 ALWAYS BASE FROM ORIGINAL START/END
+      let nextStart = new Date(task.startdate);
+      let nextDue = new Date(task.duedate);
 
       // DAILY
       if (task.recurringtype === "Daily") {
-        nextDate.setDate(nextDate.getDate() + 1);
+        nextStart.setDate(nextStart.getDate() + 1);
+        nextDue.setDate(nextDue.getDate() + 1);
       }
 
       // WEEKLY
       if (task.recurringtype === "Weekly") {
-        nextDate.setDate(nextDate.getDate() + 7);
+        nextStart.setDate(nextStart.getDate() + 7);
+        nextDue.setDate(nextDue.getDate() + 7);
       }
 
       // MONTHLY
       if (task.recurringtype === "Monthly") {
-        nextDate.setMonth(nextDate.getMonth() + 1);
+        nextStart.setMonth(nextStart.getMonth() + 1);
+        nextDue.setMonth(nextDue.getMonth() + 1);
       }
 
-      // 3. INSERT NEW TASK
+      // CREATE NEW TASK
       await db.query(`
-        INSERT INTO "admintasks"
-        ("title","startdate","duedate","assignedto","employeeids","priority","description","recurringtype","status")
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        INSERT INTO admintasks
+        (title,startdate,duedate,assignedto,employeeids,priority,description,recurringtype,status,parent_task_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       `, [
         task.title,
-        nextDate,
-        nextDate,
+        nextStart,
+        nextDue,
         task.assignedto,
         task.employeeids,
         task.priority,
         task.description,
         task.recurringtype,
-        "Pending"
+        "Pending",
+        task.id
       ]);
     }
 
