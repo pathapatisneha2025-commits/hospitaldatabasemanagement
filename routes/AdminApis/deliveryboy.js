@@ -569,6 +569,8 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
         return;
       }
 
+
+
       // ✅ CASH ONLY
       if (mode.includes('cash')) {
         total_cash += Number(order.amount_received) || 0;
@@ -578,7 +580,56 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       // ✅ DIGITAL ONLY (UPI / Card / Online)
       total_digital += Number(order.amount_received) || 0;
     });
+/* ======================================================
+   3️⃣ ECOGREEN ORDERS (ADD THIS)
+====================================================== */
 
+const ecoResult = await pool.query(
+  `
+  SELECT payment_mode_collected, amount_collected
+  FROM ecogreen_orders
+  WHERE deliveryboy_id = $1
+    AND payment_collected = true
+    AND collected_at BETWEEN $2 AND $3
+  `,
+  [deliveryBoyId, start, end]
+);
+
+ecoResult.rows.forEach(order => {
+  if (!order.payment_mode_collected) return;
+
+  // 🔥 FIX: handle nested object or string
+  const rawMode =
+    typeof order.payment_mode_collected === "string"
+      ? order.payment_mode_collected
+      : order.payment_mode_collected.payment_mode_collected;
+
+  if (!rawMode) return;
+
+  const mode = rawMode.toLowerCase();
+
+  // Split payments: Cash:4000, UPI:4450.9
+  if (mode.includes(":")) {
+    rawMode.split(",").forEach(part => {
+      const [type, val] = part.split(":");
+      const amt = Number(val) || 0;
+
+      if (type.toLowerCase().includes("cash")) {
+        total_cash += amt;
+      } else {
+        total_digital += amt;
+      }
+    });
+    return;
+  }
+
+  // fallback
+  if (mode.includes("cash")) {
+    total_cash += Number(order.amount_collected) || 0;
+  } else {
+    total_digital += Number(order.amount_collected) || 0;
+  }
+});
     /* ======================================================
        3️⃣ CREDIT ORDERS
     ====================================================== */
