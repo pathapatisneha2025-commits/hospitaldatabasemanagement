@@ -583,8 +583,8 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
     const ecoResult = await pool.query(
       `
       SELECT payment_mode_collected, amount_collected
-      FROM ecogreen_orders
-      WHERE deliveryboy_id = $1
+      FROM ecogreensales_invoices
+      WHERE delivered_by_id = $1
         AND payment_collected = true
         AND collected_at BETWEEN $2 AND $3
       `,
