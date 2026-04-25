@@ -1589,6 +1589,8 @@ router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
 });
 
 router.post("/sales-invoice/payment/collect", async (req, res) => {
+  console.log("🔥 FULL BODY:", req.body);
+
   const {
     order_no,
     amount_collected,
@@ -1597,10 +1599,21 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
     remarks = null,
   } = req.body;
 
+  console.log("📦 order_no:", order_no);
+  console.log("📦 TYPE:", typeof order_no);
+
   try {
     const paymentDetails = {
       payment_mode_collected,
     };
+
+    console.log("🧾 FINAL QUERY VALUES:", {
+      amount_collected,
+      payment_mode_collected,
+      collected_by,
+      remarks,
+      order_no,
+    });
 
     const query = `
       UPDATE ecogreensales_invoices
@@ -1620,10 +1633,13 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
       JSON.stringify(paymentDetails),
       collected_by,
       remarks,
-      order_no,   // ✅ FIXED HERE
+      order_no,
     ]);
 
+    console.log("📊 DB RESULT:", result.rows);
+
     if (result.rows.length === 0) {
+      console.log("❌ No invoice found for order_no:", order_no);
       return res.status(404).json({
         success: false,
         message: "Invoice not found",
@@ -1637,7 +1653,7 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Payment collect error:", err);
+    console.error("💥 Payment collect error:", err);
     res.status(500).json({
       success: false,
       error: "Internal Server Error",
