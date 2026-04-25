@@ -5,7 +5,7 @@ const cors = require("cors");
 const path = require("path"); // ✅ ADD THIS LINE
 const startReminderJob = require("./remainder");
 // server.js
-require("./routes/AdminApis/cron");// Import routes
+const Recurringtask =require("./routes/AdminApis/cron");// Import routes
 const employeeRoutes = require("./routes/employee");
 const attendanceRoutes = require("./routes/attendance");
 const taskRoutes = require("./routes/task");
@@ -170,6 +170,8 @@ app.use("/cron", cronRoutes);
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
     startReminderJob();
+       Recurringtask();
+
 
 });
 

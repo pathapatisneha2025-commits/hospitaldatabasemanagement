@@ -1,5 +1,5 @@
 const cron = require("node-cron");
-const pool = require("../../db");
+const db = require("././db");
 
 cron.schedule("5 0 * * *", async () => {
   try {
