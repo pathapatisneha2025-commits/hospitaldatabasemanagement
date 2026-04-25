@@ -591,39 +591,44 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
       [deliveryBoyId, start, end]
     );
 
-    ecoResult.rows.forEach(order => {
-      const amount = Number(order.amount_collected) || 0;
+   ecoResult.rows.forEach(order => {
+  const fullAmount = Number(order.amount_collected) || 0;
 
-      const rawMode =
-        typeof order.payment_mode_collected === "string"
-          ? order.payment_mode_collected
-          : order.payment_mode_collected?.payment_mode_collected;
+  const rawMode =
+    typeof order.payment_mode_collected === "string"
+      ? order.payment_mode_collected
+      : order.payment_mode_collected?.payment_mode_collected;
 
-      if (!rawMode) return;
+  if (!rawMode) return;
 
-      const mode = rawMode.toLowerCase();
+  const mode = rawMode.toLowerCase();
 
-      if (mode.includes(":")) {
-        rawMode.split(",").forEach(part => {
-          const [type, val] = part.split(":");
-          const amt = Number(val) || 0;
+  // ✅ SPLIT PAYMENT CASE
+  if (mode.includes(":")) {
+    rawMode.split(",").forEach(part => {
+      const [type, val] = part.split(":");
 
-          if (type?.toLowerCase().includes("cash")) {
-            total_cash += amt;
-          } else {
-            total_digital += amt;
-          }
-        });
-        return;
-      }
+      const amt = Number(val) || 0;
+      const cleanType = type?.trim().toLowerCase(); // 🔥 FIX IMPORTANT
 
-      if (mode.includes("cash")) {
-        total_cash += amount;
+      if (cleanType.includes("cash")) {
+        total_cash += amt;
       } else {
-        total_digital += amount;
+        // UPI = digital
+        total_digital += amt;
       }
     });
 
+    return; // ❗ STOP HERE (IMPORTANT)
+  }
+
+  // ✅ NON SPLIT CASE
+  if (mode.includes("cash")) {
+    total_cash += fullAmount;
+  } else {
+    total_digital += fullAmount;
+  }
+});
     /* ======================================================
        🔴 4. CREDIT ORDERS
     ====================================================== */
