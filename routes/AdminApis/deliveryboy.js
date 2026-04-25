@@ -579,17 +579,17 @@ router.get('/:deliveryBoyId/collections', async (req, res) => {
        3️⃣ ECOGREEN INVOICES
     ====================================================== */
 
-    const invoiceResult = await pool.query(
-      `
-      SELECT payment_mode_collected, amount_collected
-      FROM ecogreensales_invoices
-      WHERE collected_by = $1
-        AND payment_collected = true
-        AND collected_at BETWEEN $2 AND $3
-      `,
-      [deliveryBoyId, start, end]
-    );
-
+  const invoiceResult = await pool.query(
+  `
+  SELECT payment_mode_collected, amount_collected
+  FROM ecogreensales_invoices
+  WHERE collected_by = $1
+    AND payment_collected = true
+    AND collected_at >= $2::date
+    AND collected_at < ($2::date + INTERVAL '1 day')
+  `,
+  [deliveryBoyId, date]
+);
     invoiceResult.rows.forEach(inv => {
       const amount = Number(inv.amount_collected) || 0;
       if (!inv.payment_mode_collected) return;
