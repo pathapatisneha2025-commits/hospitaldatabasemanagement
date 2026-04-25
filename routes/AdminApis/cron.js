@@ -1,10 +1,9 @@
 const cron = require("node-cron");
 const pool = require("../../db");
-const { DateTime } = require("luxon");
 
 cron.schedule("5 0 * * *", async () => {
   try {
-    console.log("Running recurring task generator...");
+    console.log("🔁 Running recurring task generator...");
 
     const tasks = await pool.query(`
       SELECT 
@@ -21,18 +20,21 @@ cron.schedule("5 0 * * *", async () => {
     `);
 
     for (const task of tasks.rows) {
-      let nextDate = DateTime.fromJSDate(new Date(task.DueDate));
+      let nextDate = new Date(task.DueDate);
 
+      // 👉 DAILY
       if (task.RecurringType === "Daily") {
-        nextDate = nextDate.plus({ days: 1 });
+        nextDate.setDate(nextDate.getDate() + 1);
       }
 
+      // 👉 WEEKLY
       if (task.RecurringType === "Weekly") {
-        nextDate = nextDate.plus({ weeks: 1 });
+        nextDate.setDate(nextDate.getDate() + 7);
       }
 
+      // 👉 MONTHLY
       if (task.RecurringType === "Monthly") {
-        nextDate = nextDate.plus({ months: 1 });
+        nextDate.setMonth(nextDate.getMonth() + 1);
       }
 
       await pool.query(`
@@ -41,8 +43,8 @@ cron.schedule("5 0 * * *", async () => {
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [
         task.Title,
-        nextDate.toJSDate(),
-        nextDate.toJSDate(),
+        nextDate,
+        nextDate,
         task.AssignedTo,
         task.EmployeeIDs,
         task.Priority,
@@ -52,8 +54,8 @@ cron.schedule("5 0 * * *", async () => {
       ]);
     }
 
-    console.log("Recurring tasks generated successfully");
+    console.log("✅ Recurring tasks generated successfully");
   } catch (err) {
-    console.error("Recurring job error:", err);
+    console.error("❌ Recurring job error:", err.message);
   }
 });
