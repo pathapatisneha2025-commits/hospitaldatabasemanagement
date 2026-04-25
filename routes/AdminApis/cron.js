@@ -5,7 +5,7 @@ cron.schedule("5 0 * * *", async () => {
   try {
     console.log("🔁 Running recurring task generator...");
 
-    const tasks = await pool.query(`
+    const tasks = await db.query(`
       SELECT 
         "Title",
         "DueDate",
@@ -37,7 +37,7 @@ cron.schedule("5 0 * * *", async () => {
         nextDate.setMonth(nextDate.getMonth() + 1);
       }
 
-      await pool.query(`
+      await db.query(`
         INSERT INTO Admintasks
         ("Title","StartDate","DueDate","AssignedTo","EmployeeIDs","Priority","Description","RecurringType","Status")
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
