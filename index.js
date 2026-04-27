@@ -68,7 +68,9 @@ const EcogreenRoutes =   require("./routes/ecogreenroutes");
 const EcogreenBulkupload =   require("./routes/ecogreenbulkapiroutes"); 
 const EcogreenSingleapi =   require("./routes/ecogreensingleapisroutes"); 
 const ReserveToken =   require("./routes//AdminApis/reservetokens");
-const ChatMessages =   require("./routes/chatmessages"); 
+const ChatMessages =   require("./routes/chatmessages");
+const Razorpayments =   require("./routes/paymentroutes"); 
+
 
 
 
@@ -157,6 +159,8 @@ app.use("/ecogreenbulkupload",EcogreenBulkupload);
 app.use("/ecogreensingleapis",EcogreenSingleapi); 
 app.use("/reservetokens",ReserveToken); 
 app.use("/ChatMessages",ChatMessages); 
+app.use("/razorpay",Razorpayments); 
+
 
 
 
