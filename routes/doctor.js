@@ -110,10 +110,27 @@ async function translateToEnglish(text) {
   const [translation] = await translateClient.translate(text, "en");
   return translation;
 }
+
+const uploadImageToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "doctor_profiles",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
 // -------------------
 // Doctor Registration
 // -------------------
-router.post("/register", async (req, res) => {
+router.post("/register", upload.single("profileImage"), async (req, res) => {
   try {
     const {
       name,
@@ -127,10 +144,12 @@ router.post("/register", async (req, res) => {
       experience,
       description,
       scheduleIn,
-      scheduleOut
+      scheduleOut,
     } = req.body;
 
-    // Validation
+    // =========================
+    // VALIDATION
+    // =========================
     if (
       !name ||
       !email ||
@@ -152,26 +171,74 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Passwords do not match" });
     }
 
-    // Check existing doctor
+    // =========================
+    // CHECK EXISTING DOCTOR
+    // =========================
     const existingDoctor = await db.query(
       "SELECT * FROM doctors WHERE email=$1",
       [email]
     );
 
     if (existingDoctor.rows.length > 0) {
-      return res.status(400).json({ error: "Doctor with this email already exists" });
+      return res.status(400).json({ error: "Doctor already exists" });
     }
 
+    // =========================
+    // HASH PASSWORD
+    // =========================
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // INSERT with STATUS (default = pending)
+    // =========================
+    // IMAGE UPLOAD (CLOUDINARY)
+    // =========================
+    let imageUrl = null;
+
+    if (req.file && req.file.buffer) {
+      try {
+        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+        imageUrl = uploadResult.secure_url;
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        return res.status(500).json({ error: "Image upload failed" });
+      }
+    }
+
+    // =========================
+    // INSERT DOCTOR
+    // =========================
     const newDoctor = await db.query(
       `INSERT INTO doctors 
-        (name, email, password, phone_number, department, role, gender, experience, description, schedule_in, schedule_out, status)
-       VALUES 
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
-       RETURNING 
-        id, name, email, phone_number, department, role, gender, experience, description, schedule_in, schedule_out, status`,
+      (
+        name,
+        email,
+        password,
+        phone_number,
+        department,
+        role,
+        gender,
+        experience,
+        description,
+        schedule_in,
+        schedule_out,
+        status,
+        profile_image
+      )
+      VALUES 
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12)
+      RETURNING 
+        id,
+        name,
+        email,
+        phone_number,
+        department,
+        role,
+        gender,
+        experience,
+        description,
+        schedule_in,
+        schedule_out,
+        status,
+        profile_image`,
       [
         name,
         email,
@@ -183,10 +250,14 @@ router.post("/register", async (req, res) => {
         experience,
         description,
         scheduleIn,
-        scheduleOut
+        scheduleOut,
+        imageUrl,
       ]
     );
 
+    // =========================
+    // RESPONSE
+    // =========================
     res.status(201).json({
       message: "Doctor registered successfully",
       doctor: newDoctor.rows[0],
@@ -197,7 +268,6 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 // -------------------
 // Doctor Login
