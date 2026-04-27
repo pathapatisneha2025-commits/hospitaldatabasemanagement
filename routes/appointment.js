@@ -36,7 +36,7 @@ const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
     await client.calls.create({
       to: phone,
       from: process.env.TWILIO_PHONE,
-  twiml: `
+ twiml: `
 <Response>
 
   <Say voice="alice">
@@ -64,7 +64,7 @@ const makeVoiceCall = async (phone, doctorName, date, timeSlot, token) => {
   </Say>
 
 </Response>
-`,
+`
     });
 
     console.log("📞 Voice call sent successfully");
