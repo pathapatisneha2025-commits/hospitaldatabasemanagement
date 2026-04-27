@@ -360,7 +360,7 @@ router.get("/all", async (req, res) => {
   try {
     const doctors = await db.query(
       `SELECT 
-        id, name, email, phone_number, department, role, gender, 
+        id, name, email, phone_number, department, role, gender,profile_image, 
         experience, description, schedule_in, schedule_out,status
        FROM doctors`
     );
@@ -405,7 +405,7 @@ router.get("/:id", async (req, res) => {
 // -------------------
 // Update Doctor
 // -------------------
-router.put("/update/:id", async (req, res) => {
+router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -429,19 +429,28 @@ router.put("/update/:id", async (req, res) => {
       return res.status(404).json({ error: "Doctor not found" });
     }
 
+    // ✅ Password handling
     let hashedPassword = doctor.rows[0].password;
     if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
+    // ✅ Image handling
+    let profileImage = doctor.rows[0].profile_image; // existing image
+
+    if (req.file) {
+      profileImage = req.file.filename; // new uploaded image
+    }
+
     const updatedDoctor = await db.query(
       `UPDATE doctors SET 
         name=$1, email=$2, phone_number=$3, department=$4, role=$5, gender=$6,
-        experience=$7, description=$8, schedule_in=$9, schedule_out=$10, password=$11
-       WHERE id=$12
+        experience=$7, description=$8, schedule_in=$9, schedule_out=$10, 
+        password=$11, profile_image=$12
+       WHERE id=$13
        RETURNING 
         id, name, email, phone_number, department, role, gender, 
-        experience, description, schedule_in, schedule_out`,
+        experience, description, schedule_in, schedule_out, profile_image`,
       [
         name,
         email,
@@ -454,6 +463,7 @@ router.put("/update/:id", async (req, res) => {
         scheduleIn,
         scheduleOut,
         hashedPassword,
+        profileImage,
         id
       ]
     );
