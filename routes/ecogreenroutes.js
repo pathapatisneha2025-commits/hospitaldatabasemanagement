@@ -1156,7 +1156,23 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
     // =========================
     const localId = Math.floor(Math.random() * 999999999);
     const otp = Math.floor(1000 + Math.random() * 9000);
+  let cartItems = [];
 
+    if (patientId) {
+      const cartRes = await client.query(
+        `SELECT id AS cart_id, name, quantity, price
+         FROM cart
+         WHERE patient_id = $1`,
+        [patientId]
+      );
+
+      cartItems = cartRes.rows;
+    }
+
+    console.log("🛒 CART ITEMS:", cartItems);
+
+    // attach cart to order for ERP if needed
+    order.cartItems = cartItems;
     // =========================
     // 🟢 INSERT ORDER (SAFE)
     // =========================
@@ -1262,8 +1278,16 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
       [finalStatus, localId]
     );
 
-    await client.query("COMMIT");
+if (response.ok && patientId) {
+      await client.query(
+        "DELETE FROM cart WHERE patient_id = $1",
+        [patientId]
+      );
 
+      console.log("🧹 Cart cleared for patient:", patientId);
+    }
+
+    await client.query("COMMIT");
     return res.status(response.ok ? 200 : 400).json({
       message: response.ok
         ? "Order placed successfully"
