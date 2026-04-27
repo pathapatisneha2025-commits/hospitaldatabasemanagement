@@ -1156,6 +1156,8 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
     // =========================
     const localId = Math.floor(Math.random() * 999999999);
     const otp = Math.floor(1000 + Math.random() * 9000);
+    const patientId = order.userId || null;
+
   let cartItems = [];
 
     if (patientId) {
