@@ -33,7 +33,9 @@ router.post("/generate", async (req, res) => {
       address2,
       address3,
       city,
-      pin
+      pin,
+        finalTotal,        // 👈 ADD THIS
+
     } = req.body;
 
     if (!employeeId && !subadminId) {
@@ -126,10 +128,7 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    const totalAmount = medicines.reduce(
-      (sum, med) => sum + med.total,
-      0
-    );
+  const totalAmount = finalTotal; 
 
     const invoiceNo = generateInvoiceNo();
 
