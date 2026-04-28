@@ -382,19 +382,27 @@ router.put("/update/:id", uploadImage.single("profileImage"), async (req, res) =
       return res.status(404).json({ error: "Doctor not found" });
     }
 
-    // password logic
+    // =========================
+    // PASSWORD
+    // =========================
     let hashedPassword = doctor.rows[0].password;
-    if (password) {
+
+    if (password && password.trim() !== "") {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // image logic
-    let profileImage = doctor.rows[0].profile_image;
+    // =========================
+    // IMAGE (YOUR STYLE - CORRECT)
+    // =========================
+    const file = req.file;
 
-    if (req.file) {
-      profileImage = req.file.path; // Cloudinary URL
-    }
+    const imageUrl = file
+      ? file.path
+      : doctor.rows[0].profile_image;
 
+    // =========================
+    // UPDATE QUERY
+    // =========================
     const updated = await db.query(
       `UPDATE doctors SET
         name=$1,
@@ -423,7 +431,7 @@ router.put("/update/:id", uploadImage.single("profileImage"), async (req, res) =
         scheduleIn,
         scheduleOut,
         hashedPassword,
-        profileImage,
+        imageUrl,
         id,
       ]
     );
@@ -432,8 +440,9 @@ router.put("/update/:id", uploadImage.single("profileImage"), async (req, res) =
       message: "Doctor updated successfully",
       doctor: updated.rows[0],
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("UPDATE ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
