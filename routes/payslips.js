@@ -815,7 +815,7 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
 );
 
     const lateRows = lateResult.rows || [];
-const freeLateDays = 3;
+const freeLateDays = 0;
 const latedays = lateRows.length;
 
 const latePenalty =
