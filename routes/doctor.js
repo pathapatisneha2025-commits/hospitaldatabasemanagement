@@ -438,17 +438,16 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
     // ✅ OLD image
     let profileImage = doctor.rows[0].profile_image;
 
-    // ✅ NEW CLOUDINARY UPLOAD (FIXED)
-    if (req.file && req.file.buffer) {
-      try {
-        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
-        profileImage = uploadResult.secure_url;
-      } catch (err) {
-        console.error("Image upload failed:", err);
-        return res.status(500).json({ error: "Image upload failed" });
-      }
-    }
-
+// Cloudinary upload
+if (req.file) {
+  try {
+    const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+    profileImage = uploadResult.secure_url;
+  } catch (err) {
+    console.error("Image upload failed:", err);
+    return res.status(500).json({ error: "Image upload failed" });
+  }
+}
     const updatedDoctor = await db.query(
       `UPDATE doctors SET 
         name=$1, email=$2, phone_number=$3, department=$4, role=$5, gender=$6,
