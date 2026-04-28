@@ -696,6 +696,8 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
         SELECT l.salary_deduction
         FROM leaves l
         WHERE l.employee_id = e.id
+            AND l.status = 'Approved'
+
           AND (
             (EXTRACT(YEAR FROM l.start_date) = $1::int AND EXTRACT(MONTH FROM l.start_date) = $2::int)
             OR
