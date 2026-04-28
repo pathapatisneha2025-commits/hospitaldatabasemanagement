@@ -13,7 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../cloudinary");
-const streamifier = require("streamifier");s
+const streamifier = require("streamifier");
 // =======================
 // MULTER CONFIG (VOICE UPLOAD)
 // =======================
