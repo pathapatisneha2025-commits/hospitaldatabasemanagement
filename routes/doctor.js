@@ -15,9 +15,9 @@ const path = require("path");
 // =======================
 // MULTER CONFIG (VOICE UPLOAD)
 // =======================
-// const upload = multer({
-//   storage: multer.memoryStorage(), // important for voice buffer
-// });
+const upload = multer({
+  storage: multer.memoryStorage(), // important for voice buffer
+});
 
 // =======================
 // GOOGLE SPEECH + TRANSLATE (REQUIRED)
@@ -111,20 +111,22 @@ async function translateToEnglish(text) {
   return translation;
 }
 
+const uploadImageToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "doctor_profiles",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "doctor_profiles", // or "employee"
-    allowed_formats: ["jpg", "png", "jpeg", "webp"],
-    public_id: (req, file) => {
-      const nameWithoutExt = file.originalname.split(".")[0];
-      return `${Date.now()}-${nameWithoutExt}`;
-    },
-  },
-});
-
-const upload = multer({ storage });
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
 // -------------------
 // Doctor Registration
 // -------------------
@@ -418,60 +420,42 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
       description,
       scheduleIn,
       scheduleOut,
-      password,
+      password
     } = req.body;
 
-    // =========================
-    // CHECK DOCTOR
-    // =========================
-    const doctor = await db.query(
-      "SELECT * FROM doctors WHERE id=$1",
-      [id]
-    );
+    const doctor = await db.query("SELECT * FROM doctors WHERE id=$1", [id]);
 
     if (doctor.rows.length === 0) {
       return res.status(404).json({ error: "Doctor not found" });
     }
 
-    // =========================
-    // PASSWORD HANDLING
-    // =========================
+    // password handling
     let hashedPassword = doctor.rows[0].password;
-
-    if (password && password.trim() !== "") {
+    if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // =========================
-    // IMAGE HANDLING (FIXED ✅)
-    // =========================
+    // ✅ OLD image
     let profileImage = doctor.rows[0].profile_image;
 
-    if (req.file) {
-      console.log("Uploaded File:", req.file); // debug
-      profileImage = req.file.path; // ✅ Cloudinary URL
-    }
-
-    // =========================
-    // UPDATE QUERY
-    // =========================
+// Cloudinary upload
+if (req.file) {
+  try {
+    const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+    profileImage = uploadResult.secure_url;
+  } catch (err) {
+    console.error("Image upload failed:", err);
+    return res.status(500).json({ error: "Image upload failed" });
+  }
+}
     const updatedDoctor = await db.query(
       `UPDATE doctors SET 
-        name=$1,
-        email=$2,
-        phone_number=$3,
-        department=$4,
-        role=$5,
-        gender=$6,
-        experience=$7,
-        description=$8,
-        schedule_in=$9,
-        schedule_out=$10,
-        password=$11,
-        profile_image=$12
+        name=$1, email=$2, phone_number=$3, department=$4, role=$5, gender=$6,
+        experience=$7, description=$8, schedule_in=$9, schedule_out=$10, 
+        password=$11, profile_image=$12
        WHERE id=$13
        RETURNING 
-        id, name, email, phone_number, department, role, gender,
+        id, name, email, phone_number, department, role, gender, 
         experience, description, schedule_in, schedule_out, profile_image`,
       [
         name,
@@ -486,20 +470,17 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
         scheduleOut,
         hashedPassword,
         profileImage,
-        id,
+        id
       ]
     );
 
-    // =========================
-    // RESPONSE
-    // =========================
     res.json({
       message: "Doctor updated successfully",
-      doctor: updatedDoctor.rows[0],
+      doctor: updatedDoctor.rows[0]
     });
 
   } catch (err) {
-    console.error("UPDATE ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
