@@ -436,8 +436,7 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
     }
 
     // ✅ OLD image
-    let profileImage = doctor.rows[0].profile_image;
-
+let profileImage = doctor.rows[0].profile_image;
 // Cloudinary upload
 if (req.file) {
   try {
