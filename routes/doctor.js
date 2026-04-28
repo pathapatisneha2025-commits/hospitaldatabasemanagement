@@ -11,7 +11,9 @@ const router = express.Router();
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
-
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../cloudinary");
+const streamifier = require("streamifier");s
 // =======================
 // MULTER CONFIG (VOICE UPLOAD)
 // =======================
@@ -110,27 +112,23 @@ async function translateToEnglish(text) {
   const [translation] = await translateClient.translate(text, "en");
   return translation;
 }
+const imageStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "doctor_profiles",
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    public_id: (req, file) => {
+      const nameWithoutExt = path.parse(file.originalname).name;
+      return Date.now() + "-" + nameWithoutExt;
+    },
+  },
+});
 
-const uploadImageToCloudinary = (buffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: "doctor_profiles",
-        resource_type: "image",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      }
-    );
-
-    streamifier.createReadStream(buffer).pipe(stream);
-  });
-};
+const uploadImage = multer({ storage: imageStorage });
 // -------------------
 // Doctor Registration
 // -------------------
-router.post("/register", upload.single("profileImage"), async (req, res) => {
+router.post("/register", uploadImage.single("profileImage"), async (req, res) => {
   try {
     const {
       name,
@@ -147,9 +145,7 @@ router.post("/register", upload.single("profileImage"), async (req, res) => {
       scheduleOut,
     } = req.body;
 
-    // =========================
-    // VALIDATION
-    // =========================
+    // validation
     if (
       !name ||
       !email ||
@@ -171,74 +167,34 @@ router.post("/register", upload.single("profileImage"), async (req, res) => {
       return res.status(400).json({ error: "Passwords do not match" });
     }
 
-    // =========================
-    // CHECK EXISTING DOCTOR
-    // =========================
-    const existingDoctor = await db.query(
+    // check existing
+    const existing = await db.query(
       "SELECT * FROM doctors WHERE email=$1",
       [email]
     );
 
-    if (existingDoctor.rows.length > 0) {
+    if (existing.rows.length > 0) {
       return res.status(400).json({ error: "Doctor already exists" });
     }
 
-    // =========================
-    // HASH PASSWORD
-    // =========================
+    // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // =========================
-    // IMAGE UPLOAD (CLOUDINARY)
-    // =========================
-    let imageUrl = null;
+    // image from cloudinary middleware
+    const imageUrl = req.file ? req.file.path : null;
 
-    if (req.file && req.file.buffer) {
-      try {
-        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
-        imageUrl = uploadResult.secure_url;
-      } catch (err) {
-        console.error("Image upload failed:", err);
-        return res.status(500).json({ error: "Image upload failed" });
-      }
-    }
-
-    // =========================
-    // INSERT DOCTOR
-    // =========================
-    const newDoctor = await db.query(
-      `INSERT INTO doctors 
-      (
-        name,
-        email,
-        password,
-        phone_number,
-        department,
-        role,
-        gender,
-        experience,
-        description,
-        schedule_in,
-        schedule_out,
-        status,
-        profile_image
+    // insert
+    const result = await db.query(
+      `INSERT INTO doctors (
+        name, email, password, phone_number,
+        department, role, gender, experience,
+        description, schedule_in, schedule_out,
+        status, profile_image
       )
-      VALUES 
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12)
-      RETURNING 
-        id,
-        name,
-        email,
-        phone_number,
-        department,
-        role,
-        gender,
-        experience,
-        description,
-        schedule_in,
-        schedule_out,
-        status,
-        profile_image`,
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12
+      )
+      RETURNING *`,
       [
         name,
         email,
@@ -255,14 +211,10 @@ router.post("/register", upload.single("profileImage"), async (req, res) => {
       ]
     );
 
-    // =========================
-    // RESPONSE
-    // =========================
     res.status(201).json({
       message: "Doctor registered successfully",
-      doctor: newDoctor.rows[0],
+      doctor: result.rows[0],
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -405,7 +357,7 @@ router.get("/:id", async (req, res) => {
 // -------------------
 // Update Doctor
 // -------------------
-router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
+router.put("/update/:id", uploadImage.single("profileImage"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -420,43 +372,47 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
       description,
       scheduleIn,
       scheduleOut,
-      password
+      password,
     } = req.body;
 
-    const doctor = await db.query("SELECT * FROM doctors WHERE id=$1", [id]);
+    const doctor = await db.query(
+      "SELECT * FROM doctors WHERE id=$1",
+      [id]
+    );
 
     if (doctor.rows.length === 0) {
       return res.status(404).json({ error: "Doctor not found" });
     }
 
-    // password handling
+    // password logic
     let hashedPassword = doctor.rows[0].password;
     if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // ✅ OLD image
+    // image logic
     let profileImage = doctor.rows[0].profile_image;
 
-// Cloudinary upload
-if (req.file && req.file.buffer) {
-  try {
-    const uploadResult = await uploadImageToCloudinary(req.file.buffer);
-    profileImage = uploadResult.secure_url;
-  } catch (err) {
-    console.error("Image upload failed:", err);
-    return res.status(500).json({ error: "Image upload failed" });
-  }
-}
-    const updatedDoctor = await db.query(
-      `UPDATE doctors SET 
-        name=$1, email=$2, phone_number=$3, department=$4, role=$5, gender=$6,
-        experience=$7, description=$8, schedule_in=$9, schedule_out=$10, 
-        password=$11, profile_image=$12
-       WHERE id=$13
-       RETURNING 
-        id, name, email, phone_number, department, role, gender, 
-        experience, description, schedule_in, schedule_out, profile_image`,
+    if (req.file) {
+      profileImage = req.file.path; // Cloudinary URL
+    }
+
+    const updated = await db.query(
+      `UPDATE doctors SET
+        name=$1,
+        email=$2,
+        phone_number=$3,
+        department=$4,
+        role=$5,
+        gender=$6,
+        experience=$7,
+        description=$8,
+        schedule_in=$9,
+        schedule_out=$10,
+        password=$11,
+        profile_image=$12
+      WHERE id=$13
+      RETURNING *`,
       [
         name,
         email,
@@ -470,21 +426,19 @@ if (req.file && req.file.buffer) {
         scheduleOut,
         hashedPassword,
         profileImage,
-        id
+        id,
       ]
     );
 
     res.json({
       message: "Doctor updated successfully",
-      doctor: updatedDoctor.rows[0]
+      doctor: updated.rows[0],
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 // -------------------
 // Delete Doctor
