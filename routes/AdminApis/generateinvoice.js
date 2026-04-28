@@ -20,7 +20,7 @@ function generateInvoiceNo() {
 router.post("/generate", async (req, res) => {
   const client = await pool.connect(); // Get a client for transaction
   try {
-    const { employeeId, subadminId, patientName, patientAge, patientPhone, paymentMode } = req.body;
+    const { employeeId, subadminId, patientName, patientAge, patientPhone, paymentMode ,totalAmount} = req.body;
 
     if (!employeeId && !subadminId) {
       return res.status(400).json({ success: false, message: "Employee ID or Subadmin ID is required" });
@@ -85,7 +85,7 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
+    // const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
     const invoiceNo = generateInvoiceNo();
 
     // Insert invoice
