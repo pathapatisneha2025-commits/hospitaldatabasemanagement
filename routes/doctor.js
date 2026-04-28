@@ -439,7 +439,7 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
     let profileImage = doctor.rows[0].profile_image;
 
 // Cloudinary upload
-if (req.file) {
+if (req.file && req.file.buffer) {
   try {
     const uploadResult = await uploadImageToCloudinary(req.file.buffer);
     profileImage = uploadResult.secure_url;
