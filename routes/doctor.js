@@ -429,17 +429,24 @@ router.put("/update/:id", upload.single("profileImage"), async (req, res) => {
       return res.status(404).json({ error: "Doctor not found" });
     }
 
-    // ✅ Password handling
+    // password handling
     let hashedPassword = doctor.rows[0].password;
     if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // ✅ Image handling
-    let profileImage = doctor.rows[0].profile_image; // existing image
+    // ✅ OLD image
+    let profileImage = doctor.rows[0].profile_image;
 
-    if (req.file) {
-      profileImage = req.file.filename; // new uploaded image
+    // ✅ NEW CLOUDINARY UPLOAD (FIXED)
+    if (req.file && req.file.buffer) {
+      try {
+        const uploadResult = await uploadImageToCloudinary(req.file.buffer);
+        profileImage = uploadResult.secure_url;
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        return res.status(500).json({ error: "Image upload failed" });
+      }
     }
 
     const updatedDoctor = await db.query(
