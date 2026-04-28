@@ -30,8 +30,6 @@ const { Translate } = require("@google-cloud/translate").v2;
 const speechClient = new speech.SpeechClient();
 const translateClient = new Translate();
 
-const streamifier = require("streamifier");
-const cloudinary = require("../cloudinary");
 const uploadAudioToCloudinary = (buffer) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
