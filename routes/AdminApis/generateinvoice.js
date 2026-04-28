@@ -18,61 +18,102 @@ function generateInvoiceNo() {
     1️ GENERATE INVOICE (POST)
 ========================================================= */
 router.post("/generate", async (req, res) => {
-  const client = await pool.connect(); // Get a client for transaction
+  const client = await pool.connect();
+
   try {
-    const { employeeId, subadminId, patientName, patientAge, patientPhone, paymentMode } = req.body;
+    const {
+      employeeId,
+      subadminId,
+      patientName,
+      patientAge,
+      patientPhone,
+      paymentMode,
+      gender,
+      address1,
+      address2,
+      address3,
+      city,
+      pin
+    } = req.body;
 
     if (!employeeId && !subadminId) {
-      return res.status(400).json({ success: false, message: "Employee ID or Subadmin ID is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID or Subadmin ID is required",
+      });
     }
 
     let userName, userId;
-    // Determine the user type
+
+    // Identify user
     if (employeeId) {
-      const empResult = await client.query("SELECT full_name FROM employees WHERE id = $1", [employeeId]);
+      const empResult = await client.query(
+        "SELECT full_name FROM employees WHERE id = $1",
+        [employeeId]
+      );
       userName = empResult.rows[0]?.full_name || "Unknown Employee";
       userId = employeeId;
     } else if (subadminId) {
-      const subResult = await client.query("SELECT name FROM subadmin WHERE id = $1", [subadminId]);
+      const subResult = await client.query(
+        "SELECT name FROM subadmin WHERE id = $1",
+        [subadminId]
+      );
       userName = subResult.rows[0]?.name || "Unknown Subadmin";
       userId = subadminId;
     }
 
-    // Start transaction
+    // START TRANSACTION
     await client.query("BEGIN");
 
     // Fetch cart items
     const cartResult = await client.query(
-      `SELECT id, name, quantity, price FROM cart WHERE employeeid = $1 OR subadmin_id = $2`,
+      `SELECT id, name, quantity, price 
+       FROM cart 
+       WHERE employeeid = $1 OR subadmin_id = $2`,
       [employeeId || null, subadminId || null]
     );
 
     if (cartResult.rowCount === 0) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ success: false, message: "No items found in cart" });
+      return res.status(404).json({
+        success: false,
+        message: "No items found in cart",
+      });
     }
 
     const medicines = [];
-    // Reduce stock for each item
+
+    // Process stock reduction
     for (const item of cartResult.rows) {
-      // Get medicine ID and current stock
-      const medRes = await client.query("SELECT id, stock_bal_qty FROM  stock_batches WHERE item_name= $1", [item.name]);
+      const medRes = await client.query(
+        `SELECT id, stock_bal_qty 
+         FROM stock_batches 
+         WHERE item_name = $1`,
+        [item.name]
+      );
+
       if (!medRes.rows.length) {
         await client.query("ROLLBACK");
-        return res.status(404).json({ success: false, message: `Medicine not found: ${item.name}` });
+        return res.status(404).json({
+          success: false,
+          message: `Medicine not found: ${item.name}`,
+        });
       }
 
       const medId = medRes.rows[0].id;
-      const currentStock = medRes.rows[0].stock;
+      const currentStock = medRes.rows[0].stock_bal_qty; // FIXED
 
       if (currentStock < item.quantity) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ success: false, message: `Insufficient stock for ${item.name}` });
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for ${item.name}`,
+        });
       }
 
-      // Reduce stock
+      // Reduce stock (FIXED TABLE)
       await client.query(
-        "UPDATE medicines SET stock = stock - $1 WHERE id = $2",
+        "UPDATE stock_batches SET stock_bal_qty = stock_bal_qty - $1 WHERE id = $2",
         [item.quantity, medId]
       );
 
@@ -85,15 +126,38 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    const totalAmount = medicines.reduce((sum, med) => sum + med.total, 0);
+    const totalAmount = medicines.reduce(
+      (sum, med) => sum + med.total,
+      0
+    );
+
     const invoiceNo = generateInvoiceNo();
 
-    // Insert invoice
+    // INSERT INVOICE (UPDATED)
     const insertInvoice = await client.query(
       `INSERT INTO invoices 
-       (invoice_no, employee_id, subadmin_id, employee_name, patient_name, patient_age, patient_phone, medicines, total_amount, payment_mode, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW() AT TIME ZONE 'Asia/Kolkata')
-       RETURNING *`,
+      (
+        invoice_no,
+        employee_id,
+        subadmin_id,
+        employee_name,
+        patient_name,
+        patient_age,
+        patient_phone,
+        gender,
+        address1,
+        address2,
+        address3,
+        city,
+        pin,
+        medicines,
+        total_amount,
+        payment_mode,
+        created_at
+      )
+      VALUES
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW() AT TIME ZONE 'Asia/Kolkata')
+      RETURNING *`,
       [
         invoiceNo,
         employeeId || null,
@@ -102,28 +166,43 @@ router.post("/generate", async (req, res) => {
         patientName,
         patientAge,
         patientPhone,
+        gender,
+        address1,
+        address2,
+        address3,
+        city,
+        pin,
         JSON.stringify(medicines),
         totalAmount,
         paymentMode,
       ]
     );
 
-    // Clear cart
-    await client.query("DELETE FROM cart WHERE employeeid = $1 OR subadmin_id = $2", [employeeId || null, subadminId || null]);
+    // CLEAR CART
+    await client.query(
+      "DELETE FROM cart WHERE employeeid = $1 OR subadmin_id = $2",
+      [employeeId || null, subadminId || null]
+    );
 
-    // Commit transaction
+    // COMMIT
     await client.query("COMMIT");
 
     res.json({
       success: true,
       message: "Invoice generated successfully",
-      data: { ...insertInvoice.rows[0], medicines },
+      data: {
+        ...insertInvoice.rows[0],
+        medicines,
+      },
     });
-
   } catch (error) {
-    await client.query("ROLLBACK"); // Rollback transaction on error
+    await client.query("ROLLBACK");
     console.error("Invoice generation error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   } finally {
     client.release();
   }
