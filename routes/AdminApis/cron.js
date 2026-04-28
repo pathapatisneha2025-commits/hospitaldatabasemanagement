@@ -1,11 +1,15 @@
 const cron = require("node-cron");
 const db = require("../../db");
 
-// runs daily at 5 AM
-cron.schedule("*0 5 * * *", async () => {  try {
+// ✅ Runs once daily at 5:00 AM
+cron.schedule("0 5 * * *", async () => {
+  try {
     console.log("🔁 Running recurring task generator...");
 
-    // ONLY ORIGINAL TASKS
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+
+    // ✅ ONLY ORIGINAL TASKS (parent)
     const result = await db.query(`
       SELECT *
       FROM admintasks
@@ -15,37 +19,51 @@ cron.schedule("*0 5 * * *", async () => {  try {
 
     for (const task of result.rows) {
 
-      // 👉 ALWAYS BASE FROM ORIGINAL START/END
-      let nextStart = new Date(task.startdate);
-      let nextDue = new Date(task.duedate);
+      // ✅ 🔒 DUPLICATE PROTECTION (VERY IMPORTANT)
+      const alreadyExists = await db.query(`
+        SELECT id FROM admintasks
+        WHERE parent_task_id = $1
+        AND DATE(startdate) = $2
+      `, [task.id, todayStr]);
 
-      // DAILY
+      if (alreadyExists.rows.length > 0) {
+        console.log(`⏭️ Task already exists for today: ${task.id}`);
+        continue;
+      }
+
+      // ✅ CALCULATE DURATION (important)
+      const parentStart = new Date(task.startdate);
+      const parentEnd = new Date(task.duedate);
+      const duration = parentEnd.getTime() - parentStart.getTime();
+
+      let newStart = new Date();
+      let newEnd;
+
+      // ✅ GENERATE NEXT DATE BASED ON TYPE
       if (task.recurringtype === "Daily") {
-        nextStart.setDate(nextStart.getDate() + 1);
-        nextDue.setDate(nextDue.getDate() + 1);
+        newStart = new Date(); // today
       }
 
-      // WEEKLY
       if (task.recurringtype === "Weekly") {
-        nextStart.setDate(nextStart.getDate() + 7);
-        nextDue.setDate(nextDue.getDate() + 7);
+        newStart.setDate(newStart.getDate() + 7);
       }
 
-      // MONTHLY
       if (task.recurringtype === "Monthly") {
-        nextStart.setMonth(nextStart.getMonth() + 1);
-        nextDue.setMonth(nextDue.getMonth() + 1);
+        newStart.setMonth(newStart.getMonth() + 1);
       }
 
-      // CREATE NEW TASK
+      // ✅ KEEP SAME TIME + DURATION
+      newEnd = new Date(newStart.getTime() + duration);
+
+      // ✅ INSERT NEW TASK
       await db.query(`
         INSERT INTO admintasks
-        (title,startdate,duedate,assignedto,employeeids,priority,description,recurringtype,status,parent_task_id)
+        (title, startdate, duedate, assignedto, employeeids, priority, description, recurringtype, status, parent_task_id)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       `, [
         task.title,
-        nextStart,
-        nextDue,
+        newStart,
+        newEnd,
         task.assignedto,
         task.employeeids,
         task.priority,
