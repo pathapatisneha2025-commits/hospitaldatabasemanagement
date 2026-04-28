@@ -1273,12 +1273,12 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
     // =========================
     // 🟣 FINAL STATUS UPDATE
     // =========================
-    const finalStatus = response.ok ? "confirmed" : "failed";
+    // const finalStatus = response.ok ? "confirmed" : "failed";
 
-    await client.query(
-      `UPDATE orders SET status = $1 WHERE id = $2`,
-      [finalStatus, localId]
-    );
+    // await client.query(
+    //   `UPDATE orders SET status = $1 WHERE id = $2`,
+    //   [finalStatus, localId]
+    // );
 
 if (response.ok && patientId) {
       await client.query(
