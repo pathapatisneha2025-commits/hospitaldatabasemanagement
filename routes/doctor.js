@@ -15,9 +15,9 @@ const path = require("path");
 // =======================
 // MULTER CONFIG (VOICE UPLOAD)
 // =======================
-const upload = multer({
-  storage: multer.memoryStorage(), // important for voice buffer
-});
+// const upload = multer({
+//   storage: multer.memoryStorage(), // important for voice buffer
+// });
 
 // =======================
 // GOOGLE SPEECH + TRANSLATE (REQUIRED)
