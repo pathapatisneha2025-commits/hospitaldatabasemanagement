@@ -171,6 +171,41 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+router.get("/by-date", async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "Date is required (YYYY-MM-DD)",
+      });
+    }
+
+    // 🔥 IMPORTANT: convert created_at to DATE only
+    const query = `
+      SELECT *
+      FROM invoices
+      WHERE DATE(created_at) = $1
+      ORDER BY created_at DESC
+    `;
+
+    const result = await db.query(query, [date]);
+
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
 
 /* =========================================================
    4 DELETE INVOICE BY ID
