@@ -22,7 +22,6 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
 
     if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Read Excel/CSV
     const workbook = XLSX.read(file.buffer, { type: "buffer" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet);
@@ -34,13 +33,18 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
     const placeholders = [];
 
     data.forEach((row, index) => {
-      const i = index * 17;
+      const i = index * 34; // 🔥 UPDATED COUNT
 
       placeholders.push(`(
         $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4},
         $${i + 5}, $${i + 6}, $${i + 7}, $${i + 8},
         $${i + 9}, $${i + 10}, $${i + 11}, $${i + 12},
-        $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16}, $${i + 17}
+        $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16},
+        $${i + 17}, $${i + 18}, $${i + 19}, $${i + 20},
+        $${i + 21}, $${i + 22}, $${i + 23}, $${i + 24},
+        $${i + 25}, $${i + 26}, $${i + 27}, $${i + 28},
+        $${i + 29}, $${i + 30}, $${i + 31}, $${i + 32},
+        $${i + 33}, $${i + 34}
       )`);
 
       values.push(
@@ -60,7 +64,25 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
         row.item_added_date,
         row.item_updated_date,
         row.hsn_sac_code,
-        row.hsn_sac_name
+        row.hsn_sac_name,
+
+        // 🔥 EXTRA FIELDS
+        row.minSaleQty,
+        row.note,
+        row.mfacName,
+        row.mfacCode,
+        row.packTypCode,
+        row.packTypName,
+        row.scheduleCode,
+        row.scheduleName,
+        row.categoryHeadCode,
+        row.categoryHeadName,
+        row.categoryClassCode,
+        row.categoryClassName,
+        row.allowDisc,
+        row.gstCode,
+        row.parentItemCode,
+        row.parentItemName
       );
     });
 
@@ -70,7 +92,15 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
         brand_code, brand_name, category_code, category_name,
         content_code, content_name, pack_code, pack_name,
         item_qty_per_box, item_added_date, item_updated_date,
-        hsn_sac_code, hsn_sac_name
+        hsn_sac_code, hsn_sac_name,
+
+        minSaleQty, note, mfacName, mfacCode,
+        packTypCode, packTypName,
+        scheduleCode, scheduleName,
+        categoryHeadCode, categoryHeadName,
+        categoryClassCode, categoryClassName,
+        allowDisc, gstCode,
+        parentItemCode, parentItemName
       )
       VALUES ${placeholders.join(",")}
       ON CONFLICT (item_code) DO UPDATE SET
@@ -88,7 +118,24 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
         item_qty_per_box = EXCLUDED.item_qty_per_box,
         item_updated_date = NOW(),
         hsn_sac_code = EXCLUDED.hsn_sac_code,
-        hsn_sac_name = EXCLUDED.hsn_sac_name
+        hsn_sac_name = EXCLUDED.hsn_sac_name,
+
+        minSaleQty = EXCLUDED.minSaleQty,
+        note = EXCLUDED.note,
+        mfacName = EXCLUDED.mfacName,
+        mfacCode = EXCLUDED.mfacCode,
+        packTypCode = EXCLUDED.packTypCode,
+        packTypName = EXCLUDED.packTypName,
+        scheduleCode = EXCLUDED.scheduleCode,
+        scheduleName = EXCLUDED.scheduleName,
+        categoryHeadCode = EXCLUDED.categoryHeadCode,
+        categoryHeadName = EXCLUDED.categoryHeadName,
+        categoryClassCode = EXCLUDED.categoryClassCode,
+        categoryClassName = EXCLUDED.categoryClassName,
+        allowDisc = EXCLUDED.allowDisc,
+        gstCode = EXCLUDED.gstCode,
+        parentItemCode = EXCLUDED.parentItemCode,
+        parentItemName = EXCLUDED.parentItemName
     `;
 
     await pool.query(query, values);
@@ -97,6 +144,7 @@ router.post("/upload-itemmaster", upload.single("file"), async (req, res) => {
       message: "Bulk upload successful",
       totalItems: data.length,
     });
+
   } catch (err) {
     console.error("Bulk Upload Error:", err.message);
     res.status(500).json({ error: "Failed to upload items", details: err.message });
@@ -109,7 +157,6 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
     const file = req.file;
     if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Read Excel / CSV
     const workbook = XLSX.read(file.buffer, { type: "buffer" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet);
@@ -118,6 +165,7 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
       return res.status(400).json({ error: "Empty file" });
 
     const client = await pool.connect();
+
     try {
       await client.query("BEGIN");
 
@@ -125,9 +173,10 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
       const values = [];
 
       data.forEach((row, index) => {
-        const i = index * 6; // 6 columns
+        const i = index * 9; // 🔥 now 9 columns
+
         placeholders.push(
-          `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6})`
+          `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7}, $${i + 8}, $${i + 9})`
         );
 
         values.push(
@@ -136,13 +185,27 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
           row.item_qty_per_box,
           row.batch_no,
           row.stock_bal_qty,
-          row.expiry_date
+          row.expiry_date,
+
+          // 🔥 NEW FIELDS
+          row.mrp,
+          row.mrpbox,
+          row.sale_rate
         );
       });
 
       const query = `
-        INSERT INTO stock_batches
-          (c_item_code, item_name, item_qty_per_box, batch_no, stock_bal_qty, expiry_date)
+        INSERT INTO stock_batches (
+          c_item_code,
+          item_name,
+          item_qty_per_box,
+          batch_no,
+          stock_bal_qty,
+          expiry_date,
+          mrp,
+          mrpbox,
+          sale_rate
+        )
         VALUES ${placeholders.join(",")};
       `;
 
@@ -152,19 +215,28 @@ router.post("/stockbulk-upload-csv", upload.single("file"), async (req, res) => 
 
       res.status(201).json({
         success: true,
-        insertedStocks: result.rows,
         totalStocks: result.rowCount,
       });
+
     } catch (err) {
       await client.query("ROLLBACK");
       console.error("DB Error:", err);
-      res.status(500).json({ success: false, error: "Database error", details: err.message });
+      res.status(500).json({
+        success: false,
+        error: "Database error",
+        details: err.message,
+      });
     } finally {
       client.release();
     }
+
   } catch (err) {
     console.error("Bulk Upload Error:", err);
-    res.status(500).json({ success: false, error: "Failed to process file", details: err.message });
+    res.status(500).json({
+      success: false,
+      error: "Failed to process file",
+      details: err.message,
+    });
   }
 });
 
