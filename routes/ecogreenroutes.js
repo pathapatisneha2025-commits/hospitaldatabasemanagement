@@ -319,54 +319,35 @@ router.post("/stock-details", async (req, res) => {
     limit = 100,
   } = req.body;
 
-  // ✅ Only required fields (itemCodes REMOVED from mandatory check)
-  if (!c2Code || !storeId || !prodCode) {
+  if (!c2Code || !storeId || !prodCode || !itemCodes) {
     return res.status(400).json({
-      error: "Required fields missing: c2Code, storeId, prodCode",
+      error: "Required fields missing: c2Code, storeId, prodCode, itemCodes",
     });
   }
 
-  page = Number(page) || 1;
-  limit = Number(limit) || 100;
+  page = parseInt(page, 10) || 1;
+  limit = parseInt(limit, 10) || 100;
 
   try {
     const apiKey = await getToken();
 
-    // ✅ SAFE itemCodes handling (optional field)
-    let itemsArray = [];
+    const itemsArray = Array.isArray(itemCodes)
+      ? itemCodes
+      : JSON.parse(itemCodes);
 
-    if (itemCodes) {
-      if (Array.isArray(itemCodes)) {
-        itemsArray = itemCodes;
-      } else {
-        try {
-          itemsArray = JSON.parse(itemCodes);
-        } catch (e) {
-          console.warn("Invalid itemCodes JSON, ignoring:", itemCodes);
-          itemsArray = [];
-        }
-      }
-    }
-
-    // ✅ formatted datetime safe
     const formattedDateTime =
       inputDateTime && inputDateTime.trim() !== ""
         ? inputDateTime.replace("T", " ").trim() + ":00"
         : "";
 
-    // ✅ vendor payload
     const payload = {
       c2Code,
       storeId,
       prodCode,
+      itemCodes: itemsArray,
       apiKey,
       inputDateTime: formattedDateTime,
     };
-
-    // 👉 only send itemCodes if available (IMPORTANT FIX)
-    if (itemsArray.length > 0) {
-      payload.itemCodes = itemsArray;
-    }
 
     const vendorResponse = await fetch(
       "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
@@ -379,7 +360,7 @@ router.post("/stock-details", async (req, res) => {
 
     const vendorData = await vendorResponse.json();
 
-    if (!vendorData?.data || !Array.isArray(vendorData.data)) {
+    if (!vendorData.data || !Array.isArray(vendorData.data)) {
       return res.status(502).json({
         error: "Invalid stock data from vendor",
         rawData: vendorData,
@@ -466,7 +447,6 @@ router.post("/stock-details", async (req, res) => {
     console.error("Stock Details Error:", err);
     return res.status(500).json({
       error: "Failed to fetch or store stock details",
-      details: err.message,
     });
   }
 });
