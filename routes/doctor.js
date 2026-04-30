@@ -126,7 +126,7 @@ const uploadImage = multer({ storage: imageStorage });
 // -------------------
 // Doctor Registration
 // -------------------
-router.post("/register", uploadImage.single("profileImage"), async (req, res) => {
+router.post("/register", uploadImage.single("profile_image"), async (req, res) => {
   try {
     const {
       name,
@@ -355,7 +355,7 @@ router.get("/:id", async (req, res) => {
 // -------------------
 // Update Doctor
 // -------------------
-router.put("/update/:id", uploadImage.single("profileImage"), async (req, res) => {
+router.put("/update/:id", uploadImage.single("profilemage"), async (req, res) => {
   try {
     const { id } = req.params;
 
