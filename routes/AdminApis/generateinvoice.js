@@ -171,6 +171,31 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+router.get("/employee/:employee_id/date", async (req, res) => {
+  try {
+    const { employee_id } = req.params;
+    const { date } = req.query; // format: YYYY-MM-DD
+
+    const result = await pool.query(
+      `SELECT *
+       FROM invoices
+       WHERE employee_id = $1
+       AND DATE(created_at AT TIME ZONE 'Asia/Kolkata') = $2
+       ORDER BY created_at DESC`,
+      [employee_id, date]
+    );
+
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
 router.get("/by-date", async (req, res) => {
   try {
     const { date } = req.query;
@@ -225,5 +250,6 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 module.exports = router;
