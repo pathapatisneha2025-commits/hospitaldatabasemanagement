@@ -102,19 +102,24 @@ router.get("/attendancesummary/:employee_id", async (req, res) => {
     // 2️⃣ Fetch attendance summary for the employee for current month
     const attendanceResult = await pool.query(
       `
-      SELECT 
-        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
-        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
-        COUNT(*) FILTER (
-          WHERE a.status = 'On Duty' 
-            AND e.schedule_in IS NOT NULL 
-            AND a.timestamp::time > e.schedule_in
-        ) AS total_late
-      FROM attendance a
-      LEFT JOIN employees e ON a.employee_id = e.id
-      WHERE a.employee_id = $1
-        AND EXTRACT(MONTH FROM a.timestamp) = $2
-        AND EXTRACT(YEAR FROM a.timestamp) = $3
+     SELECT 
+  COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
+  COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
+  COUNT(*) FILTER (
+    WHERE a.status = 'On Duty' 
+    AND e.schedule_in IS NOT NULL 
+    AND a.timestamp::time > e.schedule_in
+  ) AS total_late
+FROM attendance a
+LEFT JOIN employees e ON e.id = $1
+WHERE 
+(
+  a.employee_id = $1
+  OR 
+  a.phone = e.phone
+)
+AND EXTRACT(MONTH FROM a.timestamp) = $2
+AND EXTRACT(YEAR FROM a.timestamp) = $3;
       `,
       [req.params.employee_id, currentMonth, currentYear]
     );
