@@ -116,7 +116,7 @@ WHERE
 (
   a.employee_id = $1
   OR 
-  a.phone = e.phone
+  a.phone = e.mobile
 )
 AND EXTRACT(MONTH FROM a.timestamp) = $2
 AND EXTRACT(YEAR FROM a.timestamp) = $3;
