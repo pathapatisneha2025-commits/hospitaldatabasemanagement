@@ -355,7 +355,7 @@ router.get("/:id", async (req, res) => {
 // -------------------
 // Update Doctor
 // -------------------
-router.put("/update/:id", uploadImage.single("profilemage"), async (req, res) => {
+router.put("/update/:id", uploadImage.single("profile_image"), async (req, res) => {
   try {
     const { id } = req.params;
 
