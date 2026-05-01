@@ -334,7 +334,7 @@ router.get("/:id", async (req, res) => {
     const doctor = await db.query(
       `SELECT 
         id, name, email, phone_number, department, role, gender, 
-        experience, description, schedule_in, schedule_out 
+        experience, description, schedule_in, schedule_out ,profile_image
        FROM doctors WHERE id=$1`,
       [id]
     );
