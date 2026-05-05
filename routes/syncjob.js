@@ -1,4 +1,4 @@
-const syncSalesOrders = require("./services/syncSalesOrders");
+const syncSalesOrders = require("./services/syncsalesorder");
 
 (async () => {
   console.log("🚀 Running Render Cron Job...");
