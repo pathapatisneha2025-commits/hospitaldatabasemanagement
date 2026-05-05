@@ -83,28 +83,30 @@ router.get("/stock-details/customer", async (req, res) => {
     limit = parseInt(limit);
     const offset = (page - 1) * limit;
 
-   const result = await pool.query(
-  `
-  SELECT 
-  id,
-  c_item_code,
-  item_name,
-  stock_bal_qty,
-  mrp,
-  sale_rate,
-  expiry_date,
-  image,
-  description
-FROM stock_batches
-WHERE 
-  is_visible_to_customer IS NOT false
-  AND stock_bal_qty > 0   -- ✅ ADD THIS LINE
-  AND ($1 = '' OR item_name ILIKE $1 OR c_item_code ILIKE $1)
-ORDER BY item_name ASC
-LIMIT $2 OFFSET $3
-  `,
-  [`%${search}%`, limit, offset]
-);
+    const result = await pool.query(
+      `
+      SELECT 
+        c_item_code,
+        MAX(id) AS id,
+        MAX(item_name) AS item_name,
+        SUM(stock_bal_qty) AS stock_bal_qty,
+        MAX(mrp) AS mrp,
+        MAX(sale_rate) AS sale_rate,
+        MAX(expiry_date) AS expiry_date,
+        MAX(image) AS image,
+        MAX(description) AS description
+      FROM stock_batches
+      WHERE 
+        is_visible_to_customer IS NOT false
+        AND stock_bal_qty > 0
+        AND ($1 = '' OR item_name ILIKE $1 OR c_item_code ILIKE $1)
+      GROUP BY c_item_code
+      ORDER BY item_name ASC
+      LIMIT $2 OFFSET $3
+      `,
+      [`%${search}%`, limit, offset]
+    );
+
     const formatted = result.rows.map((item) => {
       const mrp = parseFloat(item.mrp || 0);
       const sale = parseFloat(item.sale_rate || 0);
@@ -117,7 +119,10 @@ LIMIT $2 OFFSET $3
         id: item.id,
         c_item_code: item.c_item_code,
         item_name: item.item_name,
-        stock_bal_qty: item.stock_bal_qty,
+
+        // ✅ now this is SUM of all batches
+        stock_bal_qty: Number(item.stock_bal_qty),
+
         mrp,
         sale_rate: sale,
         discount: Number(discount.toFixed(2)),
@@ -125,14 +130,11 @@ LIMIT $2 OFFSET $3
         expiry_date: item.expiry_date,
         image: item.image,
         description: item.description,
+
+        // still useful for UI
         is_out_of_stock: Number(item.stock_bal_qty) <= 0,
       };
     });
-
-    // optional: check if more data exists
-    const nextCheck = await pool.query(
-      `SELECT COUNT(*) FROM stock_batches`
-    );
 
     res.json({
       success: true,
@@ -141,6 +143,7 @@ LIMIT $2 OFFSET $3
       limit,
       hasMore: formatted.length === limit,
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
