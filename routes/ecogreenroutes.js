@@ -1378,6 +1378,29 @@ router.post("/sales-order", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+router.get("/sales-orders", async (req, res) => {
+  try {
+    const { from } = req.query;
+
+    let query = "SELECT * FROM ecogreensales_orders";
+    let values = [];
+
+    if (from) {
+      query += " WHERE created_at > $1";
+      values.push(from);
+    }
+
+    query += " ORDER BY created_at ASC";
+
+    const result = await pool.query(query, values);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
 router.get("/sales-orders", async (req, res) => {
   try {
     const result = await pool.query(
