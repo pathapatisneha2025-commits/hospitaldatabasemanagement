@@ -9,24 +9,44 @@ const syncSalesOrders = async () => {
       "SELECT last_synced_at FROM sync_logs ORDER BY id DESC LIMIT 1"
     );
 
-    const lastSyncedAt = syncRes.rows[0]?.last_synced_at;
+    let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
-    // 2. Fetch from EcoGreen API
-    const response = await fetch(
-      `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-orders?from=${lastSyncedAt}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer YOUR_API_KEY"
-        }
-      }
-    );
+    // ✅ fallback: yesterday IST if no sync exists
+    if (!lastSyncedAt) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      lastSyncedAt = new Date(
+        yesterday.toLocaleString("en-US", {
+          timeZone: "Asia/Kolkata",
+        })
+      );
+
+      console.log("No previous sync found, using IST yesterday:", lastSyncedAt);
+    }
+
+    // 2. Build API URL safely
+    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-orders?from=${encodeURIComponent(
+      lastSyncedAt
+    )}`;
+
+    // 3. Fetch from EcoGreen API (NO AUTH)
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
     const orders = await response.json();
 
-    // 3. Save to DB
-    for (const data of orders || []) {
+    if (!Array.isArray(orders)) {
+      console.log("Invalid response from API");
+      return;
+    }
+
+    // 4. Save to DB
+    for (const data of orders) {
       await pool.query(
         `INSERT INTO ecogreensales_orders (
           order_id, order_no, created_at, order_type,
@@ -56,18 +76,24 @@ const syncSalesOrders = async () => {
           data.patient_contact_no,
           JSON.stringify(data.patient_address || null),
           JSON.stringify(data.pharmacy || null),
-          JSON.stringify(data.order_items || null)
+          JSON.stringify(data.order_items || null),
         ]
       );
     }
 
-    // 4. Update sync time
-    await pool.query(
-      "INSERT INTO sync_logs (last_synced_at) VALUES (NOW())"
+    // 5. Store sync time in IST (Kolkata)
+    const nowIST = new Date(
+      new Date().toLocaleString("en-US", {
+        timeZone: "Asia/Kolkata",
+      })
     );
 
-    console.log("✅ Sync completed");
+    await pool.query(
+      "INSERT INTO sync_logs (last_synced_at) VALUES ($1)",
+      [nowIST]
+    );
 
+    console.log("✅ Sync completed at IST:", nowIST);
   } catch (err) {
     console.error("❌ Sync error:", err.message);
   }
