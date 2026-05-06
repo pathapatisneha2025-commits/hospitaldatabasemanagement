@@ -116,12 +116,13 @@ router.put("/edit-slot/:id", async (req, res) => {
   const { slot, token_limit } = req.body;
 
   try {
-    const result = await pool.query(
-      `UPDATE doctor_slots 
-       SET slot_time=$1, token_limit=$2 
-       WHERE id=$3`,
-      [slot, token_limit, id]
-    );
+   const result = await pool.query(
+  `UPDATE doctor_slots 
+   SET slot_time=$1, token_limit=$2 
+   WHERE id=$3
+   RETURNING *`,
+  [slot, token_limit, id]
+);
 
     if (result.rowCount === 0) {
       return res.status(400).json({ message: "No slot updated" });
