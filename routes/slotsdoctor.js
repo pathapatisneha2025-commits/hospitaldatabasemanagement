@@ -39,7 +39,12 @@ router.get("/:doctorId", async (req, res) => {
   const { date } = req.query;
 
   try {
-    const result = await pool.query(
+    const formattedDate = date.includes("T")
+      ? date.split("T")[0]
+      : date;
+
+    // 1. Get slots
+    const slotResult = await pool.query(
       `SELECT 
         id,
         slot_time,
@@ -47,15 +52,62 @@ router.get("/:doctorId", async (req, res) => {
        FROM doctor_slots 
        WHERE doctor_id=$1 AND slot_date=$2 
        ORDER BY slot_time ASC`,
-      [doctorId, date]
+      [doctorId, formattedDate]
     );
 
-    res.json({ slots: result.rows });
+    // 2. Get reserved count for doctor/day
+    const reserveData = await pool.query(
+      `SELECT reserved_count 
+       FROM reserve_rules
+       WHERE doctor_id=$1 
+       AND date::date = TO_DATE($2,'YYYY-MM-DD')
+       LIMIT 1`,
+      [doctorId, formattedDate]
+    );
+
+    const reservedCount =
+      reserveData.rows[0]?.reserved_count || 0;
+
+    // 3. Get booked tokens for that day
+    const bookedRes = await pool.query(
+      `SELECT tokenid, timeslot
+       FROM appointments
+       WHERE doctorid=$1 AND date=$2`,
+      [doctorId, formattedDate]
+    );
+
+    // group booked by slot
+    const bookedMap = {};
+
+    bookedRes.rows.forEach((r) => {
+      if (!bookedMap[r.timeslot]) {
+        bookedMap[r.timeslot] = [];
+      }
+      bookedMap[r.timeslot].push(String(r.tokenid));
+    });
+
+    // 4. Build final response
+    const slots = slotResult.rows.map((slot) => {
+      const tokens = Array.from(
+        { length: slot.token_limit },
+        (_, i) => String(i + 1)
+      );
+
+      return {
+        ...slot,
+        tokens,
+        reserved: reservedCount,
+        booked_tokens: bookedMap[slot.slot_time] || []
+      };
+    });
+
+    return res.json({ slots });
+
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
-
 /*
 -----------------------------------
 ADD SLOT (WITH TOKEN LIMIT)
