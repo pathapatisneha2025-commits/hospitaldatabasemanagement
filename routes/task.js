@@ -363,7 +363,7 @@ router.post("/update-status", async (req, res) => {
     const query = `UPDATE tasks SET status = $1 WHERE id = $2`;
     const values = [normalizedStatus, id];
 
-    const result = await db.query(query, values);
+    const result = await pool.query(query, values);
 
     return res.json({
       success: true,
