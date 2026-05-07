@@ -362,35 +362,36 @@ router.post("/update-status", async (req, res) => {
       SET status = $1
     `;
 
-    const values = [status, id];
+    const values = [status];
     let index = 2;
 
     if (status === "completed") {
       query += `, completed_time = $${index}`;
-      values.splice(index - 1, 0, completed_time);
+      values.push(completed_time || new Date().toISOString());
       index++;
     }
 
     if (status === "rejected") {
       query += `, reject_reason = $${index}`;
-      values.splice(index - 1, 0, reject_reason);
+      values.push(reject_reason || null);
       index++;
     }
 
     query += ` WHERE id = $${index}`;
+    values.push(id);
 
-    await db.query(query, values);
+    const result = await db.query(query, values);
 
     return res.json({
       success: true,
       message: "Task updated successfully",
+      updatedRows: result.rowCount,
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("Update error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
-
 
 module.exports = router;
