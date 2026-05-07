@@ -356,71 +356,55 @@ const getISTTime = () => {
 router.post("/update-status", async (req, res) => {
   const { id, status, reject_reason } = req.body;
 
-  if (!id || !status) {
-    return res.status(400).json({ error: "id and status required" });
-  }
-
   try {
     let query = "";
     let values = [];
 
-    // ✅ START TASK
+    // START TASK
     if (status === "in_progress") {
       query = `
         UPDATE tasks
         SET status = $1,
-            start_time = $2
-        WHERE id = $3
+            started_at = COALESCE(started_at, NOW())
+        WHERE id = $2
         RETURNING *;
       `;
-      values = ["in_progress", getISTTime(), id];
+      values = ["in_progress", id];
     }
 
-    // ✅ COMPLETE TASK
+    // COMPLETE TASK
     else if (status === "completed") {
       query = `
         UPDATE tasks
         SET status = $1,
-            completed_time = $2
-        WHERE id = $3
-        RETURNING *;
-      `;
-      values = ["completed", getISTTime(), id];
-    }
-
-    // ❌ REJECT TASK
-    else if (status === "rejected") {
-      query = `
-        UPDATE tasks
-        SET status = $1,
-            reject_reason = $2
-        WHERE id = $3
-        RETURNING *;
-      `;
-      values = ["rejected", reject_reason || "", id];
-    }
-
-    // ACCEPT
-    else if (status === "accepted") {
-      query = `
-        UPDATE tasks
-        SET status = $1
+            completed_time = NOW()
         WHERE id = $2
         RETURNING *;
       `;
-      values = ["accepted", id];
+      values = ["completed", id];
+    }
+
+    // ACCEPT / REJECT
+    else {
+      query = `
+        UPDATE tasks
+        SET status = $1,
+            reject_reason = $3
+        WHERE id = $2
+        RETURNING *;
+      `;
+      values = [status, id, reject_reason || null];
     }
 
     const result = await db.query(query, values);
 
-    return res.json({
+    res.json({
       success: true,
-      message: "Task updated successfully",
       task: result.rows[0],
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
