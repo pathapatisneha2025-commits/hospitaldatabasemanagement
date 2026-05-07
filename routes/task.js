@@ -347,54 +347,80 @@ router.delete("/delete/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+const getISTTime = () => {
+  return new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+  });
+};
+
 router.post("/update-status", async (req, res) => {
+  const { id, status, reject_reason } = req.body;
+
+  if (!id || !status) {
+    return res.status(400).json({ error: "id and status required" });
+  }
+
   try {
-    const { id, status } = req.body;
+    let query = "";
+    let values = [];
 
-    if (!id || !status) {
-      return res.status(400).json({ error: "Task ID and status are required" });
-    }
-
-    let query;
-    let values;
-
-    // 👉 If task is completed, set completed_time = IST (Asia/Kolkata)
-    if (status.toLowerCase() === "completed") {
+    // ✅ START TASK
+    if (status === "in_progress") {
       query = `
         UPDATE tasks
         SET status = $1,
-            completed_time = NOW() AT TIME ZONE 'Asia/Kolkata'
-        WHERE id = $2
+            start_time = $2
+        WHERE id = $3
         RETURNING *;
       `;
-      values = [status, id];
-    } 
-    else {
-      // 👉 For other statuses, reset completed_time
+      values = ["in_progress", getISTTime(), id];
+    }
+
+    // ✅ COMPLETE TASK
+    else if (status === "completed") {
       query = `
         UPDATE tasks
         SET status = $1,
-            completed_time = NULL
+            completed_time = $2
+        WHERE id = $3
+        RETURNING *;
+      `;
+      values = ["completed", getISTTime(), id];
+    }
+
+    // ❌ REJECT TASK
+    else if (status === "rejected") {
+      query = `
+        UPDATE tasks
+        SET status = $1,
+            reject_reason = $2
+        WHERE id = $3
+        RETURNING *;
+      `;
+      values = ["rejected", reject_reason || "", id];
+    }
+
+    // ACCEPT
+    else if (status === "accepted") {
+      query = `
+        UPDATE tasks
+        SET status = $1
         WHERE id = $2
         RETURNING *;
       `;
-      values = [status, id];
+      values = ["accepted", id];
     }
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Task not found" });
-    }
-
-    res.status(200).json({
-      message: `Task status updated to ${status}.`,
+    return res.json({
+      success: true,
+      message: "Task updated successfully",
       task: result.rows[0],
     });
-
-  } catch (error) {
-    console.error("Error updating task status:", error);
-    res.status(500).json({ error: "Internal server error" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
