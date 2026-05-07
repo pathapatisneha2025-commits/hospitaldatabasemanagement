@@ -354,6 +354,8 @@ const getISTTime = () => {
 };
 router.post("/update-status", async (req, res) => {
   const { id, status } = req.body;
+    console.log("BODY RECEIVED:", req.body); // 👈 ADD THIS
+
 
   try {
     const normalizedStatus = status.toLowerCase();
