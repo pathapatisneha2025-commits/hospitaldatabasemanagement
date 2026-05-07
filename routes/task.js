@@ -353,47 +353,20 @@ const getISTTime = () => {
   });
 };
 router.post("/update-status", async (req, res) => {
-  const { id, status, reject_reason } = req.body;
+  const { id, status } = req.body;
 
   try {
     const normalizedStatus = status.toLowerCase();
 
-    let query = `UPDATE tasks SET status = $1`;
-    const values = [normalizedStatus];
-    let index = 2;
-
-    if (normalizedStatus === "accepted") {
-      query += `, accepted_time = $${index}`;
-      values.push(new Date().toISOString());
-      index++;
-    }
-
-    if (normalizedStatus === "in_progress") {
-      query += `, started_time = $${index}`;
-      values.push(new Date().toISOString());
-      index++;
-    }
-
-    if (normalizedStatus === "completed") {
-      query += `, completed_time = $${index}`;
-      values.push(new Date().toISOString());
-      index++;
-    }
-
-    if (normalizedStatus === "rejected") {
-      query += `, reject_reason = $${index}`;
-      values.push(reject_reason || "No reason provided");
-      index++;
-    }
-
-    query += ` WHERE id = $${index}`;
-    values.push(id);
+    const query = `UPDATE tasks SET status = $1 WHERE id = $2`;
+    const values = [normalizedStatus, id];
 
     const result = await db.query(query, values);
 
     return res.json({
       success: true,
       updatedRows: result.rowCount,
+      message: "Status updated successfully",
     });
 
   } catch (err) {
