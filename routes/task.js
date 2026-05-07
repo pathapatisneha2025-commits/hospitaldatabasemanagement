@@ -352,9 +352,8 @@ const getISTTime = () => {
     timeZone: "Asia/Kolkata",
   });
 };
-
 router.post("/update-status", async (req, res) => {
-  const { id, status, reject_reason, completed_time } = req.body;
+  const { id, status, reject_reason } = req.body;
 
   try {
     let query = `
@@ -365,15 +364,24 @@ router.post("/update-status", async (req, res) => {
     const values = [status];
     let index = 2;
 
-    if (status === "completed") {
-      query += `, completed_time = $${index}`;
-      values.push(completed_time || new Date().toISOString());
+    // ✅ START / IN PROGRESS (optional timestamp if you want tracking)
+    if (status === "in_progress") {
+      query += `, started_time = $${index}`;
+      values.push(new Date().toISOString());
       index++;
     }
 
+    // ✅ COMPLETED
+    if (status === "completed") {
+      query += `, completed_time = $${index}`;
+      values.push(new Date().toISOString());
+      index++;
+    }
+
+    // ✅ REJECTED
     if (status === "rejected") {
       query += `, reject_reason = $${index}`;
-      values.push(reject_reason || null);
+      values.push(reject_reason || "No reason provided");
       index++;
     }
 
@@ -384,7 +392,7 @@ router.post("/update-status", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Task updated successfully",
+      message: "Task status updated successfully",
       updatedRows: result.rowCount,
     });
 
