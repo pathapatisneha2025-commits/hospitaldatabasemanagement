@@ -354,60 +354,38 @@ const getISTTime = () => {
 };
 
 router.post("/update-status", async (req, res) => {
-  const { id, status, reject_reason } = req.body;
+  const { id, status, reject_reason, completed_time } = req.body;
 
   try {
-    let query = "";
-    let values = [];
+    let query = `
+      UPDATE tasks
+      SET status = $1
+    `;
 
-    // START TASK
-    if (status === "in_progress") {
-      query = `
-        UPDATE tasks
-        SET status = $1,
-            started_at = COALESCE(started_at, NOW())
-        WHERE id = $2
-        RETURNING *;
-      `;
-      values = ["in_progress", id];
+    const values = [status];
+
+    if (status === "completed") {
+      query += `, completed_time = $2 WHERE id = $3`;
+      values.push(completed_time, id);
+    } else if (status === "rejected") {
+      query += `, reject_reason = $2 WHERE id = $3`;
+      values.push(reject_reason, id);
+    } else {
+      query += ` WHERE id = $2`;
+      values.push(id);
     }
 
-    // COMPLETE TASK
-    else if (status === "completed") {
-      query = `
-        UPDATE tasks
-        SET status = $1,
-            completed_time = NOW()
-        WHERE id = $2
-        RETURNING *;
-      `;
-      values = ["completed", id];
-    }
-
-    // ACCEPT / REJECT
-    else {
-      query = `
-        UPDATE tasks
-        SET status = $1,
-            reject_reason = $3
-        WHERE id = $2
-        RETURNING *;
-      `;
-      values = [status, id, reject_reason || null];
-    }
-
-    const result = await db.query(query, values);
+    await db.query(query, values);
 
     res.json({
       success: true,
-      task: result.rows[0],
+      message: "Task updated successfully",
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 
