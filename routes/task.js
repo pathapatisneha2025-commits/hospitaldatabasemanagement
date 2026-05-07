@@ -356,30 +356,31 @@ router.post("/update-status", async (req, res) => {
   const { id, status, reject_reason } = req.body;
 
   try {
-    let query = `
-      UPDATE tasks
-      SET status = $1
-    `;
+    const normalizedStatus = status.toLowerCase();
 
-    const values = [status];
+    let query = `UPDATE tasks SET status = $1`;
+    const values = [normalizedStatus];
     let index = 2;
 
-    // ✅ START / IN PROGRESS (optional timestamp if you want tracking)
-    if (status === "in_progress") {
+    if (normalizedStatus === "accepted") {
+      query += `, accepted_time = $${index}`;
+      values.push(new Date().toISOString());
+      index++;
+    }
+
+    if (normalizedStatus === "in_progress") {
       query += `, started_time = $${index}`;
       values.push(new Date().toISOString());
       index++;
     }
 
-    // ✅ COMPLETED
-    if (status === "completed") {
+    if (normalizedStatus === "completed") {
       query += `, completed_time = $${index}`;
       values.push(new Date().toISOString());
       index++;
     }
 
-    // ✅ REJECTED
-    if (status === "rejected") {
+    if (normalizedStatus === "rejected") {
       query += `, reject_reason = $${index}`;
       values.push(reject_reason || "No reason provided");
       index++;
@@ -392,14 +393,12 @@ router.post("/update-status", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Task status updated successfully",
       updatedRows: result.rowCount,
     });
 
   } catch (err) {
-    console.error("Update error:", err);
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 module.exports = router;
