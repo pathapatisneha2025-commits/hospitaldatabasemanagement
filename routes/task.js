@@ -152,57 +152,90 @@ router.get("/all", async (req, res) => {
 // ============================
 router.get("/employee/:empId", async (req, res) => {
   try {
-    const empId = parseInt(req.params.empId, 10); // ensure number
+    const empId = parseInt(req.params.empId, 10);
+
     if (isNaN(empId)) {
-      return res.status(400).json({ error: "Invalid employee ID" });
+      return res.status(400).json({
+        error: "Invalid employee ID",
+      });
     }
 
-    // Step 1: Update overdue tasks for this employee
+    // Step 1: Update overdue tasks
     await pool.query(
       `
       UPDATE tasks
       SET status = 'overdue'
       WHERE status = 'pending'
       AND EXISTS (
-        SELECT 1 FROM employees e
+        SELECT 1
+        FROM employees e
         WHERE e.id = $1
         AND e.email = ANY(tasks.assignto)
       )
-      AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
+      AND (
+        due_date::date + due_time::time
+      ) < (NOW() AT TIME ZONE 'Asia/Kolkata');
       `,
       [empId]
     );
 
-    // Step 2: Fetch employee's tasks
+    // Step 2: Fetch employee tasks with creator details
     const tasks = await pool.query(
-      `SELECT t.*
-       FROM tasks t
-       JOIN employees e ON e.email = ANY(t.assignto)
-       WHERE e.id = $1
-       ORDER BY t.due_date ASC, t.due_time ASC`,
+      `
+      SELECT 
+        t.*,
+
+        creator.id AS created_by,
+        creator.full_name AS created_by_name,
+        creator.email AS created_by_email
+
+      FROM tasks t
+
+      JOIN employees e
+        ON e.email = ANY(t.assignto)
+
+      LEFT JOIN employees creator
+        ON creator.id = t.created_by
+
+      WHERE e.id = $1
+
+      ORDER BY t.due_date ASC, t.due_time ASC
+      `,
       [empId]
     );
 
     if (tasks.rows.length === 0) {
-      return res.status(404).json({ error: "No tasks found for this employee ID" });
+      return res.status(404).json({
+        error: "No tasks found for this employee ID",
+      });
     }
 
-    // Step 3: Format date (YYYY-MM-DD only)
-    const formatted = tasks.rows.map(task => ({
+    // Step 3: Format response
+    const formatted = tasks.rows.map((task) => ({
       ...task,
-      due_date: task.due_date ? task.due_date.toISOString().split("T")[0] : null
+
+      due_date: task.due_date
+        ? task.due_date.toISOString().split("T")[0]
+        : null,
+
+      created_at: task.created_at
+        ? new Date(task.created_at).toISOString()
+        : null,
     }));
 
-    // Step 4: Return employee tasks
+    // Step 4: Send response
     res.status(200).json({
       success: true,
       count: formatted.length,
-      tasks: formatted
+      tasks: formatted,
     });
 
   } catch (err) {
     console.error("Get employee tasks error:", err.message);
-    res.status(500).json({ error: "Server error" });
+
+    res.status(500).json({
+      error: "Server error",
+    });
   }
 });
 // GET /tasks/created/:employeeId
