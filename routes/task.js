@@ -324,68 +324,111 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
-
 router.post("/reassign", async (req, res) => {
   const { task_id, new_assignee, created_by } = req.body;
 
   try {
-    const assignees = (Array.isArray(new_assignee)
+    // ✅ normalize emails
+    const assignees = Array.isArray(new_assignee)
       ? new_assignee
-      : [new_assignee]
-    ).map(e => e.trim().toLowerCase());
+      : [new_assignee];
 
-    // 🔥 validate emails exist
+    const cleanEmails = assignees
+      .filter(Boolean)
+      .map((e) => e.trim());
+
+    // ✅ validate employee emails exist
     const empResult = await pool.query(
-      `SELECT id, email FROM employees WHERE LOWER(email) = ANY($1::text[])`,
-      [assignees]
+      `SELECT id, email 
+       FROM employees 
+       WHERE email = ANY($1::text[])`,
+      [cleanEmails]
     );
 
     if (empResult.rows.length === 0) {
-      return res.status(404).json({ error: "Employee not found" });
+      return res.status(404).json({
+        success: false,
+        error: "Employee not found",
+      });
     }
 
-    // 🔥 UPDATE TASK WITH EMAILS ONLY
+    // ✅ only use valid emails from DB
+    const validEmails = empResult.rows.map((e) => e.email);
+
+    // ✅ update task
     const updatedTask = await pool.query(
-      `UPDATE tasks
-       SET assignto = $1::text[],
-           status = 'pending',
-           reassigned_at = NOW(),
-           reassigned_from = $3
-       WHERE id = $2
-       RETURNING *`,
-      [assignees, task_id, created_by]
+      `
+      UPDATE tasks
+      SET
+        assignto = $1::text[],
+        status = 'pending',
+        updated_at = NOW(),
+        reassigned_at = NOW(),
+        reassigned_from = $3,
+        reject_reason = NULL
+      WHERE id = $2
+      RETURNING *
+      `,
+      [validEmails, task_id, created_by]
     );
 
-    // 🔥 NOTIFICATIONS
+    // ✅ task exists check
+    if (updatedTask.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Task not found",
+      });
+    }
+
+    // ✅ notifications
     for (const emp of empResult.rows) {
-      await pool.query(
-        `INSERT INTO notifications (employee_id, message, task_id)
-         VALUES ($1, $2, $3)`,
+      const notificationResult = await pool.query(
+        `
+        INSERT INTO notifications (
+          employee_id,
+          message,
+          task_id
+        )
+        VALUES ($1, $2, $3)
+        RETURNING *
+        `,
         [
           emp.id,
           `You have been reassigned a task`,
-          task_id
+          task_id,
         ]
       );
 
+      const notification = notificationResult.rows[0];
+
+      // ✅ websocket realtime update
       const ws = clients.get(emp.id.toString());
+
       if (ws && ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({
-          type: "taskReassigned",
-          task_id
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "taskReassigned",
+            notification,
+            task: updatedTask.rows[0],
+          })
+        );
       }
     }
 
-    res.json({
+    // ✅ final response
+    return res.status(200).json({
       success: true,
       message: "Task reassigned successfully",
       task: updatedTask.rows[0],
     });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Failed to reassign task" });
+    console.error("Reassign task error:", err);
+
+    return res.status(500).json({
+      success: false,
+      error: "Failed to reassign task",
+    });
   }
 });
 // ============================
