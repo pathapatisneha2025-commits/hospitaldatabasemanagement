@@ -358,28 +358,24 @@ router.post("/update-status", async (req, res) => {
   console.log("BODY RECEIVED:", req.body);
 
   try {
-    let normalizedStatus = status.toLowerCase();
-
-    let query = `UPDATE tasks SET status = $1`;
-    let values = [];
-    let index = 2;
-
     const getISTTime = () =>
       new Date().toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
       });
 
-    // ✅ REJECT → go back to CREATED but keep created_by unchanged
-    if (normalizedStatus === "rejected") {
-      normalizedStatus = "created";
+    let query = `UPDATE tasks SET status = $1`;
+    let values = [status];
+    let index = 2;
 
+    // ✅ REJECT
+    if (status.toLowerCase() === "rejected") {
       query += `, reject_reason = $${index}`;
       values.push(reject_reason || "No reason provided");
       index++;
     }
 
     // ✅ START
-    if (status.toLowerCase() === "start") {
+    if (status.toLowerCase() === "start" || status.toLowerCase() === "in_progress") {
       query += `, start_time = $${index}`;
       values.push(getISTTime());
       index++;
@@ -394,9 +390,6 @@ router.post("/update-status", async (req, res) => {
 
     query += ` WHERE id = $${index}`;
     values.push(id);
-
-    // final bind
-    values = [normalizedStatus, ...values];
 
     const result = await pool.query(query, values);
 
