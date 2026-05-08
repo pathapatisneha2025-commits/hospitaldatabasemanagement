@@ -1318,87 +1318,28 @@ router.post("/sales-order", async (req, res) => {
   const data = req.body;
 
   try {
-    console.log("📩 WEBHOOK RECEIVED:", JSON.stringify(data, null, 2));
-
-    // -----------------------------
-    // SAFE HELPERS
-    // -----------------------------
-    const safeString = (val) =>
-      typeof val === "string" && val.trim() !== "" ? val : null;
-
-    const safeNumber = (val) => {
-      const num = Number(val);
-      return isNaN(num) ? 0 : num;
-    };
-
-    const toDecimal = (val) => {
-      const num = Number(val);
-      if (isNaN(num)) return 0;
-      return Math.round(num * 100) / 100;
-    };
-
-    // -----------------------------
-    // SAFE JSON HANDLER (IMPORTANT FIX)
-    // -----------------------------
-    const safeJSON = (val) => {
-      if (!val) return null;
-
-      if (typeof val === "object") return val;
-
-      if (typeof val === "string") {
-        try {
-          return JSON.parse(val);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      return null;
-    };
-
-    // -----------------------------
-    // ORDER ITEMS NORMALIZATION
-    // -----------------------------
-    const orderItems = Array.isArray(data.order_items)
-      ? data.order_items.map((item) => ({
-          item_code: item.item_code || null,
-          medicine_name: item.medicine_name || null,
-          quantity: safeNumber(item.quantity),
-          discount: safeNumber(item.discount),
-          maxmrp: safeNumber(item.maxmrp),
-          selling_price: toDecimal(item.selling_price),
-          sub_total: toDecimal(item.sub_total),
-        }))
-      : [];
-
-    // -----------------------------
-    // FINAL VALUES FOR DB
-    // -----------------------------
     const values = [
-      safeString(data.order_id),
-      safeString(data.order_no),
+      data.order_id || null,
+      data.order_no || null,
       data.created_at || null,
       data.order_type || null,
       data.invoice_id || null,
       data.payment_status || null,
-
-      toDecimal(data.total_price),
-      toDecimal(data.total_discount),
+      data.total_price || 0,
+      data.total_discount || 0,
       data.order_for || null,
       data.delivered_by || null,
-      toDecimal(data.shipping_charge),
+      data.shipping_charge || 0,
 
+      // ✅ NEW FIELDS ADDED
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      safeJSON(data.patient_address), // ✅ FIXED JSONB
-      safeJSON(data.pharmacy),        // ✅ FIXED JSONB
-      orderItems                      // already object array
+      JSON.stringify(data.patient_address) || null,
+      JSON.stringify(data.pharmacy) || null,
+      JSON.stringify(data.order_items) || null
     ];
 
-    // -----------------------------
-    // QUERY
-    // -----------------------------
     const query = `
       INSERT INTO ecogreensales_orders
       (
@@ -1413,8 +1354,10 @@ router.post("/sales-order", async (req, res) => {
         order_for,
         delivered_by,
         shipping_charge,
+
         patient_name,
         patient_contact_no,
+
         patient_address,
         pharmacy,
         order_items
@@ -1427,17 +1370,15 @@ router.post("/sales-order", async (req, res) => {
 
     res.status(200).json({
       message: "Sales order saved successfully",
-      id: result.rows[0].id,
+      id: result.rows[0].id
     });
 
   } catch (err) {
-    console.error("❌ Error saving sales order:", err);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: err.message,
-    });
+    console.error("Error saving sales order:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 // router.get("/sales-orders", async (req, res) => {
 //   try {
 //     const { from } = req.query;
