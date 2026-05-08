@@ -325,7 +325,26 @@ router.put("/update/:id", async (req, res) => {
 });
 
 
+router.post("/reassign", async (req, res) => {
+  const { task_id, new_assignee, created_by } = req.body;
 
+  try {
+    await db.query(
+      `UPDATE tasks
+       SET assignto = $1,
+           status = 'pending',
+           reassigned_at = NOW(),
+           reassigned_from = created_by
+       WHERE id = $2`,
+      [new_assignee, task_id]
+    );
+
+    res.json({ message: "Task reassigned successfully" });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Failed to reassign task" });
+  }
+});
 
 // ============================
 // Delete task by ID
