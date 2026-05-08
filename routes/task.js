@@ -329,7 +329,7 @@ router.post("/reassign", async (req, res) => {
   const { task_id, new_assignee, created_by } = req.body;
 
   try {
-    await db.query(
+    await pool.query(
       `UPDATE tasks
        SET assignto = $1,
            status = 'pending',
