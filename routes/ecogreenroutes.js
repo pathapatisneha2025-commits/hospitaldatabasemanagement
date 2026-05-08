@@ -1318,26 +1318,54 @@ router.post("/sales-order", async (req, res) => {
   const data = req.body;
 
   try {
+    // 🔍 Debug incoming payload (important for webhook issues)
+    console.log("📩 WEBHOOK RECEIVED:", JSON.stringify(data, null, 2));
+
+    // 🧼 Helper: safe string
+    const safeString = (val) =>
+      typeof val === "string" && val.trim() !== "" ? val : null;
+
+    // 🧼 Helper: safe number
+    const safeNumber = (val) => {
+      const num = Number(val);
+      return isNaN(num) ? 0 : num;
+    };
+
+    // 🧼 Normalize order items
+    const orderItems = Array.isArray(data.order_items)
+      ? data.order_items.map((item) => ({
+          item_code: item.item_code || null,
+          medicine_name: item.medicine_name || null,
+          quantity: safeNumber(item.quantity),
+          discount: safeNumber(item.discount),
+          maxmrp: safeNumber(item.maxmrp),
+          selling_price: Math.round(safeNumber(item.selling_price) * 100) / 100,
+          sub_total: Math.round(safeNumber(item.sub_total) * 100) / 100,
+        }))
+      : [];
+
     const values = [
-      data.order_id || null,
-      data.order_no || null,
+      safeString(data.order_id),
+      safeString(data.order_no),
       data.created_at || null,
       data.order_type || null,
       data.invoice_id || null,
       data.payment_status || null,
-      data.total_price || 0,
-      data.total_discount || 0,
+
+      safeNumber(data.total_price),
+      safeNumber(data.total_discount),
       data.order_for || null,
       data.delivered_by || null,
-      data.shipping_charge || 0,
+      safeNumber(data.shipping_charge),
 
-      // ✅ NEW FIELDS ADDED
+      // patient info
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      JSON.stringify(data.patient_address) || null,
-      JSON.stringify(data.pharmacy) || null,
-      JSON.stringify(data.order_items) || null
+      // JSONB-safe (NO stringify needed if DB supports JSONB)
+      data.patient_address ?? null,
+      data.pharmacy ?? null,
+      orderItems,
     ];
 
     const query = `
@@ -1370,16 +1398,15 @@ router.post("/sales-order", async (req, res) => {
 
     res.status(200).json({
       message: "Sales order saved successfully",
-      id: result.rows[0].id
+      id: result.rows[0].id,
     });
 
   } catch (err) {
-    console.error("Error saving sales order:", err);
+    console.error("❌ Error saving sales order:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-router.get("/sales-orders", async (req, res) => {
+router.get("/sales-order", async (req, res) => {
   try {
     const { from } = req.query;
 
