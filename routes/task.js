@@ -333,17 +333,62 @@ router.post("/reassign", async (req, res) => {
       ? new_assignee
       : [new_assignee];
 
-    await pool.query(
+    // 1. Get employee IDs + validate users
+    const empResult = await pool.query(
+      `SELECT id, email FROM employees WHERE email = ANY($1::text[])`,
+      [assignees]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const employeeIds = empResult.rows.map(e => e.id);
+
+    // 2. Update task
+    const updatedTask = await pool.query(
       `UPDATE tasks
        SET assignto = $1::text[],
            status = 'pending',
            reassigned_at = NOW(),
            reassigned_from = $3
-       WHERE id = $2`,
+       WHERE id = $2
+       RETURNING *`,
       [assignees, task_id, created_by]
     );
 
-    res.json({ message: "Task reassigned successfully" });
+    // 3. Send notifications to NEW assignee
+    for (const emp of empResult.rows) {
+      const notificationResult = await pool.query(
+        `INSERT INTO notifications (employee_id, message, task_id)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [
+          emp.id,
+          `You have been assigned a new task (Reassigned).`,
+          task_id
+        ]
+      );
+
+      const notification = notificationResult.rows[0];
+
+      // WebSocket push
+      const ws = clients.get(emp.id.toString());
+      if (ws && ws.readyState === ws.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "taskReassigned",
+            notification,
+          })
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Task reassigned and notified successfully",
+      task: updatedTask.rows[0],
+    });
+
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "Failed to reassign task" });
