@@ -1320,7 +1320,9 @@ router.post("/sales-order", async (req, res) => {
   try {
     console.log("📩 WEBHOOK RECEIVED:", JSON.stringify(data, null, 2));
 
-    // 🧼 Helpers
+    // -----------------------------
+    // SAFE HELPERS
+    // -----------------------------
     const safeString = (val) =>
       typeof val === "string" && val.trim() !== "" ? val : null;
 
@@ -1329,14 +1331,34 @@ router.post("/sales-order", async (req, res) => {
       return isNaN(num) ? 0 : num;
     };
 
-    // 🔥 ADD THIS (FIX FOR YOUR ERROR)
     const toDecimal = (val) => {
       const num = Number(val);
       if (isNaN(num)) return 0;
       return Math.round(num * 100) / 100;
     };
 
-    // 🧼 Order items normalize
+    // -----------------------------
+    // SAFE JSON HANDLER (IMPORTANT FIX)
+    // -----------------------------
+    const safeJSON = (val) => {
+      if (!val) return null;
+
+      if (typeof val === "object") return val;
+
+      if (typeof val === "string") {
+        try {
+          return JSON.parse(val);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      return null;
+    };
+
+    // -----------------------------
+    // ORDER ITEMS NORMALIZATION
+    // -----------------------------
     const orderItems = Array.isArray(data.order_items)
       ? data.order_items.map((item) => ({
           item_code: item.item_code || null,
@@ -1349,6 +1371,9 @@ router.post("/sales-order", async (req, res) => {
         }))
       : [];
 
+    // -----------------------------
+    // FINAL VALUES FOR DB
+    // -----------------------------
     const values = [
       safeString(data.order_id),
       safeString(data.order_no),
@@ -1366,11 +1391,14 @@ router.post("/sales-order", async (req, res) => {
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      data.patient_address ?? null,
-      data.pharmacy ?? null,
-      orderItems
+      safeJSON(data.patient_address), // ✅ FIXED JSONB
+      safeJSON(data.pharmacy),        // ✅ FIXED JSONB
+      orderItems                      // already object array
     ];
 
+    // -----------------------------
+    // QUERY
+    // -----------------------------
     const query = `
       INSERT INTO ecogreensales_orders
       (
@@ -1404,30 +1432,34 @@ router.post("/sales-order", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Error saving sales order:", err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});router.get("/sales-order", async (req, res) => {
-  try {
-    const { from } = req.query;
-
-    let query = "SELECT * FROM ecogreensales_orders";
-    let values = [];
-
-    if (from) {
-      query += " WHERE created_at > $1";
-      values.push(from);
-    }
-
-    query += " ORDER BY created_at ASC";
-
-    const result = await pool.query(query, values);
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch orders" });
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: err.message,
+    });
   }
 });
+// router.get("/sales-orders", async (req, res) => {
+//   try {
+//     const { from } = req.query;
+
+//     let query = "SELECT * FROM ecogreensales_orders";
+//     let values = [];
+
+//     if (from) {
+//       query += " WHERE created_at > $1";
+//       values.push(from);
+//     }
+
+//     query += " ORDER BY created_at ASC";
+
+//     const result = await pool.query(query, values);
+
+//     res.json(result.rows);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Failed to fetch orders" });
+//   }
+// });
 router.get("/sales-orders", async (req, res) => {
   try {
     const result = await pool.query(
