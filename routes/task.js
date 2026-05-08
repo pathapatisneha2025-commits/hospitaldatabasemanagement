@@ -328,7 +328,7 @@ router.post("/reassign", async (req, res) => {
   const { task_id, new_assignee, created_by } = req.body;
 
   try {
-    // ✅ normalize emails
+    // normalize input
     const assignees = Array.isArray(new_assignee)
       ? new_assignee
       : [new_assignee];
@@ -337,7 +337,7 @@ router.post("/reassign", async (req, res) => {
       .filter(Boolean)
       .map((e) => e.trim());
 
-    // ✅ validate employee emails exist
+    // get employee ids
     const empResult = await pool.query(
       `SELECT id, email 
        FROM employees 
@@ -352,15 +352,14 @@ router.post("/reassign", async (req, res) => {
       });
     }
 
-    // ✅ only use valid emails from DB
-    const validEmails = empResult.rows.map((e) => e.email);
+    // 🔥 IMPORTANT CHANGE: use IDs instead of emails
+    const validEmployeeIds = empResult.rows.map((e) => e.id);
 
-    // ✅ update task
     const updatedTask = await pool.query(
       `
       UPDATE tasks
       SET
-        assignto = $1::text[],
+        assignto = $1::int[],
         status = 'pending',
         updated_at = NOW(),
         reassigned_at = NOW(),
@@ -369,10 +368,9 @@ router.post("/reassign", async (req, res) => {
       WHERE id = $2
       RETURNING *
       `,
-      [validEmails, task_id, created_by]
+      [validEmployeeIds, task_id, created_by]
     );
 
-    // ✅ task exists check
     if (updatedTask.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -380,7 +378,7 @@ router.post("/reassign", async (req, res) => {
       });
     }
 
-    // ✅ notifications
+    // notifications
     for (const emp of empResult.rows) {
       const notificationResult = await pool.query(
         `
@@ -401,7 +399,6 @@ router.post("/reassign", async (req, res) => {
 
       const notification = notificationResult.rows[0];
 
-      // ✅ websocket realtime update
       const ws = clients.get(emp.id.toString());
 
       if (ws && ws.readyState === ws.OPEN) {
@@ -415,7 +412,6 @@ router.post("/reassign", async (req, res) => {
       }
     }
 
-    // ✅ final response
     return res.status(200).json({
       success: true,
       message: "Task reassigned successfully",
@@ -430,8 +426,7 @@ router.post("/reassign", async (req, res) => {
       error: "Failed to reassign task",
     });
   }
-});
-// ============================
+});// ============================
 // Delete task by ID
 // ============================
 router.delete("/delete/:id", async (req, res) => {
