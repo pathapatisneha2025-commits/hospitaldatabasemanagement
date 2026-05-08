@@ -334,9 +334,9 @@ router.post("/reassign", async (req, res) => {
        SET assignto = $1,
            status = 'pending',
            reassigned_at = NOW(),
-           reassigned_from = created_by
+           reassigned_from = $3
        WHERE id = $2`,
-      [new_assignee, task_id]
+      [new_assignee, task_id, created_by]
     );
 
     res.json({ message: "Task reassigned successfully" });
@@ -345,7 +345,6 @@ router.post("/reassign", async (req, res) => {
     res.status(500).json({ error: "Failed to reassign task" });
   }
 });
-
 // ============================
 // Delete task by ID
 // ============================
