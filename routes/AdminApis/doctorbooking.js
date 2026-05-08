@@ -136,7 +136,7 @@ router.post("/add", async (req, res) => {
       patientGender,
       patientBloodGroup,
       patientPhone,
-      patientAddress, // ✅ ADDED ADDRESS
+      patientAddress,
 
       doctorName,
       specialization,
@@ -237,10 +237,28 @@ router.post("/add", async (req, res) => {
       });
     }
 
+    // ================= 🔥 GENERATE 4-DIGIT UNIQUE PATIENT ID =================
+    let patientUniqueId;
+    let isUnique = false;
+
+    while (!isUnique) {
+      patientUniqueId = Math.floor(1000 + Math.random() * 9000);
+
+      const check = await pool.query(
+        `SELECT patient_unique_id FROM doctorbooking WHERE patient_unique_id = $1`,
+        [patientUniqueId]
+      );
+
+      if (check.rows.length === 0) {
+        isUnique = true;
+      }
+    }
+
     // ================= INSERT BOOKING =================
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         daily_id, employee_id, doctor_id, patient_id,
+        patient_unique_id,
         patient_name, patient_age, patient_gender, patient_blood_group,
         patient_phone, patient_address,
 
@@ -252,13 +270,14 @@ router.post("/add", async (req, res) => {
       )
       VALUES (
         $1,$2,$3,$4,
-        $5,$6,$7,$8,
-        $9,$10,
+        $5,
+        $6,$7,$8,$9,
+        $10,$11,
 
-        $11,$12,$13,$14,
-        $15,$16,$17,
-        $18,$19,
-        $20,$21,
+        $12,$13,$14,$15,
+        $16,$17,$18,
+        $19,$20,
+        $21,$22,
         'pending'
       )
       RETURNING *`,
@@ -267,12 +286,15 @@ router.post("/add", async (req, res) => {
         employeeId,
         doctorId,
         patientId,
+
+        patientUniqueId, // ✅ 4-digit unique ID
+
         patientName,
         patientAge,
         patientGender,
         patientBloodGroup,
         patientPhone,
-        patientAddress, // ✅ ADDRESS
+        patientAddress,
 
         doctorName,
         specialization,
@@ -289,17 +311,6 @@ router.post("/add", async (req, res) => {
     );
 
     const appointment = result.rows[0];
-
-    // ================= QR DATA =================
-    const qrData = JSON.stringify({
-      token: nextDailyId,
-      patientId,
-      doctorId,
-      date: appointmentDate,
-      time: appointmentTime,
-    });
-
-    const qrImage = await QRCode.toDataURL(qrData, { width: 300 });
 
     // ================= RESPONSE =================
     res.json({
