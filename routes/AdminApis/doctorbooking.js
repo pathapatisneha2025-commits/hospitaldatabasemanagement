@@ -136,6 +136,8 @@ router.post("/add", async (req, res) => {
       patientGender,
       patientBloodGroup,
       patientPhone,
+      patientAddress, // ✅ ADDED ADDRESS
+
       doctorName,
       specialization,
       experience,
@@ -148,13 +150,14 @@ router.post("/add", async (req, res) => {
       paymentType,
       doctorConsultantFee,
       doctorEmail,
-      patientEmail,
     } = req.body;
 
     // ================= DUPLICATE CHECK =================
     const existingAppointment = await pool.query(
       `SELECT * FROM doctorbooking 
-       WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3`,
+       WHERE doctor_id = $1 
+       AND appointment_date = $2 
+       AND appointment_time = $3`,
       [doctorId, appointmentDate, appointmentTime]
     );
 
@@ -191,13 +194,15 @@ router.post("/add", async (req, res) => {
       FROM (
         SELECT tokenid 
         FROM appointments 
-        WHERE doctorid = $1 AND date::date = TO_DATE($2, 'YYYY-MM-DD')
+        WHERE doctorid = $1 
+        AND date::date = TO_DATE($2, 'YYYY-MM-DD')
 
         UNION ALL
 
         SELECT daily_id AS tokenid 
         FROM doctorbooking 
-        WHERE doctor_id::integer = $1 AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
+        WHERE doctor_id::integer = $1 
+        AND appointment_date::date = TO_DATE($2, 'YYYY-MM-DD')
       ) AS combined;
       `,
       [doctorId, appointmentDate]
@@ -236,18 +241,24 @@ router.post("/add", async (req, res) => {
     const result = await pool.query(
       `INSERT INTO doctorbooking (
         daily_id, employee_id, doctor_id, patient_id,
-        patient_name, patient_age, patient_gender, patient_blood_group, patient_phone,
+        patient_name, patient_age, patient_gender, patient_blood_group,
+        patient_phone, patient_address,
+
         doctor_name, specialization, experience, rating,
         available_days, available_time, doctor_description,
-        appointment_date, appointment_time, payment_type, doctor_consultant_fee,
+        appointment_date, appointment_time,
+        payment_type, doctor_consultant_fee,
         status
       )
       VALUES (
         $1,$2,$3,$4,
-        $5,$6,$7,$8,$9,
-        $10,$11,$12,$13,
-        $14,$15,$16,
-        $17,$18,$19,$20,
+        $5,$6,$7,$8,
+        $9,$10,
+
+        $11,$12,$13,$14,
+        $15,$16,$17,
+        $18,$19,
+        $20,$21,
         'pending'
       )
       RETURNING *`,
@@ -261,6 +272,8 @@ router.post("/add", async (req, res) => {
         patientGender,
         patientBloodGroup,
         patientPhone,
+        patientAddress, // ✅ ADDRESS
+
         doctorName,
         specialization,
         experience,
@@ -288,124 +301,17 @@ router.post("/add", async (req, res) => {
 
     const qrImage = await QRCode.toDataURL(qrData, { width: 300 });
 
-    const HOSPITAL_LOGO =
-      "https://hospitaldatabasemanagement.onrender.com/assets/Logo.jpg";
-
-    // ================= PHONE FORMAT =================
-    const formatPhone = (num) => {
-      if (!num) return null;
-      let cleaned = num.toString().replace(/\D/g, "");
-      return cleaned.length === 10 ? `+91${cleaned}` : `+${cleaned}`;
-    };
-
-    const phone = formatPhone(patientPhone);
-
-    // ================= EMAIL =================
-    try {
-      if (patientEmail) {
-        const qrBuffer = Buffer.from(
-          qrImage.split("base64,")[1],
-          "base64"
-        );
-
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: patientEmail,
-          subject: `Appointment Confirmed - Dr. ${doctorName}`,
-
-          attachments: [
-            {
-              filename: "qr.png",
-              content: qrBuffer,
-              cid: "qrimage@pams",
-            },
-          ],
-
-          html: `
-          <div style="max-width:600px;margin:auto;background:#fff;padding:20px;text-align:center;font-family:Arial;">
-
-            <img src="${HOSPITAL_LOGO}" style="width:120px"/>
-
-            <h2 style="color:green">✅ Appointment Confirmed</h2>
-
-            <p>Dear <b>${patientName}</b>,</p>
-
-            <p><b>Doctor:</b> ${doctorName}</p>
-            <p><b>Specialization:</b> ${specialization}</p>
-            <p><b>Date:</b> ${appointmentDate}</p>
-            <p><b>Time:</b> ${appointmentTime}</p>
-            <p><b>Token:</b> ${nextDailyId}</p>
-
-            <h3>QR Code</h3>
-            <img src="cid:qrimage@pams" width="180"/>
-
-            <p>Arrive 10–15 minutes early</p>
-
-          </div>
-        `,
-        });
-      }
-    } catch (err) {
-      console.error("Email error:", err.message);
-    }
-
-    // ================= SMS =================
-    try {
-      if (phone) {
-        await client.messages.create({
-          body: `🏥 Appointment Confirmed
-Doctor: ${doctorName}
-Date: ${appointmentDate}
-Time: ${appointmentTime}
-Token: ${nextDailyId}`,
-          from: process.env.TWILIO_PHONE,
-          to: phone,
-        });
-      }
-    } catch (err) {
-      console.error("SMS error:", err.message);
-    }
-
-    // ================= VOICE CALL =================
-    try {
-      if (phone) {
-        await client.calls.create({
-          to: phone,
-          from: process.env.TWILIO_PHONE,
-          twiml: `
-<Response>
-  <Say voice="alice">
-    Hello ${patientName}. Your appointment is confirmed.
-    Doctor ${doctorName}.
-    Date ${appointmentDate}.
-    Time ${appointmentTime}.
-    Token number ${nextDailyId}.
-  </Say>
-
-  <Pause length="1"/>
-
-  <Say voice="alice">
-    कृपया समय पर अस्पताल पहुंचे। धन्यवाद।
-  </Say>
-</Response>
-          `,
-        });
-      }
-    } catch (err) {
-      console.error("Call error:", err.message);
-    }
-
     // ================= RESPONSE =================
     res.json({
       message: `Appointment created successfully for Dr. ${doctorName}`,
       appointment,
     });
+
   } catch (err) {
     console.error("❌ Error booking appointment:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 
 /* =========================================================
