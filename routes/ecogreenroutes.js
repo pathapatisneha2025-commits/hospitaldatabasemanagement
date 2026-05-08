@@ -1344,30 +1344,27 @@ router.post("/sales-order", async (req, res) => {
         }))
       : [];
 
-    const values = [
-      safeString(data.order_id),
-      safeString(data.order_no),
-      data.created_at || null,
-      data.order_type || null,
-      data.invoice_id || null,
-      data.payment_status || null,
+const values = [
+  safeString(data.order_id),
+  safeString(data.order_no),
+  data.created_at || null,
+  data.order_type || null,
+  data.invoice_id || null,
+  data.payment_status || null,
 
-      safeNumber(data.total_price),
-      safeNumber(data.total_discount),
-      data.order_for || null,
-      data.delivered_by || null,
-      safeNumber(data.shipping_charge),
+  toDecimal(data.total_price),
+  toDecimal(data.total_discount),
+  data.order_for || null,
+  data.delivered_by || null,
+  toDecimal(data.shipping_charge),
 
-      // patient info
-      data.patient_name || null,
-      data.patient_contact_no || null,
+  data.patient_name || null,
+  data.patient_contact_no || null,
 
-      // JSONB-safe (NO stringify needed if DB supports JSONB)
-      data.patient_address ?? null,
-      data.pharmacy ?? null,
-      orderItems,
-    ];
-
+  data.patient_address ?? null,   //  NO stringify
+  data.pharmacy ?? null,          //  NO stringify
+  orderItems                     //  NO stringify
+];
     const query = `
       INSERT INTO ecogreensales_orders
       (
