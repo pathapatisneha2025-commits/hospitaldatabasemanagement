@@ -1318,20 +1318,25 @@ router.post("/sales-order", async (req, res) => {
   const data = req.body;
 
   try {
-    // 🔍 Debug incoming payload (important for webhook issues)
     console.log("📩 WEBHOOK RECEIVED:", JSON.stringify(data, null, 2));
 
-    // 🧼 Helper: safe string
+    // 🧼 Helpers
     const safeString = (val) =>
       typeof val === "string" && val.trim() !== "" ? val : null;
 
-    // 🧼 Helper: safe number
     const safeNumber = (val) => {
       const num = Number(val);
       return isNaN(num) ? 0 : num;
     };
 
-    // 🧼 Normalize order items
+    // 🔥 ADD THIS (FIX FOR YOUR ERROR)
+    const toDecimal = (val) => {
+      const num = Number(val);
+      if (isNaN(num)) return 0;
+      return Math.round(num * 100) / 100;
+    };
+
+    // 🧼 Order items normalize
     const orderItems = Array.isArray(data.order_items)
       ? data.order_items.map((item) => ({
           item_code: item.item_code || null,
@@ -1339,32 +1344,33 @@ router.post("/sales-order", async (req, res) => {
           quantity: safeNumber(item.quantity),
           discount: safeNumber(item.discount),
           maxmrp: safeNumber(item.maxmrp),
-          selling_price: Math.round(safeNumber(item.selling_price) * 100) / 100,
-          sub_total: Math.round(safeNumber(item.sub_total) * 100) / 100,
+          selling_price: toDecimal(item.selling_price),
+          sub_total: toDecimal(item.sub_total),
         }))
       : [];
 
-const values = [
-  safeString(data.order_id),
-  safeString(data.order_no),
-  data.created_at || null,
-  data.order_type || null,
-  data.invoice_id || null,
-  data.payment_status || null,
+    const values = [
+      safeString(data.order_id),
+      safeString(data.order_no),
+      data.created_at || null,
+      data.order_type || null,
+      data.invoice_id || null,
+      data.payment_status || null,
 
-  toDecimal(data.total_price),
-  toDecimal(data.total_discount),
-  data.order_for || null,
-  data.delivered_by || null,
-  toDecimal(data.shipping_charge),
+      toDecimal(data.total_price),
+      toDecimal(data.total_discount),
+      data.order_for || null,
+      data.delivered_by || null,
+      toDecimal(data.shipping_charge),
 
-  data.patient_name || null,
-  data.patient_contact_no || null,
+      data.patient_name || null,
+      data.patient_contact_no || null,
 
-  data.patient_address ?? null,   //  NO stringify
-  data.pharmacy ?? null,          //  NO stringify
-  orderItems                     //  NO stringify
-];
+      data.patient_address ?? null,
+      data.pharmacy ?? null,
+      orderItems
+    ];
+
     const query = `
       INSERT INTO ecogreensales_orders
       (
@@ -1379,10 +1385,8 @@ const values = [
         order_for,
         delivered_by,
         shipping_charge,
-
         patient_name,
         patient_contact_no,
-
         patient_address,
         pharmacy,
         order_items
@@ -1402,8 +1406,7 @@ const values = [
     console.error("❌ Error saving sales order:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
-});
-router.get("/sales-order", async (req, res) => {
+});router.get("/sales-order", async (req, res) => {
   try {
     const { from } = req.query;
 
