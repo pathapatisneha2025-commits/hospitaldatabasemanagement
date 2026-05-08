@@ -323,21 +323,19 @@ router.put("/update/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 router.post("/reassign", async (req, res) => {
   const { task_id, new_assignee, created_by } = req.body;
 
   try {
-    // normalize input
     const assignees = Array.isArray(new_assignee)
       ? new_assignee
       : [new_assignee];
 
     const cleanEmails = assignees
       .filter(Boolean)
-      .map((e) => e.trim());
+      .map(e => e.trim());
 
-    // get employee ids
+    // validate employees
     const empResult = await pool.query(
       `SELECT id, email 
        FROM employees 
@@ -352,14 +350,14 @@ router.post("/reassign", async (req, res) => {
       });
     }
 
-    // 🔥 IMPORTANT CHANGE: use IDs instead of emails
-    const validEmployeeIds = empResult.rows.map((e) => e.id);
+    // 🔥 KEEP EMAILS (NOT IDs)
+    const validEmails = empResult.rows.map(e => e.email);
 
     const updatedTask = await pool.query(
       `
       UPDATE tasks
       SET
-        assignto = $1::int[],
+        assignto = $1::text[],
         status = 'pending',
         updated_at = NOW(),
         reassigned_at = NOW(),
@@ -368,7 +366,7 @@ router.post("/reassign", async (req, res) => {
       WHERE id = $2
       RETURNING *
       `,
-      [validEmployeeIds, task_id, created_by]
+      [validEmails, task_id, created_by]
     );
 
     if (updatedTask.rows.length === 0) {
@@ -380,16 +378,9 @@ router.post("/reassign", async (req, res) => {
 
     // notifications
     for (const emp of empResult.rows) {
-      const notificationResult = await pool.query(
-        `
-        INSERT INTO notifications (
-          employee_id,
-          message,
-          task_id
-        )
-        VALUES ($1, $2, $3)
-        RETURNING *
-        `,
+      await pool.query(
+        `INSERT INTO notifications (employee_id, message, task_id)
+         VALUES ($1, $2, $3)`,
         [
           emp.id,
           `You have been reassigned a task`,
@@ -397,22 +388,18 @@ router.post("/reassign", async (req, res) => {
         ]
       );
 
-      const notification = notificationResult.rows[0];
-
       const ws = clients.get(emp.id.toString());
-
       if (ws && ws.readyState === ws.OPEN) {
         ws.send(
           JSON.stringify({
             type: "taskReassigned",
-            notification,
             task: updatedTask.rows[0],
           })
         );
       }
     }
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Task reassigned successfully",
       task: updatedTask.rows[0],
@@ -420,13 +407,13 @@ router.post("/reassign", async (req, res) => {
 
   } catch (err) {
     console.error("Reassign task error:", err);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: "Failed to reassign task",
     });
   }
-});// ============================
+});
+// ============================
 // Delete task by ID
 // ============================
 router.delete("/delete/:id", async (req, res) => {
