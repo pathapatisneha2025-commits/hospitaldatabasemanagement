@@ -324,7 +324,7 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 router.post("/reassign", async (req, res) => {
-  const { task_id, new_assignee, created_by } = req.body;
+  const { task_id, new_assignee } = req.body;
 
   try {
     const assignees = Array.isArray(new_assignee)
@@ -335,7 +335,7 @@ router.post("/reassign", async (req, res) => {
       .filter(Boolean)
       .map(e => e.trim());
 
-    // validate employees
+    // validate emails only
     const empResult = await pool.query(
       `SELECT id, email 
        FROM employees 
@@ -350,7 +350,6 @@ router.post("/reassign", async (req, res) => {
       });
     }
 
-    // 🔥 KEEP EMAILS (NOT IDs)
     const validEmails = empResult.rows.map(e => e.email);
 
     const updatedTask = await pool.query(
@@ -361,47 +360,15 @@ router.post("/reassign", async (req, res) => {
         status = 'pending',
         updated_at = NOW(),
         reassigned_at = NOW(),
-        reassigned_from = $3,
         reject_reason = NULL
       WHERE id = $2
       RETURNING *
       `,
-      [validEmails, task_id, created_by]
+      [validEmails, task_id]
     );
-
-    if (updatedTask.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: "Task not found",
-      });
-    }
-
-    // notifications
-    for (const emp of empResult.rows) {
-      await pool.query(
-        `INSERT INTO notifications (employee_id, message, task_id)
-         VALUES ($1, $2, $3)`,
-        [
-          emp.id,
-          `You have been reassigned a task`,
-          task_id,
-        ]
-      );
-
-      const ws = clients.get(emp.id.toString());
-      if (ws && ws.readyState === ws.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "taskReassigned",
-            task: updatedTask.rows[0],
-          })
-        );
-      }
-    }
 
     return res.json({
       success: true,
-      message: "Task reassigned successfully",
       task: updatedTask.rows[0],
     });
 
