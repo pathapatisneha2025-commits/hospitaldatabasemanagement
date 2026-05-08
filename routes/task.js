@@ -355,52 +355,58 @@ const getISTTime = () => {
 router.post("/update-status", async (req, res) => {
   const { id, status, reject_reason } = req.body;
 
-  console.log("BODY RECEIVED:", req.body);
-
   try {
-    const getISTTime = () =>
-      new Date().toLocaleString("en-IN", {
-        timeZone: "Asia/Kolkata",
-      });
+    const now = new Date();
 
     let query = `UPDATE tasks SET status = $1`;
     let values = [status];
     let index = 2;
 
-    // ✅ REJECT
-    if (status.toLowerCase() === "rejected") {
-      query += `, reject_reason = $${index}`;
-      values.push(reject_reason || "No reason provided");
-      index++;
-    }
-
     // ✅ START
-    if (status.toLowerCase() === "start" || status.toLowerCase() === "in_progress") {
+    if (status === "in_progress") {
       query += `, start_time = $${index}`;
-      values.push(getISTTime());
+      values.push(now);
       index++;
     }
 
-    // ✅ COMPLETED
-    if (status.toLowerCase() === "completed") {
+    // ✅ COMPLETE → calculate duration
+    if (status === "completed") {
       query += `, completed_time = $${index}`;
-      values.push(getISTTime());
+      values.push(now);
       index++;
+
+      // 🧠 fetch start_time first
+      const task = await pool.query(
+        `SELECT start_time FROM tasks WHERE id = $1`,
+        [id]
+      );
+
+      const startTime = task.rows[0]?.start_time;
+
+      if (startTime) {
+        const diffMs = new Date(now) - new Date(startTime);
+        const mins = Math.floor(diffMs / 60000);
+
+        const hours = Math.floor(mins / 60);
+        const minutes = mins % 60;
+
+        const totalTime =
+          hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+        query += `, total_time = $${index}`;
+        values.push(totalTime);
+        index++;
+      }
     }
 
     query += ` WHERE id = $${index}`;
     values.push(id);
 
-    const result = await pool.query(query, values);
+    await pool.query(query, values);
 
-    return res.json({
-      success: true,
-      updatedRows: result.rowCount,
-      message: "Status updated successfully",
-    });
-
+    res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.log(err);
     res.status(500).json({ error: "Server error" });
   }
 });
