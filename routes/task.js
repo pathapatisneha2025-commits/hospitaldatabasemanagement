@@ -329,6 +329,10 @@ router.post("/reassign", async (req, res) => {
   const { task_id, new_assignee, created_by } = req.body;
 
   try {
+    const assignees = Array.isArray(new_assignee)
+      ? new_assignee
+      : [new_assignee];
+
     await pool.query(
       `UPDATE tasks
        SET assignto = $1::text[],
@@ -336,7 +340,7 @@ router.post("/reassign", async (req, res) => {
            reassigned_at = NOW(),
            reassigned_from = $3
        WHERE id = $2`,
-      [[new_assignee], task_id, created_by]
+      [assignees, task_id, created_by]
     );
 
     res.json({ message: "Task reassigned successfully" });
