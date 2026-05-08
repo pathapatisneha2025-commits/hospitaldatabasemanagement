@@ -210,7 +210,7 @@ router.get("/employee/:empId", async (req, res) => {
       });
     }
 
-    // Step 3: Format response
+    // Step 3: Format response (IMPORTANT FIX HERE)
     const formatted = tasks.rows.map((task) => ({
       ...task,
 
@@ -221,6 +221,9 @@ router.get("/employee/:empId", async (req, res) => {
       created_at: task.created_at
         ? new Date(task.created_at).toISOString()
         : null,
+
+      // ✅ FIX: always include reject_reason safely
+      reject_reason: task.reject_reason || null,
     }));
 
     // Step 4: Send response
@@ -237,8 +240,7 @@ router.get("/employee/:empId", async (req, res) => {
       error: "Server error",
     });
   }
-});
-// GET /tasks/created/:employeeId
+});// GET /tasks/created/:employeeId
 router.get("/created/:employeeId", async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -369,13 +371,12 @@ router.post("/update-status", async (req, res) => {
       index++;
     }
 
-    // ✅ COMPLETE → calculate duration
+    // ✅ COMPLETE
     if (status === "completed") {
       query += `, completed_time = $${index}`;
       values.push(now);
       index++;
 
-      // 🧠 fetch start_time first
       const task = await pool.query(
         `SELECT start_time FROM tasks WHERE id = $1`,
         [id]
@@ -399,6 +400,13 @@ router.post("/update-status", async (req, res) => {
       }
     }
 
+    // 🔥 FIX: REJECT reason save
+    if (status === "rejected") {
+      query += `, reject_reason = $${index}`;
+      values.push(reject_reason || "No reason provided");
+      index++;
+    }
+
     query += ` WHERE id = $${index}`;
     values.push(id);
 
@@ -409,5 +417,4 @@ router.post("/update-status", async (req, res) => {
     console.log(err);
     res.status(500).json({ error: "Server error" });
   }
-});
-module.exports = router;
+});module.exports = router;
