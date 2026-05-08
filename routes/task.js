@@ -329,13 +329,14 @@ router.post("/reassign", async (req, res) => {
   const { task_id, new_assignee, created_by } = req.body;
 
   try {
-    const assignees = Array.isArray(new_assignee)
+    const assignees = (Array.isArray(new_assignee)
       ? new_assignee
-      : [new_assignee];
+      : [new_assignee]
+    ).map(e => e.trim().toLowerCase());
 
-    // 1. Get employee IDs + validate users
+    // 🔥 validate emails exist
     const empResult = await pool.query(
-      `SELECT id, email FROM employees WHERE email = ANY($1::text[])`,
+      `SELECT id, email FROM employees WHERE LOWER(email) = ANY($1::text[])`,
       [assignees]
     );
 
@@ -343,9 +344,7 @@ router.post("/reassign", async (req, res) => {
       return res.status(404).json({ error: "Employee not found" });
     }
 
-    const employeeIds = empResult.rows.map(e => e.id);
-
-    // 2. Update task
+    // 🔥 UPDATE TASK WITH EMAILS ONLY
     const updatedTask = await pool.query(
       `UPDATE tasks
        SET assignto = $1::text[],
@@ -357,35 +356,30 @@ router.post("/reassign", async (req, res) => {
       [assignees, task_id, created_by]
     );
 
-    // 3. Send notifications to NEW assignee
+    // 🔥 NOTIFICATIONS
     for (const emp of empResult.rows) {
-      const notificationResult = await pool.query(
+      await pool.query(
         `INSERT INTO notifications (employee_id, message, task_id)
-         VALUES ($1, $2, $3) RETURNING *`,
+         VALUES ($1, $2, $3)`,
         [
           emp.id,
-          `You have been assigned a new task (Reassigned).`,
+          `You have been reassigned a task`,
           task_id
         ]
       );
 
-      const notification = notificationResult.rows[0];
-
-      // WebSocket push
       const ws = clients.get(emp.id.toString());
       if (ws && ws.readyState === ws.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "taskReassigned",
-            notification,
-          })
-        );
+        ws.send(JSON.stringify({
+          type: "taskReassigned",
+          task_id
+        }));
       }
     }
 
     res.json({
       success: true,
-      message: "Task reassigned and notified successfully",
+      message: "Task reassigned successfully",
       task: updatedTask.rows[0],
     });
 
