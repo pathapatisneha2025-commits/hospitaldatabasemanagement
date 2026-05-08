@@ -331,12 +331,12 @@ router.post("/reassign", async (req, res) => {
   try {
     await pool.query(
       `UPDATE tasks
-       SET assignto = $1,
+       SET assignto = $1::text[],
            status = 'pending',
            reassigned_at = NOW(),
            reassigned_from = $3
        WHERE id = $2`,
-      [new_assignee, task_id, created_by]
+      [[new_assignee], task_id, created_by]
     );
 
     res.json({ message: "Task reassigned successfully" });
