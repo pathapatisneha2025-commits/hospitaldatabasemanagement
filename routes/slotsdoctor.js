@@ -64,19 +64,27 @@ router.get("/:doctorId", async (req, res) => {
 
     const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // ================= 3. BOOKED TOKENS =================
+    // ================= 3. BOOKED TOKENS (COMBINED) =================
     const bookedRes = await pool.query(
-      `SELECT tokenid, timeslot
-       FROM appointments
-       WHERE doctorid=$1 AND date=$2`,
+      `
+      SELECT tokenid, timeslot
+      FROM appointments
+      WHERE doctorid=$1 AND date=$2
+
+      UNION ALL
+
+      SELECT daily_id AS tokenid, appointment_time AS timeslot
+      FROM doctorbooking
+      WHERE doctor_id=$1 AND appointment_date=$2
+      `,
       [doctorId, formattedDate]
     );
 
-    // 🔥 NORMALIZED BOOKED MAP (IMPORTANT FIX)
+    // ================= 4. NORMALIZE BOOKED MAP =================
     const bookedMap = {};
 
     bookedRes.rows.forEach((r) => {
-      const slotKey = String(r.timeslot).trim();
+      const slotKey = String(r.timeslot || "").trim();
 
       if (!bookedMap[slotKey]) {
         bookedMap[slotKey] = new Set();
@@ -85,7 +93,7 @@ router.get("/:doctorId", async (req, res) => {
       bookedMap[slotKey].add(String(r.tokenid));
     });
 
-    // ================= 4. GLOBAL TOKEN =================
+    // ================= 5. GLOBAL TOKEN =================
     const lastTokenRes = await pool.query(
       `SELECT MAX(tokenid) AS last_token
        FROM appointments
@@ -95,7 +103,7 @@ router.get("/:doctorId", async (req, res) => {
 
     let globalToken = Number(lastTokenRes.rows[0]?.last_token || 0);
 
-    // ================= 5. BUILD FINAL SLOTS =================
+    // ================= 6. BUILD FINAL SLOTS =================
     const slots = slotResult.rows.map((slot) => {
       const start = globalToken + 1;
       const end = globalToken + slot.token_limit;
@@ -125,8 +133,7 @@ router.get("/:doctorId", async (req, res) => {
     console.error("❌ Slot API Error:", err);
     res.status(500).json({ error: err.message });
   }
-});
-/*
+});/*
 -----------------------------------
 ADD SLOT (WITH TOKEN LIMIT)
 -----------------------------------
