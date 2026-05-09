@@ -67,21 +67,17 @@ router.get("/:doctorId", async (req, res) => {
 
     const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // ================= 3. BOOKED TOKENS =================
+    // ================= 3. BOOKED TOKENS (USE ONLY TOKEN SYSTEM) =================
     const bookedRes = await pool.query(
       `
-      SELECT 
-        tokenid::text AS tokenid, 
-        LOWER(TRIM(timeslot)) AS timeslot
+      SELECT tokenid::text AS tokenid
       FROM appointments
       WHERE doctorid::text = $1 
       AND date = $2
 
       UNION ALL
 
-      SELECT 
-        daily_id::text AS tokenid, 
-        LOWER(TRIM(appointment_time)) AS timeslot
+      SELECT daily_id::text AS tokenid
       FROM doctorbooking
       WHERE doctor_id::text = $1 
       AND appointment_date = $2
@@ -89,19 +85,11 @@ router.get("/:doctorId", async (req, res) => {
       [doctorIdStr, formattedDate]
     );
 
-    // ================= 4. BUILD BOOKED MAP =================
-    const bookedMap = {};
+    // ================= 4. BUILD BOOKED SET =================
+    const bookedSet = new Set();
 
     bookedRes.rows.forEach((r) => {
-      const slotKey = r.timeslot;
-
-      if (!slotKey) return;
-
-      if (!bookedMap[slotKey]) {
-        bookedMap[slotKey] = new Set();
-      }
-
-      bookedMap[slotKey].add(r.tokenid);
+      bookedSet.add(String(r.tokenid));
     });
 
     // ================= 5. GLOBAL TOKEN =================
@@ -115,7 +103,7 @@ router.get("/:doctorId", async (req, res) => {
 
     let globalToken = Number(lastTokenRes.rows[0]?.last_token || 0);
 
-    // ================= 6. BUILD FINAL RESPONSE =================
+    // ================= 6. BUILD FINAL SLOTS =================
     const slots = slotResult.rows.map((slot) => {
       const start = globalToken + 1;
       const end = globalToken + slot.token_limit;
@@ -127,12 +115,10 @@ router.get("/:doctorId", async (req, res) => {
 
       globalToken = end;
 
-      // 🔥 NORMALIZE SLOT TIME (MOST IMPORTANT FIX)
-      const slotKey = (slot.slot_time || "").toLowerCase().trim();
-
-      const bookedTokens = bookedMap[slotKey]
-        ? Array.from(bookedMap[slotKey])
-        : [];
+      // ✅ CHECK BOOKED TOKENS BY TOKEN ID (NOT TIME)
+      const bookedTokens = tokens.filter((t) =>
+        bookedSet.has(t)
+      );
 
       return {
         ...slot,
