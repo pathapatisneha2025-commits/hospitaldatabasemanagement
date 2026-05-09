@@ -150,6 +150,8 @@ router.post("/add", async (req, res) => {
       paymentType,
       doctorConsultantFee,
       doctorEmail,
+        tokenId,
+
     } = req.body;
 
     // ================= DUPLICATE CHECK =================
@@ -222,20 +224,20 @@ router.post("/add", async (req, res) => {
         ? parseInt(reserveData.rows[0].reserved_count, 10)
         : 0;
 
-    let nextDailyId;
+const nextDailyId = parseInt(tokenId);
 
-    if (!lastToken.rows[0].last_token) {
-      nextDailyId = reservedCount + 1;
-    } else {
-      nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
-    }
+    // if (!lastToken.rows[0].last_token) {
+    //   nextDailyId = reservedCount + 1;
+    // } else {
+    //   nextDailyId = parseInt(lastToken.rows[0].last_token, 10) + 1;
+    // }
 
-    if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
-      return res.status(200).json({
-        alert: true,
-        message: `No bookings available for Dr. ${doctorName} today.`,
-      });
-    }
+    // if (nextDailyId > MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY) {
+    //   return res.status(200).json({
+    //     alert: true,
+    //     message: `No bookings available for Dr. ${doctorName} today.`,
+    //   });
+    // }
 
     // ================= 🔥 GENERATE 4-DIGIT UNIQUE PATIENT ID =================
     let patientUniqueId;
@@ -253,7 +255,6 @@ router.post("/add", async (req, res) => {
         isUnique = true;
       }
     }
-
     // ================= INSERT BOOKING =================
     const result = await pool.query(
       `INSERT INTO doctorbooking (
