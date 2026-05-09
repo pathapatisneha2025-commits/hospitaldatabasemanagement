@@ -67,12 +67,12 @@ router.get("/:doctorId", async (req, res) => {
 
     const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // ================= 3. BOOKED TOKENS (IMPORTANT FIX) =================
+    // ================= 3. BOOKED TOKENS =================
     const bookedRes = await pool.query(
       `
       SELECT 
         tokenid::text AS tokenid, 
-        timeslot::text AS timeslot
+        LOWER(TRIM(timeslot)) AS timeslot
       FROM appointments
       WHERE doctorid::text = $1 
       AND date = $2
@@ -81,7 +81,7 @@ router.get("/:doctorId", async (req, res) => {
 
       SELECT 
         daily_id::text AS tokenid, 
-        appointment_time::text AS timeslot
+        LOWER(TRIM(appointment_time)) AS timeslot
       FROM doctorbooking
       WHERE doctor_id::text = $1 
       AND appointment_date = $2
@@ -93,7 +93,9 @@ router.get("/:doctorId", async (req, res) => {
     const bookedMap = {};
 
     bookedRes.rows.forEach((r) => {
-      const slotKey = (r.timeslot || "").trim();
+      const slotKey = r.timeslot;
+
+      if (!slotKey) return;
 
       if (!bookedMap[slotKey]) {
         bookedMap[slotKey] = new Set();
@@ -125,10 +127,12 @@ router.get("/:doctorId", async (req, res) => {
 
       globalToken = end;
 
-      const bookedTokens =
-        bookedMap[(slot.slot_time || "").trim()]
-          ? Array.from(bookedMap[(slot.slot_time || "").trim()])
-          : [];
+      // 🔥 NORMALIZE SLOT TIME (MOST IMPORTANT FIX)
+      const slotKey = (slot.slot_time || "").toLowerCase().trim();
+
+      const bookedTokens = bookedMap[slotKey]
+        ? Array.from(bookedMap[slotKey])
+        : [];
 
       return {
         ...slot,
