@@ -43,69 +43,77 @@ router.get("/:doctorId", async (req, res) => {
       ? date.split("T")[0]
       : date;
 
-    const doctorIdParam = String(doctorId); // ✅ FIX TYPE ISSUE
+    const doctorIdStr = String(doctorId);
 
     // ================= 1. GET SLOTS =================
     const slotResult = await pool.query(
       `SELECT id, slot_time, token_limit
        FROM doctor_slots 
-       WHERE doctor_id::text=$1 AND slot_date=$2 
+       WHERE doctor_id::text = $1 
+       AND slot_date = $2 
        ORDER BY slot_time ASC`,
-      [doctorIdParam, formattedDate]
+      [doctorIdStr, formattedDate]
     );
 
     // ================= 2. RESERVED RULE =================
     const reserveData = await pool.query(
       `SELECT reserved_count 
        FROM reserve_rules
-       WHERE doctor_id::text=$1 
+       WHERE doctor_id::text = $1 
        AND date::date = TO_DATE($2,'YYYY-MM-DD')
        LIMIT 1`,
-      [doctorIdParam, formattedDate]
+      [doctorIdStr, formattedDate]
     );
 
     const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // ================= 3. BOOKED TOKENS (appointments + doctorbooking) =================
+    // ================= 3. BOOKED TOKENS (IMPORTANT FIX) =================
     const bookedRes = await pool.query(
       `
-      SELECT tokenid, timeslot
+      SELECT 
+        tokenid::text AS tokenid, 
+        timeslot::text AS timeslot
       FROM appointments
-      WHERE doctorid::text=$1 AND date=$2
+      WHERE doctorid::text = $1 
+      AND date = $2
 
       UNION ALL
 
-      SELECT daily_id AS tokenid, appointment_time AS timeslot
+      SELECT 
+        daily_id::text AS tokenid, 
+        appointment_time::text AS timeslot
       FROM doctorbooking
-      WHERE doctor_id::text=$1 AND appointment_date=$2
+      WHERE doctor_id::text = $1 
+      AND appointment_date = $2
       `,
-      [doctorIdParam, formattedDate]
+      [doctorIdStr, formattedDate]
     );
 
-    // ================= 4. NORMALIZE BOOKED MAP =================
+    // ================= 4. BUILD BOOKED MAP =================
     const bookedMap = {};
 
     bookedRes.rows.forEach((r) => {
-      const slotKey = String(r.timeslot || "").trim();
+      const slotKey = (r.timeslot || "").trim();
 
       if (!bookedMap[slotKey]) {
         bookedMap[slotKey] = new Set();
       }
 
-      bookedMap[slotKey].add(String(r.tokenid));
+      bookedMap[slotKey].add(r.tokenid);
     });
 
     // ================= 5. GLOBAL TOKEN =================
     const lastTokenRes = await pool.query(
-      `SELECT MAX(tokenid) AS last_token
+      `SELECT MAX(tokenid::int) AS last_token
        FROM appointments
-       WHERE doctorid::text=$1 AND date=$2`,
-      [doctorIdParam, formattedDate]
+       WHERE doctorid::text = $1 
+       AND date = $2`,
+      [doctorIdStr, formattedDate]
     );
 
     let globalToken = Number(lastTokenRes.rows[0]?.last_token || 0);
 
-    // ================= 6. BUILD FINAL SLOTS =================
+    // ================= 6. BUILD FINAL RESPONSE =================
     const slots = slotResult.rows.map((slot) => {
       const start = globalToken + 1;
       const end = globalToken + slot.token_limit;
@@ -117,9 +125,10 @@ router.get("/:doctorId", async (req, res) => {
 
       globalToken = end;
 
-      const bookedTokens = bookedMap[String(slot.slot_time).trim()]
-        ? Array.from(bookedMap[String(slot.slot_time).trim()])
-        : [];
+      const bookedTokens =
+        bookedMap[(slot.slot_time || "").trim()]
+          ? Array.from(bookedMap[(slot.slot_time || "").trim()])
+          : [];
 
       return {
         ...slot,
