@@ -43,41 +43,43 @@ router.get("/:doctorId", async (req, res) => {
       ? date.split("T")[0]
       : date;
 
+    const doctorIdParam = String(doctorId); // ✅ FIX TYPE ISSUE
+
     // ================= 1. GET SLOTS =================
     const slotResult = await pool.query(
       `SELECT id, slot_time, token_limit
        FROM doctor_slots 
-       WHERE doctor_id=$1 AND slot_date=$2 
+       WHERE doctor_id::text=$1 AND slot_date=$2 
        ORDER BY slot_time ASC`,
-      [doctorId, formattedDate]
+      [doctorIdParam, formattedDate]
     );
 
     // ================= 2. RESERVED RULE =================
     const reserveData = await pool.query(
       `SELECT reserved_count 
        FROM reserve_rules
-       WHERE doctor_id=$1 
+       WHERE doctor_id::text=$1 
        AND date::date = TO_DATE($2,'YYYY-MM-DD')
        LIMIT 1`,
-      [doctorId, formattedDate]
+      [doctorIdParam, formattedDate]
     );
 
     const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // ================= 3. BOOKED TOKENS (COMBINED) =================
+    // ================= 3. BOOKED TOKENS (appointments + doctorbooking) =================
     const bookedRes = await pool.query(
       `
       SELECT tokenid, timeslot
       FROM appointments
-      WHERE doctorid=$1 AND date=$2
+      WHERE doctorid::text=$1 AND date=$2
 
       UNION ALL
 
       SELECT daily_id AS tokenid, appointment_time AS timeslot
       FROM doctorbooking
-      WHERE doctor_id=$1 AND appointment_date=$2
+      WHERE doctor_id::text=$1 AND appointment_date=$2
       `,
-      [doctorId, formattedDate]
+      [doctorIdParam, formattedDate]
     );
 
     // ================= 4. NORMALIZE BOOKED MAP =================
@@ -97,8 +99,8 @@ router.get("/:doctorId", async (req, res) => {
     const lastTokenRes = await pool.query(
       `SELECT MAX(tokenid) AS last_token
        FROM appointments
-       WHERE doctorid=$1 AND date=$2`,
-      [doctorId, formattedDate]
+       WHERE doctorid::text=$1 AND date=$2`,
+      [doctorIdParam, formattedDate]
     );
 
     let globalToken = Number(lastTokenRes.rows[0]?.last_token || 0);
@@ -133,7 +135,8 @@ router.get("/:doctorId", async (req, res) => {
     console.error("❌ Slot API Error:", err);
     res.status(500).json({ error: err.message });
   }
-});/*
+});
+/*
 -----------------------------------
 ADD SLOT (WITH TOKEN LIMIT)
 -----------------------------------
