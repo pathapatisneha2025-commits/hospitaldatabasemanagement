@@ -55,7 +55,7 @@ router.get("/:doctorId", async (req, res) => {
       [doctorId, formattedDate]
     );
 
-    // 2. Get reserved count for doctor/day
+    // 2. Reserved count (optional buffer)
     const reserveData = await pool.query(
       `SELECT reserved_count 
        FROM reserve_rules
@@ -68,7 +68,7 @@ router.get("/:doctorId", async (req, res) => {
     const reservedCount =
       reserveData.rows[0]?.reserved_count || 0;
 
-    // 3. Get booked tokens for that day
+    // 3. Booked tokens
     const bookedRes = await pool.query(
       `SELECT tokenid, timeslot
        FROM appointments
@@ -76,7 +76,6 @@ router.get("/:doctorId", async (req, res) => {
       [doctorId, formattedDate]
     );
 
-    // group booked by slot
     const bookedMap = {};
 
     bookedRes.rows.forEach((r) => {
@@ -86,18 +85,33 @@ router.get("/:doctorId", async (req, res) => {
       bookedMap[r.timeslot].push(String(r.tokenid));
     });
 
-    // 4. Build final response
+    // 4. 🔥 GLOBAL TOKEN START (IMPORTANT FIX)
+    const lastTokenRes = await pool.query(
+      `SELECT MAX(tokenid) AS last_token
+       FROM appointments
+       WHERE doctorid=$1 AND date=$2`,
+      [doctorId, formattedDate]
+    );
+
+    let globalToken = Number(lastTokenRes.rows[0]?.last_token || 0);
+
+    // 5. BUILD SLOTS WITH SEQUENTIAL TOKENS
     const slots = slotResult.rows.map((slot) => {
+      const start = globalToken + 1;
+      const end = globalToken + slot.token_limit;
+
       const tokens = Array.from(
         { length: slot.token_limit },
-        (_, i) => String(i + 1)
+        (_, i) => String(start + i)
       );
+
+      globalToken = end; // move pointer forward
 
       return {
         ...slot,
         tokens,
         reserved: reservedCount,
-        booked_tokens: bookedMap[slot.slot_time] || []
+        booked_tokens: bookedMap[slot.slot_time] || [],
       };
     });
 
