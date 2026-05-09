@@ -43,19 +43,16 @@ router.get("/:doctorId", async (req, res) => {
       ? date.split("T")[0]
       : date;
 
-    // 1. Get slots
+    // ================= 1. GET SLOTS =================
     const slotResult = await pool.query(
-      `SELECT 
-        id,
-        slot_time,
-        token_limit
+      `SELECT id, slot_time, token_limit
        FROM doctor_slots 
        WHERE doctor_id=$1 AND slot_date=$2 
        ORDER BY slot_time ASC`,
       [doctorId, formattedDate]
     );
 
-    // 2. Reserved count (optional buffer)
+    // ================= 2. RESERVED RULE =================
     const reserveData = await pool.query(
       `SELECT reserved_count 
        FROM reserve_rules
@@ -65,10 +62,9 @@ router.get("/:doctorId", async (req, res) => {
       [doctorId, formattedDate]
     );
 
-    const reservedCount =
-      reserveData.rows[0]?.reserved_count || 0;
+    const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // 3. Booked tokens
+    // ================= 3. BOOKED TOKENS =================
     const bookedRes = await pool.query(
       `SELECT tokenid, timeslot
        FROM appointments
@@ -76,16 +72,20 @@ router.get("/:doctorId", async (req, res) => {
       [doctorId, formattedDate]
     );
 
+    // 🔥 NORMALIZED BOOKED MAP (IMPORTANT FIX)
     const bookedMap = {};
 
     bookedRes.rows.forEach((r) => {
-      if (!bookedMap[r.timeslot]) {
-        bookedMap[r.timeslot] = [];
+      const slotKey = String(r.timeslot).trim();
+
+      if (!bookedMap[slotKey]) {
+        bookedMap[slotKey] = new Set();
       }
-      bookedMap[r.timeslot].push(String(r.tokenid));
+
+      bookedMap[slotKey].add(String(r.tokenid));
     });
 
-    // 4. 🔥 GLOBAL TOKEN START (IMPORTANT FIX)
+    // ================= 4. GLOBAL TOKEN =================
     const lastTokenRes = await pool.query(
       `SELECT MAX(tokenid) AS last_token
        FROM appointments
@@ -95,7 +95,7 @@ router.get("/:doctorId", async (req, res) => {
 
     let globalToken = Number(lastTokenRes.rows[0]?.last_token || 0);
 
-    // 5. BUILD SLOTS WITH SEQUENTIAL TOKENS
+    // ================= 5. BUILD FINAL SLOTS =================
     const slots = slotResult.rows.map((slot) => {
       const start = globalToken + 1;
       const end = globalToken + slot.token_limit;
@@ -105,20 +105,24 @@ router.get("/:doctorId", async (req, res) => {
         (_, i) => String(start + i)
       );
 
-      globalToken = end; // move pointer forward
+      globalToken = end;
+
+      const bookedTokens = bookedMap[String(slot.slot_time).trim()]
+        ? Array.from(bookedMap[String(slot.slot_time).trim()])
+        : [];
 
       return {
         ...slot,
         tokens,
         reserved: reservedCount,
-        booked_tokens: bookedMap[slot.slot_time] || [],
+        booked_tokens: bookedTokens,
       };
     });
 
     return res.json({ slots });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ Slot API Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
