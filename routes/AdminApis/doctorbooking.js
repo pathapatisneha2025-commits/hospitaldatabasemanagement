@@ -224,8 +224,13 @@ router.post("/add", async (req, res) => {
         ? parseInt(reserveData.rows[0].reserved_count, 10)
         : 0;
 
-const nextDailyId = parseInt(tokenId);
+const nextDailyId = Number(tokenId);
 
+if (!nextDailyId || isNaN(nextDailyId)) {
+  return res.status(400).json({
+    error: "Invalid token ID",
+  });
+}
     // if (!lastToken.rows[0].last_token) {
     //   nextDailyId = reservedCount + 1;
     // } else {
