@@ -389,7 +389,92 @@ router.get("/doctor/:doctorId", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+router.get("/doctorwise", async (req, res) => {
+  try {
+    const { employee_id, doctor_id, date } = req.query;
 
+    let query = `
+      SELECT *
+      FROM doctorbooking
+      WHERE 1=1
+    `;
+
+    const values = [];
+    let i = 1;
+
+    if (employee_id) {
+      query += ` AND employee_id = $${i}`;
+      values.push(employee_id);
+      i++;
+    }
+
+    if (doctor_id) {
+      query += ` AND doctor_id = $${i}`;
+      values.push(doctor_id);
+      i++;
+    }
+
+    if (date) {
+      query += ` AND DATE(appointment_date) = $${i}`;
+      values.push(date);
+      i++;
+    }
+
+    query += ` ORDER BY appointment_time ASC`;
+
+    const result = await pool.query(query, values);
+
+    const data = result.rows;
+
+    // 🔥 GROUPING + REVENUE CALCULATION
+    const grouped = {};
+
+    data.forEach((item) => {
+      const key = `${item.employee_id}_${item.doctor_id}_${item.appointment_date?.toString().split("T")[0]}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          employee_id: item.employee_id,
+          doctor_id: item.doctor_id,
+          doctor_name: item.doctor_name,
+          specialization: item.specialization,
+          date: item.appointment_date?.toString().split("T")[0],
+          total_patients: 0,
+          total_revenue: 0,
+          patients: [],
+        };
+      }
+
+      grouped[key].total_patients += 1;
+      grouped[key].total_revenue += Number(item.doctor_consultant_fee || 0);
+
+      grouped[key].patients.push({
+        patient_id: item.patient_id,
+        patient_name: item.patient_name,
+        age: item.patient_age,
+        gender: item.patient_gender,
+        phone: item.patient_phone,
+        token_time: item.appointment_time,
+        payment_type: item.payment_type,
+        fee: Number(item.doctor_consultant_fee || 0),
+        status: item.status,
+      });
+    });
+
+    res.json({
+      success: true,
+      count: data.length,
+      result: Object.values(grouped),
+    });
+
+  } catch (err) {
+    console.error("Doctor booking fetch error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
 /* =========================================================
     4️⃣ GET SINGLE APPOINTMENT BY DATABASE ID
 ========================================================= */
