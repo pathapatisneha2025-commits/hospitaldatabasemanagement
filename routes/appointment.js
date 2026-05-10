@@ -240,7 +240,7 @@ router.post("/add", async (req, res) => {
   try {
     const formattedDate = date.includes("T") ? date.split("T")[0] : date;
 
-    // // ✅ Doctor check
+    // ✅ Doctor check
     // const doctorCheck = await db.query(
     //   `SELECT doctor_id FROM doctor_consultant_fees WHERE doctor_id = $1`,
     //   [doctorId]
@@ -335,11 +335,11 @@ router.post("/add", async (req, res) => {
     }
 
     //  LIMIT CHECK
-    if (tokenid > MAX) {
-      return res.status(400).json({
-        error: "No slots available",
-      });
-    }
+    // if (tokenid > MAX) {
+    //   return res.status(400).json({
+    //     error: "No slots available",
+    //   });
+    // }
 
     // ✅ QR
     const qrData = JSON.stringify({
