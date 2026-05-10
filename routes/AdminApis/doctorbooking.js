@@ -155,18 +155,19 @@ router.post("/add", async (req, res) => {
     } = req.body;
 
     // ================= DUPLICATE CHECK =================
-   const existingAppointment = await pool.query(
-  `SELECT * FROM doctorbooking 
-   WHERE doctor_id = $1 
-   AND appointment_date = $2`,
-  [doctorId, appointmentDate]
-);
+    // const existingAppointment = await pool.query(
+    //   `SELECT * FROM doctorbooking 
+    //    WHERE doctor_id = $1 
+    //    AND appointment_date = $2, 
+    //    AND appointment_time = $3`,
+    //   [doctorId, appointmentDate, appointmentTime]
+    // );
 
-    if (existingAppointment.rows.length > 0) {
-      return res.status(400).json({
-        error: "Doctor is already booked for this time slot",
-      });
-    }
+    // if (existingAppointment.rows.length > 0) {
+    //   return res.status(400).json({
+    //     error: "Doctor is already booked for this time slot",
+    //   });
+    // }
 
     // ================= VISIT LIMIT =================
     const visitData = await pool.query(
