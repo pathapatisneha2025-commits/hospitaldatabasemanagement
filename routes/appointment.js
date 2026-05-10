@@ -240,45 +240,45 @@ router.post("/add", async (req, res) => {
   try {
     const formattedDate = date.includes("T") ? date.split("T")[0] : date;
 
-    // ✅ Doctor check
-    const doctorCheck = await db.query(
-      `SELECT doctor_id FROM doctor_consultant_fees WHERE doctor_id = $1`,
-      [doctorId]
-    );
+    // // ✅ Doctor check
+    // const doctorCheck = await db.query(
+    //   `SELECT doctor_id FROM doctor_consultant_fees WHERE doctor_id = $1`,
+    //   [doctorId]
+    // );
 
-    if (doctorCheck.rows.length === 0) {
-      return res.status(404).json({ error: "Doctor not found" });
-    }
+    // if (doctorCheck.rows.length === 0) {
+    //   return res.status(404).json({ error: "Doctor not found" });
+    // }
 
-    // already booked slot check
-    const existing = await db.query(
-      `SELECT * FROM appointments 
-       WHERE doctorid = $1 AND date = $2 AND timeslot = $3 AND tokenid = $4`,
-      [doctorId, formattedDate, timeSlot, tokenid]
-    );
+    // // already booked slot check
+    // const existing = await db.query(
+    //   `SELECT * FROM appointments 
+    //    WHERE doctorid = $1 AND date = $2 AND timeslot = $3 AND tokenid = $4`,
+    //   [doctorId, formattedDate, timeSlot, tokenid]
+    // );
 
-    if (existing.rows.length > 0) {
-      return res.status(409).json({
-        error: "Token already booked for this slot",
-      });
-    }
+    // if (existing.rows.length > 0) {
+    //   return res.status(409).json({
+    //     error: "Token already booked for this slot",
+    //   });
+    // }
 
-    // visit limit
-    const visitData = await db.query(
-      `SELECT number_of_visits_per_day 
-       FROM doctor_visits 
-       WHERE LOWER(doctor_email) = LOWER($1)
-       LIMIT 1`,
-      [doctorEmail]
-    );
+    // // visit limit
+    // const visitData = await db.query(
+    //   `SELECT number_of_visits_per_day 
+    //    FROM doctor_visits 
+    //    WHERE LOWER(doctor_email) = LOWER($1)
+    //    LIMIT 1`,
+    //   [doctorEmail]
+    // );
 
-    if (visitData.rows.length === 0) {
-      return res.status(400).json({
-        error: "No visit limit set",
-      });
-    }
+    // if (visitData.rows.length === 0) {
+    //   return res.status(400).json({
+    //     error: "No visit limit set",
+    //   });
+    // }
 
-    const MAX = parseInt(visitData.rows[0].number_of_visits_per_day, 10);
+    // const MAX = parseInt(visitData.rows[0].number_of_visits_per_day, 10);
 
     // ✅ last token
     const lastToken = await db.query(
