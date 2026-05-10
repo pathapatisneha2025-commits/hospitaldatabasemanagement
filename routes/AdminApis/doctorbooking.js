@@ -155,13 +155,13 @@ router.post("/add", async (req, res) => {
     } = req.body;
 
     // ================= DUPLICATE CHECK =================
-    const existingAppointment = await pool.query(
-      `SELECT * FROM doctorbooking 
-       WHERE doctor_id = $1 
-       AND appointment_date = $2 
-       AND appointment_time = $3`,
-      [doctorId, appointmentDate, appointmentTime]
-    );
+   const existingAppointment = await pool.query(
+  `SELECT * FROM doctorbooking 
+   WHERE doctor_id = $1 
+   AND appointment_date = $2 
+   AND daily_id = $3`,
+  [doctorId, appointmentDate, nextDailyId]
+);
 
     if (existingAppointment.rows.length > 0) {
       return res.status(400).json({
