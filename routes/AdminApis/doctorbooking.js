@@ -155,13 +155,29 @@ router.post("/add", async (req, res) => {
     } = req.body;
 
     // ================= DUPLICATE CHECK =================
-   const existingAppointment = await pool.query(
+  // TOKEN
+const nextDailyId = Number(tokenId);
+
+if (!nextDailyId || isNaN(nextDailyId)) {
+  return res.status(400).json({
+    error: "Invalid token ID",
+  });
+}
+
+// DUPLICATE TOKEN CHECK
+const existingAppointment = await pool.query(
   `SELECT * FROM doctorbooking 
    WHERE doctor_id = $1 
    AND appointment_date = $2 
    AND daily_id = $3`,
   [doctorId, appointmentDate, nextDailyId]
 );
+
+if (existingAppointment.rows.length > 0) {
+  return res.status(400).json({
+    error: "Token already booked",
+  });
+}
 
     if (existingAppointment.rows.length > 0) {
       return res.status(400).json({
@@ -224,13 +240,7 @@ router.post("/add", async (req, res) => {
         ? parseInt(reserveData.rows[0].reserved_count, 10)
         : 0;
 
-const nextDailyId = Number(tokenId);
 
-if (!nextDailyId || isNaN(nextDailyId)) {
-  return res.status(400).json({
-    error: "Invalid token ID",
-  });
-}
     // if (!lastToken.rows[0].last_token) {
     //   nextDailyId = reservedCount + 1;
     // } else {
