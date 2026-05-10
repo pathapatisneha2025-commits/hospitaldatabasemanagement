@@ -449,16 +449,40 @@ router.get("/doctorwise", async (req, res) => {
       grouped[key].total_revenue += Number(item.doctor_consultant_fee || 0);
 
       grouped[key].patients.push({
-        patient_id: item.patient_id,
-        patient_name: item.patient_name,
-        age: item.patient_age,
-        gender: item.patient_gender,
-        phone: item.patient_phone,
-        token_time: item.appointment_time,
-        payment_type: item.payment_type,
-        fee: Number(item.doctor_consultant_fee || 0),
-        status: item.status,
-      });
+  patient_id: item.patient_id || "",
+
+  patient_unique_id:
+    item.patient_unique_id || "",
+
+  patient_name: item.patient_name || "",
+
+  age: item.patient_age || "",
+
+  gender: item.patient_gender || "",
+
+  phone: item.patient_phone || "",
+
+  patient_email:
+    item.patient_email || "",
+
+  patient_address:
+    item.patient_address || "",
+
+  patient_blood_group:
+    item.patient_blood_group || "",
+
+  token_time:
+    item.appointment_time || "",
+
+  payment_type:
+    item.payment_type || "",
+
+  fee: Number(
+    item.doctor_consultant_fee || 0
+  ),
+
+  status: item.status || "",
+});
     });
 
     res.json({
