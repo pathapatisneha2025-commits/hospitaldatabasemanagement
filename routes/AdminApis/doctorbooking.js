@@ -448,11 +448,14 @@ router.get("/doctorwise", async (req, res) => {
       grouped[key].total_patients += 1;
       grouped[key].total_revenue += Number(item.doctor_consultant_fee || 0);
 
-      grouped[key].patients.push({
+grouped[key].patients.push({
   patient_id: item.patient_id || "",
 
-  patient_unique_id:
-    item.patient_unique_id || "",
+  patient_unique_id: item.patient_unique_id || "",
+
+  daily_id: item.daily_id || "",   // ✅ ADD THIS (your token number)
+
+  token_number: item.daily_id || "", // (optional alias for frontend clarity)
 
   patient_name: item.patient_name || "",
 
@@ -462,24 +465,17 @@ router.get("/doctorwise", async (req, res) => {
 
   phone: item.patient_phone || "",
 
-  patient_email:
-    item.patient_email || "",
+  patient_email: item.patient_email || "",
 
-  patient_address:
-    item.patient_address || "",
+  patient_address: item.patient_address || "",
 
-  patient_blood_group:
-    item.patient_blood_group || "",
+  patient_blood_group: item.patient_blood_group || "",
 
-  token_time:
-    item.appointment_time || "",
+  token_time: item.appointment_time || "",
 
-  payment_type:
-    item.payment_type || "",
+  payment_type: item.payment_type || "",
 
-  fee: Number(
-    item.doctor_consultant_fee || 0
-  ),
+  fee: Number(item.doctor_consultant_fee || 0),
 
   status: item.status || "",
 });
