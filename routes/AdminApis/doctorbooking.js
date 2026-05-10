@@ -170,12 +170,12 @@ router.post("/add", async (req, res) => {
     // }
 
     // ================= VISIT LIMIT =================
-   const visitData = await pool.query(
+    const visitData = await pool.query(
   `SELECT number_of_visits_per_day 
    FROM doctor_visits
-   WHERE doctor_id = $1
+   WHERE doctor_email = $1
    LIMIT 1`,
-  [doctorId]
+  [doctorEmail]
 );
 
     if (visitData.rows.length === 0) {
