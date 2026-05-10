@@ -170,24 +170,24 @@ router.post("/add", async (req, res) => {
     // }
 
     // ================= VISIT LIMIT =================
-    const visitData = await pool.query(
-  `SELECT number_of_visits_per_day 
-   FROM doctor_visits
-   WHERE doctor_email = $1
-   LIMIT 1`,
-  [doctorEmail]
-);
+//     const visitData = await pool.query(
+//   `SELECT number_of_visits_per_day 
+//    FROM doctor_visits
+//    WHERE doctor_email = $1
+//    LIMIT 1`,
+//   [doctorEmail]
+// );
 
-    if (visitData.rows.length === 0) {
-      return res.status(400).json({
-        error: `No visit limit set for Dr. ${doctorName}`,
-      });
-    }
+//     if (visitData.rows.length === 0) {
+//       return res.status(400).json({
+//         error: `No visit limit set for Dr. ${doctorName}`,
+//       });
+//     }
 
-    const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
-      visitData.rows[0].number_of_visits_per_day,
-      10
-    );
+//     const MAX_APPOINTMENTS_PER_DOCTOR_PER_DAY = parseInt(
+//       visitData.rows[0].number_of_visits_per_day,
+//       10
+//     );
 
     // ================= TOKEN LOGIC =================
     const lastToken = await pool.query(
