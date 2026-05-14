@@ -39,6 +39,10 @@ router.get("/:doctorId", async (req, res) => {
   const { date } = req.query;
 
   try {
+    if (!date) {
+      return res.status(400).json({ error: "Date is required" });
+    }
+
     const formattedDate = date.includes("T")
       ? date.split("T")[0]
       : date;
@@ -79,54 +83,50 @@ router.get("/:doctorId", async (req, res) => {
       SELECT tokenid::text AS tokenid
       FROM appointments
       WHERE doctorid::text = $1
-      AND date = $2
+      AND date::date = TO_DATE($2,'YYYY-MM-DD')
 
       UNION ALL
 
       SELECT daily_id::text AS tokenid
       FROM doctorbooking
       WHERE doctor_id::text = $1
-      AND appointment_date = $2
+      AND appointment_date::date = TO_DATE($2,'YYYY-MM-DD')
       `,
       [doctorIdStr, formattedDate]
     );
 
-    // ================= 4. CREATE BOOKED SET =================
-    const bookedSet = new Set();
+    // ================= 4. NORMALIZED BOOKED SET =================
+    const bookedSet = new Set(
+      bookedRes.rows.map(r => String(r.tokenid).trim())
+    );
 
-    bookedRes.rows.forEach((row) => {
-      if (row.tokenid) {
-        bookedSet.add(String(row.tokenid));
-      }
-    });
-
-    // ================= 5. FIXED TOKEN GENERATION =================
+    // ================= 5. TOKEN GENERATION =================
     let currentToken = 1;
 
     const slots = slotResult.rows.map((slot) => {
+      const limit = Number(slot.token_limit);
 
-      // START TOKEN FOR THIS SLOT
       const start = currentToken;
 
-      // GENERATE FIXED TOKENS
       const tokens = Array.from(
-        { length: Number(slot.token_limit) },
+        { length: limit },
         (_, i) => String(start + i)
       );
 
-      // MOVE POINTER FOR NEXT SLOT
-      currentToken += Number(slot.token_limit);
+      currentToken += limit;
 
-      // FIND BOOKED TOKENS
-      const bookedTokens = tokens.filter((token) =>
-        bookedSet.has(String(token))
+      // booked tokens
+      const booked_tokens = tokens.filter((t) =>
+        bookedSet.has(String(t).trim())
       );
 
       return {
-        ...slot,
+        id: slot.id,
+        slot_time: slot.slot_time,
+        token_limit: limit,
         tokens,
         reserved: reservedCount,
-        booked_tokens: bookedTokens,
+        booked_tokens
       };
     });
 
