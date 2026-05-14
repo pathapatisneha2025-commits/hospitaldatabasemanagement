@@ -313,24 +313,13 @@ router.post("/add", async (req, res) => {
       [doctorId, formattedDate]
     );
 
-    const reserved = reserveData.rows.length > 0
-      ? parseInt(reserveData.rows[0].reserved_count)
-      : 0;
+  const reserved = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // MIN allowed token
-    const minAllowedToken = reserved + 1;
-
-    //  BLOCK reserved range tokens
-    if (tokenid < minAllowedToken) {
+    // ⚠️ ONLY block reserved if your business rule requires it
+    // (KEEP THIS ONLY IF SLOT 1 SHOULD BE BLOCKED)
+    if (Number(tokenid) <= reserved) {
       return res.status(400).json({
-        error: `Token ${tokenid} is reserved. Start from ${minAllowedToken}`,
-      });
-    }
-
-    //BLOCK already used token
-    if (tokenid <= lastNumber) {
-      return res.status(409).json({
-        error: "Token already used",
+        error: `Token ${tokenid} is reserved`,
       });
     }
 
