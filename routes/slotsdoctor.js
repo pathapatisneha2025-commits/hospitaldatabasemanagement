@@ -39,20 +39,16 @@ router.get("/:doctorId", async (req, res) => {
   const { date } = req.query;
 
   try {
-    if (!date) {
-      return res.status(400).json({ error: "Date is required" });
-    }
-
     const formattedDate = date.includes("T")
       ? date.split("T")[0]
       : date;
 
     const doctorIdStr = String(doctorId);
 
-    // 1. GET SLOTS (WITH TOKENS FROM DB IF AVAILABLE)
+    // ================= 1. GET SLOTS =================
     const slotResult = await pool.query(
       `
-      SELECT id, slot_time, token_limit, tokens
+      SELECT id, slot_time, token_limit
       FROM doctor_slots
       WHERE doctor_id::text = $1
       AND slot_date = $2
@@ -61,7 +57,7 @@ router.get("/:doctorId", async (req, res) => {
       [doctorIdStr, formattedDate]
     );
 
-    // 2. RESERVED RULE
+    // ================= 2. RESERVED RULE =================
     const reserveData = await pool.query(
       `
       SELECT reserved_count
@@ -73,37 +69,57 @@ router.get("/:doctorId", async (req, res) => {
       [doctorIdStr, formattedDate]
     );
 
-    const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
+    const reservedCount = Number(
+      reserveData.rows[0]?.reserved_count || 0
+    );
 
-    // 3. BOOKED TOKENS
+    // ================= 3. GET BOOKED TOKENS =================
     const bookedRes = await pool.query(
       `
       SELECT tokenid::text AS tokenid
       FROM appointments
       WHERE doctorid::text = $1
-      AND date::date = $2
+      AND date = $2
 
       UNION ALL
 
       SELECT daily_id::text AS tokenid
       FROM doctorbooking
       WHERE doctor_id::text = $1
-      AND appointment_date::date = $2
+      AND appointment_date = $2
       `,
       [doctorIdStr, formattedDate]
     );
 
+    // ================= 4. CREATE BOOKED SET =================
     const bookedSet = new Set();
-    bookedRes.rows.forEach(r => {
-      if (r.tokenid) bookedSet.add(String(r.tokenid));
+
+    bookedRes.rows.forEach((row) => {
+      if (row.tokenid) {
+        bookedSet.add(String(row.tokenid));
+      }
     });
 
-    // 4. BUILD RESPONSE (NO TOKEN REGENERATION)
-    const slots = slotResult.rows.map(slot => {
-      const tokens = slot.tokens || [];
+    // ================= 5. FIXED TOKEN GENERATION =================
+    let currentToken = 1;
 
-      const bookedTokens = tokens.filter(t =>
-        bookedSet.has(String(t))
+    const slots = slotResult.rows.map((slot) => {
+
+      // START TOKEN FOR THIS SLOT
+      const start = currentToken;
+
+      // GENERATE FIXED TOKENS
+      const tokens = Array.from(
+        { length: Number(slot.token_limit) },
+        (_, i) => String(start + i)
+      );
+
+      // MOVE POINTER FOR NEXT SLOT
+      currentToken += Number(slot.token_limit);
+
+      // FIND BOOKED TOKENS
+      const bookedTokens = tokens.filter((token) =>
+        bookedSet.has(String(token))
       );
 
       return {
@@ -117,8 +133,11 @@ router.get("/:doctorId", async (req, res) => {
     return res.json({ slots });
 
   } catch (err) {
-    console.error("Slot API Error:", err);
-    return res.status(500).json({ error: err.message });
+    console.error("❌ Slot API Error:", err);
+
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 });
 /*
