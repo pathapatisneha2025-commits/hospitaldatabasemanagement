@@ -55,7 +55,7 @@ router.get("/:doctorId", async (req, res) => {
       [doctorIdStr, formattedDate]
     );
 
-    // ================= 2. GLOBAL RESERVED RULE =================
+    // ================= 2. RESERVED RULE =================
     const reserveData = await pool.query(
       `SELECT reserved_count 
        FROM reserve_rules
@@ -65,11 +65,9 @@ router.get("/:doctorId", async (req, res) => {
       [doctorIdStr, formattedDate]
     );
 
-    const globalReserved = Number(
-      reserveData.rows[0]?.reserved_count || 0
-    );
+    const reservedCount = Number(reserveData.rows[0]?.reserved_count || 0);
 
-    // ================= 3. BOOKED TOKENS =================
+    // ================= 3. BOOKED TOKENS (USE ONLY TOKEN SYSTEM) =================
     const bookedRes = await pool.query(
       `
       SELECT tokenid::text AS tokenid
@@ -87,13 +85,14 @@ router.get("/:doctorId", async (req, res) => {
       [doctorIdStr, formattedDate]
     );
 
-    // ================= 4. BOOKED SET =================
+    // ================= 4. BUILD BOOKED SET =================
     const bookedSet = new Set();
+
     bookedRes.rows.forEach((r) => {
       bookedSet.add(String(r.tokenid));
     });
 
-    // ================= 5. GLOBAL TOKEN START =================
+    // ================= 5. GLOBAL TOKEN =================
     const lastTokenRes = await pool.query(
       `SELECT MAX(tokenid::int) AS last_token
        FROM appointments
@@ -109,30 +108,23 @@ router.get("/:doctorId", async (req, res) => {
       const start = globalToken + 1;
       const end = globalToken + slot.token_limit;
 
-      let tokens = Array.from(
+      const tokens = Array.from(
         { length: slot.token_limit },
         (_, i) => String(start + i)
       );
 
       globalToken = end;
 
-      // 🔥 GLOBAL RESERVED FILTER (MAIN FIX)
-      tokens = tokens.filter(
-        (t) => Number(t) > globalReserved
-      );
-
-      // booked tokens after filtering
+      // ✅ CHECK BOOKED TOKENS BY TOKEN ID (NOT TIME)
       const bookedTokens = tokens.filter((t) =>
         bookedSet.has(t)
       );
 
       return {
-        id: slot.id,
-        slot_time: slot.slot_time,
-        token_limit: slot.token_limit,
+        ...slot,
         tokens,
+        reserved: reservedCount,
         booked_tokens: bookedTokens,
-        global_reserved: globalReserved, // optional for UI debug
       };
     });
 
