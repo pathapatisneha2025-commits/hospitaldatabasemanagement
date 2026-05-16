@@ -303,20 +303,26 @@ router.post("/mark-attendance", async (req, res) => {
  let employeeName = "Unknown Employee";
 
 try {
-  if (employeeId) {
-    const empRes = await pool.query(
-      `SELECT full_name FROM employees WHERE id = $1`,
-      [employeeId]
-    );
-    employeeName = empRes.rows[0]?.full_name || employeeName;
+  let empRes;
 
-  } else if (phone) {
-    const empRes = await pool.query(
+  if (employeeId) {
+    empRes = await pool.query(
+      `SELECT full_name FROM employees WHERE id = $1`,
+      [Number(employeeId)]
+    );
+  }
+
+  if (!empRes?.rows?.length && phone) {
+    empRes = await pool.query(
       `SELECT full_name FROM employees WHERE mobile = $1`,
       [phone]
     );
-    employeeName = empRes.rows[0]?.full_name || employeeName;
   }
+
+  if (empRes?.rows?.length > 0) {
+    employeeName = empRes.rows[0].full_name;
+  }
+
 } catch (err) {
   console.log("Name fetch error:", err.message);
 }
