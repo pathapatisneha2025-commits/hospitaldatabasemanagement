@@ -256,22 +256,24 @@ router.post("/mark-attendance", async (req, res) => {
       employeeId,
       subadminId,
       adminId,
-      phone,             // ✅ New field for quick attendance
+      phone,
       capturedUrl,
       locationVerified,
       faceVerified,
     } = req.body;
 
     if ((!employeeId && !subadminId && !adminId && !phone) || !capturedUrl) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required fields" });
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
     }
 
     const status =
-      locationVerified === true && faceVerified === true ? "On Duty" : "Absent";
+      locationVerified === true && faceVerified === true
+        ? "On Duty"
+        : "Absent";
 
-    // Determine which ID or phone to use
     let columnToUse, valueToUse;
 
     if (employeeId) {
@@ -284,11 +286,10 @@ router.post("/mark-attendance", async (req, res) => {
       columnToUse = "admin_id";
       valueToUse = adminId;
     } else if (phone) {
-      columnToUse = "phone";      // ✅ Store phone if employee not logged in
+      columnToUse = "phone";
       valueToUse = phone;
     }
 
-    // Insert attendance
     const insertResult = await pool.query(
       `INSERT INTO attendance (${columnToUse}, timestamp, image_url, status)
        VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
@@ -298,14 +299,49 @@ router.post("/mark-attendance", async (req, res) => {
 
     const row = insertResult.rows[0];
 
+    // ================= REAL-TIME NOTIFICATION =================
+    let employeeName = "Unknown Employee";
+
+    if (employeeId) {
+      try {
+        const empRes = await pool.query(
+          `SELECT name FROM employees WHERE id = $1`,
+          [employeeId]
+        );
+        employeeName = empRes.rows[0]?.name || employeeName;
+      } catch {}
+    }
+
+    const payload = {
+      type: "ATTENDANCE_MARKED",
+      data: {
+        employeeId,
+        subadminId,
+        adminId,
+        phone,
+        employeeName,
+        status: row.status,
+        timestamp: row.timestamp,
+      },
+    };
+
+    if (global.clients) {
+      global.clients.forEach((ws) => {
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify(payload));
+        }
+      });
+    }
+    // ==========================================================
+
     return res.json({
       success: true,
       message: "Attendance marked successfully",
       data: {
-        employeeId: employeeId || null,
-        subadminId: subadminId || null,
-        adminId: adminId || null,
-        phone: phone || null,      // ✅ Return phone if used
+        employeeId,
+        subadminId,
+        adminId,
+        phone,
         status: row.status,
         timestamp: row.timestamp,
       },
