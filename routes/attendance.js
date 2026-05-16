@@ -300,18 +300,26 @@ router.post("/mark-attendance", async (req, res) => {
     const row = insertResult.rows[0];
 
     // ================= REAL-TIME NOTIFICATION =================
-    let employeeName = "Unknown Employee";
+  let employeeName = "Unknown Employee";
 
-    if (employeeId) {
-      try {
-        const empRes = await pool.query(
-          `SELECT name FROM employees WHERE id = $1`,
-          [employeeId]
-        );
-        employeeName = empRes.rows[0]?.name || employeeName;
-      } catch {}
-    }
+try {
+  if (employeeId) {
+    const empRes = await pool.query(
+      `SELECT name FROM employees WHERE id = $1`,
+      [employeeId]
+    );
+    employeeName = empRes.rows[0]?.name || employeeName;
 
+  } else if (phone) {
+    const empRes = await pool.query(
+      `SELECT name FROM employees WHERE phone = $1`,
+      [phone]
+    );
+    employeeName = empRes.rows[0]?.name || employeeName;
+  }
+} catch (err) {
+  console.log("Name fetch error:", err.message);
+}
     const payload = {
       type: "ATTENDANCE_MARKED",
       data: {
@@ -325,13 +333,13 @@ router.post("/mark-attendance", async (req, res) => {
       },
     };
 
-    if (global.clients) {
-      global.clients.forEach((ws) => {
-        if (ws.readyState === 1) {
-          ws.send(JSON.stringify(payload));
-        }
-      });
+   if (global.clients && global.clients.size > 0) {
+  global.clients.forEach((ws) => {
+    if (ws.readyState === 1) {
+      ws.send(JSON.stringify(payload));
     }
+  });
+}
     // ==========================================================
 
     return res.json({
