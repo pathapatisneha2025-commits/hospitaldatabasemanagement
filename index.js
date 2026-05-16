@@ -186,10 +186,20 @@ wss.on("connection", (ws) => {
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg);
-      if (data.type === "register" && data.employeeId) {
-        clients.set(data.employeeId.toString(), ws);
-        console.log(` Employee ${data.employeeId} registered for notifications`);
-      }
+    if (data.type === "register") {
+  const id =
+    data.adminId ||
+    data.employeeId ||
+    data.subadminId ||
+    data.phone;
+
+  if (id) {
+    ws.userId = id.toString();
+    clients.set(id.toString(), ws);
+
+    console.log("Registered WS user:", id);
+  }
+}
     } catch (err) {
       console.error("❌ Invalid WS message", err.message);
     }
