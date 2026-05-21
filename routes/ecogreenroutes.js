@@ -88,7 +88,7 @@ const generateToken = async () => {
     console.log("🔄 Generating token...");
 
     const response = await fetch(
-      "http://117.211.64.158:41000/ws_c2_services_generate_token",
+      "http://117.211.64.158:21000/ws_c2_services_generate_token",
       {
         method: "POST",
         headers: {
