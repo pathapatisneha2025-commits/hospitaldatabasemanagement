@@ -1025,7 +1025,7 @@ router.post('/create_sales_order', async (req, res) => {
     console.log('=== Incoming Request Body ===');
     console.log(salesOrderData);
 
-    if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode || !salesOrderData.patientId) {
+    if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode ) {
       return res.status(400).json({
         message: 'Required fields missing: c2Code, storeId, prodCode, patientId'
       });
