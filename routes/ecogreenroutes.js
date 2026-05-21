@@ -350,7 +350,7 @@ router.post("/stock-details", async (req, res) => {
     };
 
     const vendorResponse = await fetch(
-      "http://117.211.64.158:41000/ws_c2_services_get_stock_data",
+      "http://117.211.64.158:21000/ws_c2_services_get_stock_data",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
