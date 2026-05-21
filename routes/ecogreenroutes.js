@@ -149,7 +149,7 @@ router.post("/item-master", async (req, res) => {
       formattedDateTime += ":00";
     }
 
-    const vendorUrl = `http://117.211.64.158:41000/ws_c2_services_get_master_data`;
+    const vendorUrl = `http://117.211.64.158:21000/ws_c2_services_get_master_data`;
     const postBody = { c2Code, storeId, prodCode, inputDateTime: formattedDateTime, apiKey };
 
     const response = await fetch(vendorUrl, {
@@ -573,7 +573,7 @@ router.post("/local-customers", async (req, res) => {
     const apiKey = await getToken();
     console.log("Generated API Key:", apiKey);
 
-    const url = "http://117.211.64.158:41000/ws_c2_services_fetch_local_customer";
+    const url = "http://117.211.64.158:21000/ws_c2_services_fetch_local_customer";
 
     const payload = {
       c2Code,
@@ -702,7 +702,7 @@ router.post("/purchase-orders", async (req, res) => {
     console.log("Payload for vendor API:", payload);
 
     const fetchResponse = await fetch(
-      "http://117.211.64.158:41000/ws_c2_services_po_fetch",
+      "http://117.211.64.158:21000/ws_c2_services_po_fetch",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1059,7 +1059,7 @@ router.post('/create_sales_order', async (req, res) => {
 
     // 4️⃣ SEND TO ERP
     const response = await fetch(
-      'http://117.211.64.158:41000/ws_c2_services_create_sale_order',
+      'http://117.211.64.158:21000/ws_c2_services_create_sale_order',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1241,7 +1241,7 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
     order.orderId = localId;
 
     const response = await fetch(
-      "http://117.211.64.158:41000/ws_c2_services_create_sale_order",
+      "http://117.211.64.158:21000/ws_c2_services_create_sale_order",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1750,7 +1750,7 @@ router.post('/sales-order-status', async (req, res) => {
     const client = await pool.connect();
 
     try {
-      const url = `http://117.211.64.158:41000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
+      const url = `http://117.211.64.158:21000/ws_c2_services_sale_order_status?order_no=${encodeURIComponent(orderNo)}&apikey=${encodeURIComponent(apiKey)}`;
 
       const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
 
