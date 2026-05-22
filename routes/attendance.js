@@ -1364,90 +1364,60 @@ router.get("/employee-history", async (req, res) => {
       ${dateFilter}
     `;
 
-    // ✅ LOGIN ONLY
-    const loginQuery = `
+    // 🔥 GET ALL EVENTS ORDERED (IMPORTANT FIX)
+    const query = `
       SELECT
         COALESCE(a.employee_id, e.id) AS employee_id,
         COALESCE(e.full_name, 'Unknown Employee') AS full_name,
         COALESCE(e.image, a.image_url) AS image_url,
         a.phone,
-        a.timestamp AS login_time,
+        a.status,
+        a.timestamp,
         DATE(a.timestamp) AS attendance_date
       FROM attendance a
       LEFT JOIN employees e
         ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
         OR (a.employee_id IS NULL AND a.phone = e.mobile)
       WHERE ${baseWhere}
-        AND a.status = 'login'
       ORDER BY a.timestamp ASC
     `;
 
-    // ✅ LOGOUT ONLY
-    const logoutQuery = `
-      SELECT
-        COALESCE(a.employee_id, e.id) AS employee_id,
-        a.phone,
-        a.timestamp AS logout_time,
-        DATE(a.timestamp) AS attendance_date,
-        a.daily_hours
-      FROM attendance a
-      LEFT JOIN employees e
-        ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
-        OR (a.employee_id IS NULL AND a.phone = e.mobile)
-      WHERE ${baseWhere}
-        AND a.status = 'logout'
-      ORDER BY a.timestamp ASC
-    `;
-
-    const loginResult = await pool.query(loginQuery, [
-      employee_id || null,
-      phone || null,
-    ]);
-
-    const logoutResult = await pool.query(logoutQuery, [
+    const result = await pool.query(query, [
       employee_id || null,
       phone || null,
     ]);
 
     const map = {};
 
-    // LOGIN
-    loginResult.rows.forEach((r) => {
-      const key = `${r.employee_id}-${r.attendance_date}`;
+    result.rows.forEach((row) => {
+      const key = `${row.employee_id}-${row.attendance_date}`;
 
-      map[key] = {
-        employee_id: r.employee_id,
-        full_name: r.full_name,
-        image_url: r.image_url,
-        phone: r.phone,
-        date: r.attendance_date,
-        login_time: r.login_time,
-        logout_time: null,
-        working_hours: null,
-        status: "On Duty",
-      };
-    });
-
-    // LOGOUT
-    logoutResult.rows.forEach((r) => {
-      const key = `${r.employee_id}-${r.attendance_date}`;
-
-      if (map[key]) {
-        map[key].logout_time = r.logout_time;
-        map[key].working_hours = r.daily_hours;
-        map[key].status = "Off Duty";
-      } else {
+      if (!map[key]) {
         map[key] = {
-          employee_id: r.employee_id,
-          full_name: "Unknown",
-          image_url: null,
-          phone: r.phone,
-          date: r.attendance_date,
+          employee_id: row.employee_id,
+          full_name: row.full_name,
+          image_url: row.image_url,
+          phone: row.phone,
+          date: row.attendance_date,
+
           login_time: null,
-          logout_time: r.logout_time,
-          working_hours: r.daily_hours,
+          logout_time: null,
+
           status: "Off Duty",
+          working_hours: null,
         };
+      }
+
+      // 🔥 LOGIN
+      if (row.status === "On Duty") {
+        map[key].login_time = row.timestamp;
+        map[key].status = "On Duty";
+      }
+
+      // 🔥 LOGOUT
+      if (row.status === "Off Duty") {
+        map[key].logout_time = row.timestamp;
+        map[key].status = "Off Duty";
       }
     });
 
@@ -1462,11 +1432,13 @@ router.get("/employee-history", async (req, res) => {
       attendance,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("employee-history error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
-
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
