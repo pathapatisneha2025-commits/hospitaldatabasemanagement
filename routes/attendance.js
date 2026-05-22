@@ -1336,6 +1336,174 @@ router.get("/employee/phone/:phone", async (req, res) => {
   }
 });
 
+router.get("/employee-history", async (req, res) => {
+  try {
+    const { employee_id, phone, month, year, date } = req.query;
+
+    if (!employee_id && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "employee_id or phone is required",
+      });
+    }
+
+    // =========================
+    // DATE FILTER
+    // =========================
+    const dateFilter = date
+      ? `AND DATE(a.timestamp) = '${date}'`
+      : "";
+
+    // =========================
+    // LOGIN QUERY
+    // =========================
+    const loginQuery = `
+      SELECT
+        COALESCE(a.employee_id, e.id) AS employee_id,
+        COALESCE(e.full_name, 'Unknown Employee') AS full_name,
+        COALESCE(e.image, a.image_url) AS image_url,
+        a.phone,
+        a.timestamp AS login_time,
+        DATE(a.timestamp) AS attendance_date
+      FROM attendance_login a
+      LEFT JOIN employees e
+        ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
+        OR (a.employee_id IS NULL AND a.phone = e.mobile)
+
+      WHERE
+      (
+        ($1::int IS NOT NULL AND a.employee_id = $1)
+        OR
+        ($2::text IS NOT NULL AND (a.phone = $2 OR e.mobile = $2))
+      )
+
+      AND EXTRACT(MONTH FROM a.timestamp) = $3
+      AND EXTRACT(YEAR FROM a.timestamp) = $4
+      ${dateFilter}
+
+      ORDER BY a.timestamp ASC
+    `;
+
+    // =========================
+    // LOGOUT QUERY
+    // =========================
+    const logoutQuery = `
+      SELECT
+        COALESCE(a.employee_id, e.id) AS employee_id,
+        COALESCE(e.full_name, 'Unknown Employee') AS full_name,
+        COALESCE(e.image, a.image_url) AS image_url,
+        a.phone,
+        a.timestamp AS logout_time,
+        DATE(a.timestamp) AS attendance_date,
+        a.daily_hours,
+        a.monthly_hours
+
+      FROM attendance_logout a
+
+      LEFT JOIN employees e
+        ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
+        OR (a.employee_id IS NULL AND a.phone = e.mobile)
+
+      WHERE
+      (
+        ($1::int IS NOT NULL AND a.employee_id = $1)
+        OR
+        ($2::text IS NOT NULL AND (a.phone = $2 OR e.mobile = $2))
+      )
+
+      AND EXTRACT(MONTH FROM a.timestamp) = $3
+      AND EXTRACT(YEAR FROM a.timestamp) = $4
+      ${dateFilter}
+
+      ORDER BY a.timestamp ASC
+    `;
+
+    const loginResult = await pool.query(loginQuery, [
+      employee_id || null,
+      phone || null,
+      month,
+      year,
+    ]);
+
+    const logoutResult = await pool.query(logoutQuery, [
+      employee_id || null,
+      phone || null,
+      month,
+      year,
+    ]);
+
+    const attendanceMap = {};
+
+    // =========================
+    // LOGIN MERGE
+    // =========================
+    loginResult.rows.forEach((row) => {
+      const date = row.attendance_date;
+
+      if (!attendanceMap[date]) {
+        attendanceMap[date] = {
+          employee_id: row.employee_id,
+          full_name: row.full_name,
+          image_url: row.image_url,
+          phone: row.phone,
+          date,
+          login_time: row.login_time,
+          logout_time: null,
+          working_hours: null,
+          monthly_hours: null,
+          status: "Login Only",
+        };
+      }
+    });
+
+    // =========================
+    // LOGOUT MERGE
+    // =========================
+    logoutResult.rows.forEach((row) => {
+      const date = row.attendance_date;
+
+      if (!attendanceMap[date]) {
+        attendanceMap[date] = {
+          employee_id: row.employee_id,
+          full_name: row.full_name,
+          image_url: row.image_url,
+          phone: row.phone,
+          date,
+          login_time: null,
+          logout_time: row.logout_time,
+          working_hours: row.daily_hours,
+          monthly_hours: row.monthly_hours,
+          status: "Logout Only",
+        };
+      } else {
+        attendanceMap[date].logout_time = row.logout_time;
+        attendanceMap[date].working_hours = row.daily_hours;
+        attendanceMap[date].monthly_hours = row.monthly_hours;
+        attendanceMap[date].status = "Completed";
+      }
+    });
+
+    const attendance = Object.values(attendanceMap).sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+
+    res.json({
+      success: true,
+      month: `${year}-${month}`,
+      total_days_present: attendance.length,
+      attendance,
+    });
+
+  } catch (error) {
+    console.error("Employee history error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
