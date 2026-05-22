@@ -1353,13 +1353,18 @@ router.get("/employee-history", async (req, res) => {
 
     const dateFilter = date ? `AND DATE(a.timestamp) = '${date}'` : "";
 
-    const getKey = (row) => {
-      const id = row.employee_id || row.phone || row.mobile;
-      const d = new Date(row.attendance_date).toISOString().split("T")[0];
-      return `${id}-${d}`;
-    };
+    const baseWhere = `
+      (
+        ($1::int IS NULL OR a.employee_id = $1)
+        AND
+        ($2::text IS NULL OR (a.phone = $2 OR e.mobile = $2))
+      )
+      AND EXTRACT(MONTH FROM a.timestamp) = ${currentMonth}
+      AND EXTRACT(YEAR FROM a.timestamp) = ${currentYear}
+      ${dateFilter}
+    `;
 
-    // ================= LOGIN =================
+    // ✅ LOGIN ONLY
     const loginQuery = `
       SELECT
         COALESCE(a.employee_id, e.id) AS employee_id,
@@ -1372,26 +1377,15 @@ router.get("/employee-history", async (req, res) => {
       LEFT JOIN employees e
         ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
         OR (a.employee_id IS NULL AND a.phone = e.mobile)
-
-      WHERE
-        (
-          ($1::int IS NULL OR a.employee_id = $1)
-          AND
-          ($2::text IS NULL OR (a.phone = $2 OR e.mobile = $2))
-        )
-        AND EXTRACT(MONTH FROM a.timestamp) = ${currentMonth}
-        AND EXTRACT(YEAR FROM a.timestamp) = ${currentYear}
-        ${dateFilter}
-
+      WHERE ${baseWhere}
+        AND a.status = 'login'
       ORDER BY a.timestamp ASC
     `;
 
-    // ================= LOGOUT =================
+    // ✅ LOGOUT ONLY
     const logoutQuery = `
       SELECT
         COALESCE(a.employee_id, e.id) AS employee_id,
-        COALESCE(e.full_name, 'Unknown Employee') AS full_name,
-        COALESCE(e.image, a.image_url) AS image_url,
         a.phone,
         a.timestamp AS logout_time,
         DATE(a.timestamp) AS attendance_date,
@@ -1400,17 +1394,8 @@ router.get("/employee-history", async (req, res) => {
       LEFT JOIN employees e
         ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
         OR (a.employee_id IS NULL AND a.phone = e.mobile)
-
-      WHERE
-        (
-          ($1::int IS NULL OR a.employee_id = $1)
-          AND
-          ($2::text IS NULL OR (a.phone = $2 OR e.mobile = $2))
-        )
-        AND EXTRACT(MONTH FROM a.timestamp) = ${currentMonth}
-        AND EXTRACT(YEAR FROM a.timestamp) = ${currentYear}
-        ${dateFilter}
-
+      WHERE ${baseWhere}
+        AND a.status = 'logout'
       ORDER BY a.timestamp ASC
     `;
 
@@ -1424,64 +1409,49 @@ router.get("/employee-history", async (req, res) => {
       phone || null,
     ]);
 
-    const attendanceMap = {};
+    const map = {};
 
-    // ================= LOGIN =================
-    loginResult.rows.forEach((row) => {
-      const key = getKey(row);
+    // LOGIN
+    loginResult.rows.forEach((r) => {
+      const key = `${r.employee_id}-${r.attendance_date}`;
 
-      if (!attendanceMap[key]) {
-        attendanceMap[key] = {
-          employee_id: row.employee_id,
-          phone: row.phone,
-          full_name: row.full_name,
-          image_url: row.image_url,
-          date: row.attendance_date,
-
-          login_time: row.login_time || null,
-          logout_time: null,
-
-          working_hours: null,
-
-          // 🔥 STATUS BASED LOGIC
-          status: "On Duty",
-        };
-      }
+      map[key] = {
+        employee_id: r.employee_id,
+        full_name: r.full_name,
+        image_url: r.image_url,
+        phone: r.phone,
+        date: r.attendance_date,
+        login_time: r.login_time,
+        logout_time: null,
+        working_hours: null,
+        status: "On Duty",
+      };
     });
 
-    // ================= LOGOUT =================
-    logoutResult.rows.forEach((row) => {
-      const key = getKey(row);
+    // LOGOUT
+    logoutResult.rows.forEach((r) => {
+      const key = `${r.employee_id}-${r.attendance_date}`;
 
-      if (!attendanceMap[key]) {
-        attendanceMap[key] = {
-          employee_id: row.employee_id,
-          phone: row.phone,
-          full_name: row.full_name,
-          image_url: row.image_url,
-          date: row.attendance_date,
-
+      if (map[key]) {
+        map[key].logout_time = r.logout_time;
+        map[key].working_hours = r.daily_hours;
+        map[key].status = "Off Duty";
+      } else {
+        map[key] = {
+          employee_id: r.employee_id,
+          full_name: "Unknown",
+          image_url: null,
+          phone: r.phone,
+          date: r.attendance_date,
           login_time: null,
-          logout_time: row.logout_time || null,
-
-          working_hours: row.daily_hours || null,
-
-          // 🔥 STATUS BASED LOGIC
+          logout_time: r.logout_time,
+          working_hours: r.daily_hours,
           status: "Off Duty",
         };
-      } else {
-        attendanceMap[key].logout_time = row.logout_time;
-        attendanceMap[key].working_hours = row.daily_hours;
-
-        // 🔥 FINAL STATUS RULE
-        attendanceMap[key].status =
-          attendanceMap[key].login_time && row.logout_time
-            ? "Completed"
-            : "Off Duty";
       }
     });
 
-    const attendance = Object.values(attendanceMap).sort(
+    const attendance = Object.values(map).sort(
       (a, b) => new Date(b.date) - new Date(a.date)
     );
 
@@ -1491,13 +1461,9 @@ router.get("/employee-history", async (req, res) => {
       total_days: attendance.length,
       attendance,
     });
-
-  } catch (error) {
-    console.error("Employee history error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
