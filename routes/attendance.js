@@ -1347,18 +1347,19 @@ router.get("/employee-history", async (req, res) => {
       });
     }
 
-    // =========================
-    // CURRENT MONTH DEFAULT FILTER
-    // =========================
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
 
     const dateFilter = date ? `AND DATE(a.timestamp) = '${date}'` : "";
 
-    // =========================
-    // LOGIN QUERY
-    // =========================
+    const getKey = (row) => {
+      const id = row.employee_id || row.phone || row.mobile;
+      const d = new Date(row.attendance_date).toISOString().split("T")[0];
+      return `${id}-${d}`;
+    };
+
+    // ================= LOGIN =================
     const loginQuery = `
       SELECT
         COALESCE(a.employee_id, e.id) AS employee_id,
@@ -1385,9 +1386,7 @@ router.get("/employee-history", async (req, res) => {
       ORDER BY a.timestamp ASC
     `;
 
-    // =========================
-    // LOGOUT QUERY
-    // =========================
+    // ================= LOGOUT =================
     const logoutQuery = `
       SELECT
         COALESCE(a.employee_id, e.id) AS employee_id,
@@ -1427,45 +1426,58 @@ router.get("/employee-history", async (req, res) => {
 
     const attendanceMap = {};
 
-    // LOGIN
+    // ================= LOGIN =================
     loginResult.rows.forEach((row) => {
-      const d = row.attendance_date;
+      const key = getKey(row);
 
-      if (!attendanceMap[d]) {
-        attendanceMap[d] = {
+      if (!attendanceMap[key]) {
+        attendanceMap[key] = {
           employee_id: row.employee_id,
+          phone: row.phone,
           full_name: row.full_name,
           image_url: row.image_url,
-          phone: row.phone,
-          date: d,
-          login_time: row.login_time,
+          date: row.attendance_date,
+
+          login_time: row.login_time || null,
           logout_time: null,
+
           working_hours: null,
-          status: "Login Only",
+
+          // 🔥 STATUS BASED LOGIC
+          status: "On Duty",
         };
       }
     });
 
-    // LOGOUT
+    // ================= LOGOUT =================
     logoutResult.rows.forEach((row) => {
-      const d = row.attendance_date;
+      const key = getKey(row);
 
-      if (!attendanceMap[d]) {
-        attendanceMap[d] = {
+      if (!attendanceMap[key]) {
+        attendanceMap[key] = {
           employee_id: row.employee_id,
+          phone: row.phone,
           full_name: row.full_name,
           image_url: row.image_url,
-          phone: row.phone,
-          date: d,
+          date: row.attendance_date,
+
           login_time: null,
-          logout_time: row.logout_time,
-          working_hours: row.daily_hours,
-          status: "Logout Only",
+          logout_time: row.logout_time || null,
+
+          working_hours: row.daily_hours || null,
+
+          // 🔥 STATUS BASED LOGIC
+          status: "Off Duty",
         };
       } else {
-        attendanceMap[d].logout_time = row.logout_time;
-        attendanceMap[d].working_hours = row.daily_hours;
-        attendanceMap[d].status = "Completed";
+        attendanceMap[key].logout_time = row.logout_time;
+        attendanceMap[key].working_hours = row.daily_hours;
+
+        // 🔥 FINAL STATUS RULE
+        attendanceMap[key].status =
+          attendanceMap[key].login_time && row.logout_time
+            ? "Completed"
+            : "Off Duty";
       }
     });
 
