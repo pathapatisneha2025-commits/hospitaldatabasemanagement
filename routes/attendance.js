@@ -1364,7 +1364,6 @@ router.get("/employee-history", async (req, res) => {
       ${dateFilter}
     `;
 
-    // 🔥 GET ALL EVENTS ORDERED (IMPORTANT FIX)
     const query = `
       SELECT
         COALESCE(a.employee_id, e.id) AS employee_id,
@@ -1389,6 +1388,9 @@ router.get("/employee-history", async (req, res) => {
 
     const map = {};
 
+    // ---------------------------
+    // STEP 1: BUILD LOGIN/LOGOUT
+    // ---------------------------
     result.rows.forEach((row) => {
       const key = `${row.employee_id}-${row.attendance_date}`;
 
@@ -1399,26 +1401,46 @@ router.get("/employee-history", async (req, res) => {
           image_url: row.image_url,
           phone: row.phone,
           date: row.attendance_date,
-
           login_time: null,
           logout_time: null,
-
           status: "Off Duty",
           working_hours: null,
         };
       }
 
-      // 🔥 LOGIN
+      // LOGIN
       if (row.status === "On Duty") {
         map[key].login_time = row.timestamp;
         map[key].status = "On Duty";
       }
 
-      // 🔥 LOGOUT
+      // LOGOUT
       if (row.status === "Off Duty") {
         map[key].logout_time = row.timestamp;
         map[key].status = "Off Duty";
       }
+    });
+
+    // ---------------------------
+    // STEP 2: CALCULATE HOURS
+    // ---------------------------
+    const calculateHours = (login, logout) => {
+      if (!login || !logout) return null;
+
+      const diffMs = new Date(logout) - new Date(login);
+
+      if (diffMs <= 0) return null;
+
+      const hours = diffMs / (1000 * 60 * 60);
+
+      return hours.toFixed(2); // e.g. 2.35 hrs
+    };
+
+    Object.values(map).forEach((item) => {
+      item.working_hours = calculateHours(
+        item.login_time,
+        item.logout_time
+      );
     });
 
     const attendance = Object.values(map).sort(
