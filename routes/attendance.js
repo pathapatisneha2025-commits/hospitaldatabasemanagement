@@ -1367,7 +1367,7 @@ router.get("/employee-history", async (req, res) => {
         a.phone,
         a.timestamp AS login_time,
         DATE(a.timestamp) AS attendance_date
-      FROM attendance_login a
+      FROM attendance a
       LEFT JOIN employees e
         ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
         OR (a.employee_id IS NULL AND a.phone = e.mobile)
@@ -1397,7 +1397,7 @@ router.get("/employee-history", async (req, res) => {
         a.timestamp AS logout_time,
         DATE(a.timestamp) AS attendance_date,
         a.daily_hours
-      FROM attendance_logout a
+      FROM attendance a
       LEFT JOIN employees e
         ON (a.employee_id IS NOT NULL AND a.employee_id = e.id)
         OR (a.employee_id IS NULL AND a.phone = e.mobile)
