@@ -319,49 +319,113 @@ router.get("/:id", async (req, res) => {
 router.put("/update/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, joining_date, password, confirm_password, status } = req.body; // ✅ added status
+
+    const {
+      name,
+      email,
+      phone,
+      joining_date,
+      password,
+      confirm_password,
+      status,
+      department,
+    } = req.body;
 
     // Check if subadmin exists
-    const existing = await pool.query("SELECT * FROM subadmin WHERE id = $1", [id]);
+    const existing = await pool.query(
+      "SELECT * FROM subadmin WHERE id = $1",
+      [id]
+    );
+
     if (existing.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Subadmin not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Subadmin not found",
+      });
     }
 
     let updateQuery;
     let updateValues;
 
+    // ✅ Update with password
     if (password && confirm_password) {
       if (password !== confirm_password) {
-        return res.status(400).json({ success: false, message: "Passwords do not match" });
+        return res.status(400).json({
+          success: false,
+          message: "Passwords do not match",
+        });
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
       updateQuery = `
         UPDATE subadmin 
-        SET name = $1, email = $2, phone = $3, joining_date = $4, password = $5
-        WHERE id = $6
+        SET 
+          name = $1,
+          email = $2,
+          phone = $3,
+          joining_date = $4,
+          password = $5,
+          confirm_password = $6,
+          status = $7,
+          department = $8
+        WHERE id = $9
         RETURNING *`;
-      updateValues = [name, email, phone, joining_date, hashedPassword, id];
-    } else {
+
+      updateValues = [
+        name,
+        email,
+        phone,
+        joining_date,
+        hashedPassword,
+        hashedPassword,
+        status,
+        department,
+        id,
+      ];
+    } 
+    
+    // ✅ Update without password
+    else {
       updateQuery = `
         UPDATE subadmin 
-        SET name = $1, email = $2, phone = $3, joining_date = $4, status = $5
-        WHERE id = $6
+        SET 
+          name = $1,
+          email = $2,
+          phone = $3,
+          joining_date = $4,
+          status = $5,
+          department = $6
+        WHERE id = $7
         RETURNING *`;
-      updateValues = [name, email, phone, joining_date, status, id]; // ✅ now status is defined
+
+      updateValues = [
+        name,
+        email,
+        phone,
+        joining_date,
+        status,
+        department,
+        id,
+      ];
     }
 
     const result = await pool.query(updateQuery, updateValues);
 
     res.status(200).json({
       success: true,
-      message: password ? "Subadmin & password updated successfully" : "Subadmin updated successfully",
+      message: password
+        ? "Subadmin & password updated successfully"
+        : "Subadmin updated successfully",
       data: result.rows[0],
     });
   } catch (error) {
     console.error("Error updating subadmin:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
