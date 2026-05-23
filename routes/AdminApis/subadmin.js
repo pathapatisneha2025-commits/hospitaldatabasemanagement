@@ -85,37 +85,97 @@ router.get("/export", async (req, res) => {
 
 router.post("/register", upload.single("image"), async (req, res) => {
   try {
-    const { name, email, password, cnfpass, joiningdate, phone } = req.body;
+    const {
+      name,
+      email,
+      password,
+      cnfpass,
+      joiningdate,
+      phone,
+      department,
+    } = req.body;
+
     const file = req.file;
 
-   
+    if (
+      !name ||
+      !email ||
+      !password ||
+      !cnfpass ||
+      !phone ||
+      !department
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All required fields must be filled",
+      });
+    }
 
-    if (!name || !email || !password || !cnfpass || !phone)
-      return res.status(400).json({ success: false, message: "All required fields must be filled" });
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Profile image is required",
+      });
+    }
 
-    if (!file)
-      return res.status(400).json({ success: false, message: "Profile image is required" });
+    if (password !== cnfpass) {
+      return res.status(400).json({
+        success: false,
+        message: "Passwords do not match",
+      });
+    }
 
-    if (password !== cnfpass)
-      return res.status(400).json({ success: false, message: "Passwords do not match" });
+    const existing = await pool.query(
+      "SELECT * FROM subadmin WHERE email = $1",
+      [email]
+    );
 
-    const existing = await pool.query("SELECT * FROM subadmin WHERE email = $1", [email]);
-    if (existing.rows.length > 0)
-      return res.status(400).json({ success: false, message: "Email already registered" });
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const imageUrl = file.path;
 
-    // ✅ Convert date
-   // ✅ Use the date directly — frontend sends in ISO format
-const formattedDate = joiningdate || new Date().toISOString().split('T')[0];
+    const formattedDate =
+      joiningdate || new Date().toISOString().split("T")[0];
 
     const result = await pool.query(
       `INSERT INTO subadmin 
-        (name, email, password, confirm_password, joining_date, phone, status, created_at, image)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'), $8)
+        (
+          name,
+          email,
+          password,
+          confirm_password,
+          joining_date,
+          phone,
+          department,
+          status,
+          created_at,
+          image
+        )
+       VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7, $8,
+          (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'),
+          $9
+       )
        RETURNING *`,
-      [name, email, hashedPassword, hashedPassword, formattedDate || new Date(), phone, "pending", imageUrl]
+      [
+        name,
+        email,
+        hashedPassword,
+        hashedPassword,
+        formattedDate || new Date(),
+        phone,
+        department,
+        "pending",
+        imageUrl,
+      ]
     );
 
     res.status(201).json({
@@ -125,7 +185,11 @@ const formattedDate = joiningdate || new Date().toISOString().split('T')[0];
     });
   } catch (error) {
     console.error("❌ Subadmin registration error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
