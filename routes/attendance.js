@@ -668,13 +668,21 @@ router.post("/logout", async (req, res) => {
       return `${hrs}h ${mins}m`;
     };
 
-    const parseHoursStrToSeconds = (str) => {
-      if (!str) return 0;
-      const match = str.match(/(\d+)h\s*(\d+)?m?/);
-      const hrs = parseInt(match?.[1] || 0);
-      const mins = parseInt(match?.[2] || 0);
-      return hrs * 3600 + mins * 60;
-    };
+  const parseHoursStrToSeconds = (str) => {
+  if (!str) return 0;
+
+  // convert anything to string safely
+  str = String(str);
+
+  const match = str.match(/(\d+)h\s*(\d+)?m?/);
+
+  if (!match) return 0;
+
+  const hrs = parseInt(match[1] || 0, 10);
+  const mins = parseInt(match[2] || 0, 10);
+
+  return hrs * 3600 + mins * 60;
+};
 
    // ---------------- EMPLOYEE LOGOUT ----------------
  if (employeeId || phone) {
