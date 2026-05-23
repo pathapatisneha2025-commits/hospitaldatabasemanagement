@@ -495,8 +495,12 @@ router.get("/login/all", async (req, res) => {
         a.phone,
         (a.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS timestamp,
         a.status,
+
         COALESCE(e1.full_name, e2.full_name, 'Unknown Employee') AS full_name,
-        COALESCE(e1.image, e2.image, a.image_url) AS image_url
+        COALESCE(e1.image, e2.image, a.image_url) AS image_url,
+
+        COALESCE(e1.department, e2.department, 'Unknown') AS department
+
       FROM attendance a
       LEFT JOIN employees e1 ON e1.id = a.employee_id
       LEFT JOIN employees e2 ON e2.mobile = a.phone
@@ -852,11 +856,19 @@ router.post("/logout", async (req, res) => {
 
 router.get("/logout/all", async (req, res) => {
   try {
+    // Helper function
+    const formatHours = (seconds) => {
+      const hrs = Math.floor((seconds || 0) / 3600);
+      const mins = Math.floor(((seconds || 0) % 3600) / 60);
+      return `${hrs}h ${mins}m`;
+    };
+
     // 1️⃣ All Off Duty records (individual)
     const allRes = await pool.query(
       `SELECT 
          a.*,
-         e.full_name
+         e.full_name,
+         COALESCE(e.department, 'Unknown') AS department
        FROM attendance a
        LEFT JOIN employees e ON e.id = a.employee_id
        WHERE a.status = 'Off Duty'
@@ -868,12 +880,13 @@ router.get("/logout/all", async (req, res) => {
       `SELECT
          a.employee_id,
          e.full_name,
+         COALESCE(e.department, 'Unknown') AS department,
          SUM(EXTRACT(EPOCH FROM (a.session_hours::interval))) AS total_seconds
        FROM attendance a
        LEFT JOIN employees e ON e.id = a.employee_id
        WHERE a.status = 'Off Duty'
          AND DATE(a.timestamp) = CURRENT_DATE
-       GROUP BY a.employee_id, e.full_name
+       GROUP BY a.employee_id, e.full_name, e.department
        ORDER BY e.full_name`
     );
 
@@ -882,51 +895,50 @@ router.get("/logout/all", async (req, res) => {
       `SELECT
          a.employee_id,
          e.full_name,
+         COALESCE(e.department, 'Unknown') AS department,
          SUM(EXTRACT(EPOCH FROM (a.session_hours::interval))) AS total_seconds
        FROM attendance a
        LEFT JOIN employees e ON e.id = a.employee_id
        WHERE a.status = 'Off Duty'
          AND DATE_TRUNC('month', a.timestamp) = DATE_TRUNC('month', CURRENT_DATE)
-       GROUP BY a.employee_id, e.full_name
+       GROUP BY a.employee_id, e.full_name, e.department
        ORDER BY e.full_name`
     );
-    const formatHours = (seconds) => {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  return `${hrs}h ${mins}m`;
-};
 
-    // Convert seconds to "xh ym" strings
+    // Convert daily totals
     const daily = dailyRes.rows.map(r => ({
       employee_id: r.employee_id,
       full_name: r.full_name,
+      department: r.department,
       total_hours: formatHours(r.total_seconds)
     }));
 
+    // Convert monthly totals
     const monthly = monthlyRes.rows.map(r => ({
       employee_id: r.employee_id,
       full_name: r.full_name,
+      department: r.department,
       total_hours: formatHours(r.total_seconds)
     }));
 
     return res.json({
       success: true,
-      message: "Fetched all logout records with aggregated totals",
+      message: "Fetched all logout records with department info",
       data: {
         status: "Off Duty",
         attendance: {
-          all: allRes.rows,
+          all: allRes.rows,   // now includes department
           daily,
           monthly,
         },
       },
     });
+
   } catch (error) {
     console.error("Get logout error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 
 // router.get("/logout/:employeeId", async (req, res) => {
