@@ -312,7 +312,44 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+router.get("/employees/by-subadmin/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    // 1. Get subadmin department
+    const subadminRes = await pool.query(
+      "SELECT department FROM subadmin WHERE id = $1",
+      [id]
+    );
+
+    if (subadminRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Subadmin not found",
+      });
+    }
+
+    const department = subadminRes.rows[0].department;
+
+    // 2. Get employees with same department
+    const employeesRes = await pool.query(
+      `SELECT * FROM employee WHERE LOWER(department) = LOWER($1)`,
+      [department]
+    );
+
+    res.json({
+      success: true,
+      department,
+      employees: employeesRes.rows,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
 /* ======================================================
    6. Update Subadmin
 ====================================================== */
