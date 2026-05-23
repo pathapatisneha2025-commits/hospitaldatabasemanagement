@@ -83,13 +83,14 @@ router.get("/employee/all", async (req, res) => {
         b.id,
         b.employee_id,
         COALESCE(e.full_name, 'Unknown Employee') AS user_name,
+        COALESCE(e.department, 'Unknown') AS department,
         b.break_type,
         b.timestamp,
         b.image_url,
         b.status
       FROM break_logs b
       LEFT JOIN employees e ON b.employee_id = e.id
-      WHERE b.employee_id IS NOT NULL  -- ✅ Only employee records
+      WHERE b.employee_id IS NOT NULL
       ORDER BY b.timestamp DESC
       `
     );
@@ -99,6 +100,7 @@ router.get("/employee/all", async (req, res) => {
       count: result.rowCount,
       data: result.rows,
     });
+
   } catch (error) {
     console.error("Get employee breaks error:", error.message);
     res.status(500).json({ success: false, message: "Server error" });
