@@ -277,7 +277,7 @@ router.put("/forgot-password", async (req, res) => {
 ====================================================== */
 router.get("/all", async (req, res) => {
   try {
-    const result = await pool.query("SELECT id, name, email, phone, joining_date, status, created_at FROM subadmin ORDER BY created_at DESC");
+    const result = await pool.query("SELECT id, name, email, phone, joining_date, status, department, created_at FROM subadmin ORDER BY created_at DESC");
 
     res.status(200).json({ 
       success: true, 
