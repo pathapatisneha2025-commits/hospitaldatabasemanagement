@@ -89,7 +89,7 @@ router.post("/add", async (req, res) => {
 // ============================
 router.get("/all", async (req, res) => {
   try {
-    // Step 1: Update overdue tasks
+    // 1. Mark overdue tasks
     await pool.query(`
       UPDATE tasks
       SET status = 'overdue'
@@ -97,7 +97,7 @@ router.get("/all", async (req, res) => {
       AND (due_date::date + due_time::time) < (NOW() AT TIME ZONE 'Asia/Kolkata');
     `);
 
-    // Step 2: Fetch all tasks with created_by employee full_name
+    // 2. Get tasks
     const tasks = await pool.query(`
       SELECT 
         t.*,
@@ -108,55 +108,55 @@ router.get("/all", async (req, res) => {
       ORDER BY t.due_date ASC, t.due_time ASC
     `);
 
-    // Step 3: Format tasks + add assignees + departments
+    // 3. Format tasks
     const formatted = await Promise.all(
       tasks.rows.map(async (task) => {
 
-        let assigneeNames = [];
-        let assigneeDepartments = [];
+        // ✅ FIX: normalize assignto emails properly
+        let emails = [];
 
-        // IMPORTANT: ensure array safety
-        const emails = Array.isArray(task.assignto)
-          ? task.assignto
-          : [];
+        if (Array.isArray(task.assignto)) {
+          task.assignto.forEach(item => {
+            if (typeof item === "string") {
+              emails.push(
+                ...item.split(",").map(e => e.trim()).filter(Boolean)
+              );
+            }
+          });
+        }
+
+        let assignees = [];
+        let departments = [];
 
         if (emails.length > 0) {
-
-          const assignees = await pool.query(
+          const result = await pool.query(
             `SELECT full_name, department, email 
              FROM employees 
              WHERE email = ANY($1)`,
             [emails]
           );
 
-          assigneeNames = assignees.rows.map(a => a.full_name);
+          assignees = result.rows.map(r => r.full_name);
 
-          assigneeDepartments = [
-            ...new Set(assignees.rows.map(a => a.department))
-          ];
+          // unique departments
+          departments = [...new Set(result.rows.map(r => r.department))];
         }
 
         return {
           ...task,
 
-          // format date
           due_date: task.due_date
             ? task.due_date.toISOString().split("T")[0]
             : null,
 
-          // replace created_by id with name
           created_by: task.created_by_name || null,
 
-          // names
-          assignees: assigneeNames,
-
-          // 🔥 NEW: departments of all assigned employees
-          assignee_departments: assigneeDepartments
+          assignees,
+          assignee_departments: departments
         };
       })
     );
 
-    // Step 4: Response
     res.status(200).json({
       success: true,
       count: formatted.length,
