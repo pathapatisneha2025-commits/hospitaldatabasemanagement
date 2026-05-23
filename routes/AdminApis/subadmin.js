@@ -333,7 +333,7 @@ router.get("/employees/by-subadmin/:id", async (req, res) => {
 
     // 2. Get employees with same department
     const employeesRes = await pool.query(
-      `SELECT * FROM employee WHERE LOWER(department) = LOWER($1)`,
+      `SELECT * FROM employees WHERE LOWER(department) = LOWER($1)`,
       [department]
     );
 
