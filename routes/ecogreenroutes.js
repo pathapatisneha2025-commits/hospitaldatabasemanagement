@@ -1447,6 +1447,7 @@ router.post("/sales-invoice", async (req, res) => {
     const values = [
       data.order_id || null,
       data.order_no || null,
+      data.invoice_id || null,   // FIXED
       data.created_at || null,
       data.order_type || null,
       data.payment_status || null,
@@ -1457,16 +1458,33 @@ router.post("/sales-invoice", async (req, res) => {
       data.shipping_charge || 0,
       data.patient_name || null,
       data.patient_contact_no || null,
-      JSON.stringify(data.patient_address) || null,
+      JSON.stringify(data.patient_address || null),
       data.store_id || null,
-      JSON.stringify(data.order_items) || null,
+      JSON.stringify(data.order_items || null),
       data.user_email || null
     ];
 
     const query = `
       INSERT INTO ecogreensales_invoices
-      (order_id, order_no, created_at, order_type, payment_status, total_price, total_discount, order_for,
-       delivered_by, shipping_charge, patient_name, patient_contact_no, patient_address, store_id, order_items, user_email)
+      (
+        order_id,
+        order_no,
+        invoice_id,
+        created_at,
+        order_type,
+        payment_status,
+        total_price,
+        total_discount,
+        order_for,
+        delivered_by,
+        shipping_charge,
+        patient_name,
+        patient_contact_no,
+        patient_address,
+        store_id,
+        order_items,
+        user_email
+      )
       VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
       RETURNING id
     `;
