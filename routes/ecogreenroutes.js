@@ -1445,9 +1445,9 @@ router.post("/sales-invoice", async (req, res) => {
 
   try {
     // ✅ IST (Asia/Kolkata) timestamp
-    const createdAtIST = new Date().toLocaleString("sv-SE", {
-      timeZone: "Asia/Kolkata",
-    }).replace(" ", "T");
+  const createdAtIST = new Date().toLocaleString("en-GB", {
+  timeZone: "Asia/Kolkata",
+});
 
     const values = [
       data.order_id || null,
