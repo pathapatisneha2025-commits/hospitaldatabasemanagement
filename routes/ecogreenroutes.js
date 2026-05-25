@@ -1445,15 +1445,19 @@ router.post("/sales-invoice", async (req, res) => {
 
   try {
 
-    // ✅ SAVE CURRENT UTC TIME
-    // Later convert to IST only while displaying
+    // ✅ KEEP ORIGINAL CREATED AT (if coming from frontend)
+    const createdAt = data.created_at || null;
+
+    // ✅ SYSTEM GENERATED TIME (UTC SAFE - NO TOMORROW SHIFT BUG)
+    const createdAtSystem = new Date().toISOString();
 
     const values = [
       data.order_id || null,
       data.order_no || null,
       data.invoice_id || null,
 
-      data.created_at || null,
+      createdAt,              // ✅ original (UNCHANGED)
+      createdAtSystem,        // ✅ system time (FIXED)
 
       data.order_type || null,
       data.payment_status || null,
@@ -1465,16 +1469,9 @@ router.post("/sales-invoice", async (req, res) => {
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      data.patient_address
-        ? JSON.stringify(data.patient_address)
-        : null,
-
+      data.patient_address ? JSON.stringify(data.patient_address) : null,
       data.store_id || null,
-
-      data.order_items
-        ? JSON.stringify(data.order_items)
-        : null,
-
+      data.order_items ? JSON.stringify(data.order_items) : null,
       data.user_email || null
     ];
 
@@ -1484,6 +1481,7 @@ router.post("/sales-invoice", async (req, res) => {
         order_no,
         invoice_id,
         created_at,
+        created_at_system,
         order_type,
         payment_status,
         total_price,
@@ -1498,9 +1496,7 @@ router.post("/sales-invoice", async (req, res) => {
         order_items,
         user_email
       )
-      VALUES (
-        ${values.map((_, i) => `$${i + 1}`).join(",")}
-      )
+      VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
       RETURNING id
     `;
 
