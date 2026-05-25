@@ -367,15 +367,27 @@ router.post("/stock-details", async (req, res) => {
       });
     }
 
-    const stockData = vendorData.data;
+    let stockData = vendorData.data;
+
+    // ==================================================
+    // 🚀 FIX: REMOVE DUPLICATES BEFORE INSERT
+    // ==================================================
+    const map = new Map();
+
+    for (const item of stockData) {
+      const key = `${item.c_item_code}-${item.batchNo}`;
+      map.set(key, item); // keeps last occurrence
+    }
+
+    const uniqueStockData = Array.from(map.values());
 
     // ===============================
     // 🚀 BULK INSERT (CHUNKED SAFE)
     // ===============================
     const chunkSize = 5000;
 
-    for (let i = 0; i < stockData.length; i += chunkSize) {
-      const chunk = stockData.slice(i, i + chunkSize);
+    for (let i = 0; i < uniqueStockData.length; i += chunkSize) {
+      const chunk = uniqueStockData.slice(i, i + chunkSize);
 
       const values = [];
       const placeholders = [];
@@ -432,14 +444,14 @@ router.post("/stock-details", async (req, res) => {
     // PAGINATION FOR FRONTEND ONLY
     // ===============================
     const start = (page - 1) * limit;
-    const paginatedData = stockData.slice(start, start + limit);
+    const paginatedData = uniqueStockData.slice(start, start + limit);
 
     return res.status(200).json({
       message: "Stock fetched and stored successfully",
-      totalItems: stockData.length,
+      totalItems: uniqueStockData.length,
       page,
       limit,
-      totalPages: Math.ceil(stockData.length / limit),
+      totalPages: Math.ceil(uniqueStockData.length / limit),
       stockItems: paginatedData,
     });
 
