@@ -370,24 +370,38 @@ router.post("/stock-details", async (req, res) => {
     let stockData = vendorData.data;
 
     // ==================================================
-    // 🚀 FIX: REMOVE DUPLICATES BEFORE INSERT
+    // 🚀 1. STRONG GLOBAL DEDUPLICATION (FIXED KEY)
     // ==================================================
     const map = new Map();
 
     for (const item of stockData) {
-      const key = `${item.c_item_code}-${item.batchNo}`;
-      map.set(key, item); // keeps last occurrence
+      const key = `${String(item.c_item_code || "").trim().toLowerCase()}-${String(item.batchNo || "NA").trim().toLowerCase()}`;
+      map.set(key, item);
     }
 
     const uniqueStockData = Array.from(map.values());
 
     // ===============================
-    // 🚀 BULK INSERT (CHUNKED SAFE)
+    // 🚀 2. BULK INSERT (SAFE CHUNKING)
     // ===============================
     const chunkSize = 5000;
 
     for (let i = 0; i < uniqueStockData.length; i += chunkSize) {
-      const chunk = uniqueStockData.slice(i, i + chunkSize);
+      let chunk = uniqueStockData.slice(i, i + chunkSize);
+
+      // ==================================================
+      // 🚨 3. DOUBLE SAFETY INSIDE CHUNK (IMPORTANT FIX)
+      // ==================================================
+      const seen = new Set();
+
+      chunk = chunk.filter((batch) => {
+        const key = `${String(batch.c_item_code || "").trim().toLowerCase()}-${String(batch.batchNo || "NA").trim().toLowerCase()}`;
+
+        if (seen.has(key)) return false;
+        seen.add(key);
+
+        return true;
+      });
 
       const values = [];
       const placeholders = [];
@@ -412,36 +426,38 @@ router.post("/stock-details", async (req, res) => {
         );
       });
 
-      await pool.query(
-        `
-        INSERT INTO stock_batches (
-          c_item_code,
-          item_name,
-          item_qty_per_box,
-          batch_no,
-          stock_bal_qty,
-          expiry_date,
-          mrp,
-          mrpbox,
-          sale_rate
-        )
-        VALUES ${placeholders.join(",")}
-        ON CONFLICT (c_item_code, batch_no)
-        DO UPDATE SET
-          item_name = EXCLUDED.item_name,
-          item_qty_per_box = EXCLUDED.item_qty_per_box,
-          stock_bal_qty = EXCLUDED.stock_bal_qty,
-          expiry_date = EXCLUDED.expiry_date,
-          mrp = EXCLUDED.mrp,
-          mrpbox = EXCLUDED.mrpbox,
-          sale_rate = EXCLUDED.sale_rate
-        `,
-        values
-      );
+      if (values.length > 0) {
+        await pool.query(
+          `
+          INSERT INTO stock_batches (
+            c_item_code,
+            item_name,
+            item_qty_per_box,
+            batch_no,
+            stock_bal_qty,
+            expiry_date,
+            mrp,
+            mrpbox,
+            sale_rate
+          )
+          VALUES ${placeholders.join(",")}
+          ON CONFLICT (c_item_code, batch_no)
+          DO UPDATE SET
+            item_name = EXCLUDED.item_name,
+            item_qty_per_box = EXCLUDED.item_qty_per_box,
+            stock_bal_qty = EXCLUDED.stock_bal_qty,
+            expiry_date = EXCLUDED.expiry_date,
+            mrp = EXCLUDED.mrp,
+            mrpbox = EXCLUDED.mrpbox,
+            sale_rate = EXCLUDED.sale_rate
+          `,
+          values
+        );
+      }
     }
 
     // ===============================
-    // PAGINATION FOR FRONTEND ONLY
+    // PAGINATION (SAFE DATA)
     // ===============================
     const start = (page - 1) * limit;
     const paginatedData = uniqueStockData.slice(start, start + limit);
