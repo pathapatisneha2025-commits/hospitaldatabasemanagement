@@ -1444,11 +1444,17 @@ router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
   try {
+
+    // ✅ SAVE CURRENT UTC TIME
+    // Later convert to IST only while displaying
+
     const values = [
       data.order_id || null,
       data.order_no || null,
-      
+      data.invoice_id || null,
+
       data.created_at || null,
+
       data.order_type || null,
       data.payment_status || null,
       data.total_price || 0,
@@ -1458,30 +1464,61 @@ router.post("/sales-invoice", async (req, res) => {
       data.shipping_charge || 0,
       data.patient_name || null,
       data.patient_contact_no || null,
-      JSON.stringify(data.patient_address) || null,
+
+      data.patient_address
+        ? JSON.stringify(data.patient_address)
+        : null,
+
       data.store_id || null,
-      JSON.stringify(data.order_items) || null,
+
+      data.order_items
+        ? JSON.stringify(data.order_items)
+        : null,
+
       data.user_email || null
     ];
 
     const query = `
-      INSERT INTO ecogreensales_invoices
-      (order_id, order_no, created_at, order_type, payment_status, total_price, total_discount, order_for,
-       delivered_by, shipping_charge, patient_name, patient_contact_no, patient_address, store_id, order_items, user_email)
-      VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
+      INSERT INTO ecogreensales_invoices (
+        order_id,
+        order_no,
+        invoice_id,
+        created_at,
+        order_type,
+        payment_status,
+        total_price,
+        total_discount,
+        order_for,
+        delivered_by,
+        shipping_charge,
+        patient_name,
+        patient_contact_no,
+        patient_address,
+        store_id,
+        order_items,
+        user_email
+      )
+      VALUES (
+        ${values.map((_, i) => `$${i + 1}`).join(",")}
+      )
       RETURNING id
     `;
 
     const result = await pool.query(query, values);
 
     res.status(200).json({
+      success: true,
       message: "Sales invoice saved successfully",
       id: result.rows[0].id
     });
 
   } catch (err) {
     console.error("Error saving sales invoice:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error"
+    });
   }
 });
 router.get("/sales-invoice/by-order/:orderNo", async (req, res) => {
