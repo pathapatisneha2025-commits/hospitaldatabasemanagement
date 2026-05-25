@@ -1444,15 +1444,11 @@ router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
   try {
-    // ✅ IST (Asia/Kolkata) timestamp
-const createdAtIST = new Date().toLocaleString("sv-SE", {
-  timeZone: "Asia/Kolkata",
-}).replace(" ", "T");
     const values = [
       data.order_id || null,
       data.order_no || null,
-      data.invoice_id || null,
-      createdAtIST, // ✅ FIXED HERE
+      data.invoice_id || null,   // FIXED
+      data.created_at || null,
       data.order_type || null,
       data.payment_status || null,
       data.total_price || 0,
@@ -1469,7 +1465,8 @@ const createdAtIST = new Date().toLocaleString("sv-SE", {
     ];
 
     const query = `
-      INSERT INTO ecogreensales_invoices (
+      INSERT INTO ecogreensales_invoices
+      (
         order_id,
         order_no,
         invoice_id,
