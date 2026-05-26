@@ -1063,7 +1063,7 @@ router.post('/create_sales_order', async (req, res) => {
 
     // 🔥 CALL ERP
     const response = await fetch(
-      'http://117.211.64.158:21000/ws_c2_services_create_sale_order',
+      ' https://bharatmedicalhallplus.com/ecogreen/sales-order',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
