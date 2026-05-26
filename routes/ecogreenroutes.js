@@ -1049,19 +1049,19 @@ router.post('/create_sales_order', async (req, res) => {
     console.log('=== Incoming Request Body ===');
     console.log(salesOrderData);
 
-    // ✅ ONLY REQUIRED VALIDATION (ERP mandatory fields)
+    // ✅ REQUIRED VALIDATION
     if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode) {
       return res.status(400).json({
         message: 'Required fields missing: c2Code, storeId, prodCode'
       });
     }
 
-    // optional token handling
+    // ✅ Attach token if missing
     if (!salesOrderData.apiKey) {
       salesOrderData.apiKey = await getToken();
     }
 
-    // 🔥 DIRECT CALL TO ERP (NO CART, NO DB)
+    // 🔥 CALL ERP
     const response = await fetch(
       'http://117.211.64.158:21000/ws_c2_services_create_sale_order',
       {
@@ -1077,35 +1077,51 @@ router.post('/create_sales_order', async (req, res) => {
     try {
       data = JSON.parse(rawText);
     } catch (err) {
-      return res.status(500).json({
+      console.error("❌ ERP non-JSON response:", rawText);
+
+      return res.status(502).json({
         message: "ERP returned invalid response",
         raw: rawText,
       });
     }
 
-    // success response
-    if (response.ok) {
-      return res.status(200).json({
-        message: "Sales order created successfully",
+    console.log("=== ERP RESPONSE ===", data);
+
+    // ❗ IMPORTANT: ERP BUSINESS FAILURE CHECK
+    // (this is what was missing in your code)
+    if (
+      data?.code && 
+      data.code !== "200"
+    ) {
+      return res.status(400).json({
+        message: data.message || "ERP rejected request",
         data
       });
     }
 
-    // failure response
-    return res.status(response.status).json({
-      message: "Failed to submit sales order",
+    // ❌ also handle explicit known error messages
+    if (data?.message?.toLowerCase().includes("does not exist")) {
+      return res.status(400).json({
+        message: data.message,
+        data
+      });
+    }
+
+    // ✅ SUCCESS CASE (only when ERP is truly successful)
+    return res.status(200).json({
+      message: "Sales order created successfully",
       data
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("❌ Server error:", error);
+
     return res.status(500).json({
       message: "Server error",
       error: error.message
     });
   }
 });
-
 router.post("/ordermedicne/create_sales_order", async (req, res) => {
   const client = await pool.connect();
 
