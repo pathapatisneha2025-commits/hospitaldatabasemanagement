@@ -1436,10 +1436,7 @@ router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
   try {
-    // ✅ KEEP ORIGINAL CREATED AT (if coming from frontend)
     const createdAt = data.created_at || null;
-
-    // ✅ SYSTEM GENERATED TIME (UTC SAFE)
     const createdAtSystem = new Date().toISOString();
 
     const values = [
@@ -1450,7 +1447,7 @@ router.post("/sales-invoice", async (req, res) => {
       createdAt,
       createdAtSystem,
 
-      data.createduser || null,   // ✅ ADDED HERE
+      data.createduser || null,
 
       data.order_type || null,
       data.payment_status || null,
@@ -1462,9 +1459,22 @@ router.post("/sales-invoice", async (req, res) => {
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      data.patient_address ? JSON.stringify(data.patient_address) : null,
+      // ✅ PATIENT ADDRESS
+      data.patient_address
+        ? JSON.stringify(data.patient_address)
+        : null,
+
+      // ✅ PHARMACY ADDED HERE
+      data.pharmacy
+        ? JSON.stringify(data.pharmacy)
+        : null,
+
       data.store_id || null,
-      data.order_items ? JSON.stringify(data.order_items) : null,
+
+      data.order_items
+        ? JSON.stringify(data.order_items)
+        : null,
+
       data.user_email || null
     ];
 
@@ -1475,7 +1485,7 @@ router.post("/sales-invoice", async (req, res) => {
         invoice_id,
         created_at,
         created_at_system,
-        createduser,              -- ✅ ADDED HERE
+        createduser,
         order_type,
         payment_status,
         total_price,
@@ -1486,6 +1496,10 @@ router.post("/sales-invoice", async (req, res) => {
         patient_name,
         patient_contact_no,
         patient_address,
+
+        -- ✅ NEW COLUMN
+        pharmacy,
+
         store_id,
         order_items,
         user_email
