@@ -1434,11 +1434,10 @@ router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
   try {
-
     // ✅ KEEP ORIGINAL CREATED AT (if coming from frontend)
     const createdAt = data.created_at || null;
 
-    // ✅ SYSTEM GENERATED TIME (UTC SAFE - NO TOMORROW SHIFT BUG)
+    // ✅ SYSTEM GENERATED TIME (UTC SAFE)
     const createdAtSystem = new Date().toISOString();
 
     const values = [
@@ -1446,8 +1445,10 @@ router.post("/sales-invoice", async (req, res) => {
       data.order_no || null,
       data.invoice_id || null,
 
-      createdAt,              // ✅ original (UNCHANGED)
-      createdAtSystem,        // ✅ system time (FIXED)
+      createdAt,
+      createdAtSystem,
+
+      data.createduser || null,   // ✅ ADDED HERE
 
       data.order_type || null,
       data.payment_status || null,
@@ -1472,6 +1473,7 @@ router.post("/sales-invoice", async (req, res) => {
         invoice_id,
         created_at,
         created_at_system,
+        createduser,              -- ✅ ADDED HERE
         order_type,
         payment_status,
         total_price,
