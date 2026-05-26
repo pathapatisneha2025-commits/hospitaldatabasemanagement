@@ -1050,11 +1050,11 @@ router.post('/create_sales_order', async (req, res) => {
     console.log(salesOrderData);
 
     // ✅ ONLY REQUIRED VALIDATION (ERP mandatory fields)
-    if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode) {
-      return res.status(400).json({
-        message: 'Required fields missing: c2Code, storeId, prodCode'
-      });
-    }
+    // if (!salesOrderData.c2Code || !salesOrderData.storeId || !salesOrderData.prodCode) {
+    //   return res.status(400).json({
+    //     message: 'Required fields missing: c2Code, storeId, prodCode'
+    //   });
+    // }
 
     // optional token handling
     if (!salesOrderData.apiKey) {
