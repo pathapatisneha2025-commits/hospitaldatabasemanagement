@@ -402,8 +402,10 @@ router.get('/:id', async (req, res) => {
 router.put('/update/:id', upload.single('image'), async (req, res) => {
   console.log("FILE:", req.file);
   console.log("BODY:", req.body);
-    const { id } = req.params;
-  const {
+
+  const { id } = req.params;
+
+  let {
     fullName,
     email,
     password,
@@ -437,41 +439,80 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     dateOfJoining
   } = req.body;
 
-  const file = req.file;
-
   try {
     // Fetch existing employee
-    const existingRes = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+    const existingRes = await pool.query(
+      'SELECT * FROM employees WHERE id = $1',
+      [id]
+    );
+
     if (existingRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Employee not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
     }
+
     const existingEmployee = existingRes.rows[0];
 
-    // Handle image
-let imageUrl = existingEmployee.image;
+    // =========================
+    // IMAGE HANDLING
+    // =========================
+    let imageUrl = existingEmployee.image;
 
-if (req.file && req.file.path) {
-  imageUrl = req.file.path;
-}
-    // Handle password
+    if (req.file?.path) {
+      imageUrl = req.file.path;
+    }
+
+    // =========================
+    // PASSWORD HANDLING
+    // =========================
     let hashedPassword = existingEmployee.password;
+
     if (password && confirmPassword) {
       if (password !== confirmPassword) {
-        return res.status(400).json({ success: false, message: 'Password and Confirm Password do not match' });
+        return res.status(400).json({
+          success: false,
+          message: 'Password and Confirm Password do not match'
+        });
       }
+
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    // Handle addresses safely (as objects)
-    const tempAddresses = temporaryAddresses 
-      ? JSON.stringify(JSON.parse(temporaryAddresses)) 
-      : null;
+    // =========================
+    // SAFE JSON PARSING
+    // =========================
+    let tempAddresses = existingEmployee.temporary_addresses;
+    let permAddresses = existingEmployee.permanent_addresses;
 
-    const permAddresses = permanentAddresses 
-      ? JSON.stringify(JSON.parse(permanentAddresses)) 
-      : null;
+    try {
+      if (temporaryAddresses) {
+        tempAddresses = JSON.stringify(
+          typeof temporaryAddresses === "string"
+            ? JSON.parse(temporaryAddresses)
+            : temporaryAddresses
+        );
+      }
+    } catch (e) {
+      tempAddresses = existingEmployee.temporary_addresses;
+    }
 
-    // Update employee
+    try {
+      if (permanentAddresses) {
+        permAddresses = JSON.stringify(
+          typeof permanentAddresses === "string"
+            ? JSON.parse(permanentAddresses)
+            : permanentAddresses
+        );
+      }
+    } catch (e) {
+      permAddresses = existingEmployee.permanent_addresses;
+    }
+
+    // =========================
+    // UPDATE QUERY
+    // =========================
     const updateRes = await pool.query(
       `UPDATE employees
        SET full_name = $1,
@@ -525,8 +566,8 @@ if (req.file && req.file.path) {
         dob || existingEmployee.dob,
         scheduleIn || existingEmployee.schedule_in,
         scheduleOut || existingEmployee.schedule_out,
-        breakIn|| existingEmployee.break_in,
-         monthlySalary || existingEmployee.monthly_salary,
+        breakIn || existingEmployee.break_in,
+        monthlySalary || existingEmployee.monthly_salary,
         jobDescription || existingEmployee.job_description,
         employmentType || existingEmployee.employment_type,
         category || existingEmployee.category,
@@ -538,20 +579,22 @@ if (req.file && req.file.path) {
         tempAddresses,
         permAddresses,
         dateOfJoining || existingEmployee.date_of_joining,
-        breakOut|| existingEmployee.break_out,
-
+        breakOut || existingEmployee.break_out,
         id
       ]
     );
 
-    const updatedEmployee = updateRes.rows[0];
-
-    // No need to parse addresses; they are already objects
-    res.json({ success: true, employee: updatedEmployee });
+    return res.json({
+      success: true,
+      employee: updateRes.rows[0]
+    });
 
   } catch (error) {
     console.error('Update error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
   }
 });
 
