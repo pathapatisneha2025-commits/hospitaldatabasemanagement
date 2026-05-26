@@ -1300,6 +1300,8 @@ router.post("/sales-order", async (req, res) => {
       data.order_id || null,
       data.order_no || null,
       data.created_at || null,
+      data.createduser || null,   // ✅ ADDED HERE
+
       data.order_type || null,
       data.invoice_id || null,
       data.payment_status || null,
@@ -1309,13 +1311,12 @@ router.post("/sales-order", async (req, res) => {
       data.delivered_by || null,
       data.shipping_charge || 0,
 
-      // ✅ NEW FIELDS ADDED
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      JSON.stringify(data.patient_address) || null,
-      JSON.stringify(data.pharmacy) || null,
-      JSON.stringify(data.order_items) || null
+      data.patient_address ? JSON.stringify(data.patient_address) : null,
+      data.pharmacy ? JSON.stringify(data.pharmacy) : null,
+      data.order_items ? JSON.stringify(data.order_items) : null
     ];
 
     const query = `
@@ -1324,6 +1325,7 @@ router.post("/sales-order", async (req, res) => {
         order_id,
         order_no,
         created_at,
+        createduser,              -- ✅ ADDED HERE
         order_type,
         invoice_id,
         payment_status,
