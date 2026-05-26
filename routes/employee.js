@@ -400,7 +400,9 @@ router.get('/:id', async (req, res) => {
 
 
 router.put('/update/:id', upload.single('image'), async (req, res) => {
-  const { id } = req.params;
+  console.log("FILE:", req.file);
+  console.log("BODY:", req.body);
+    const { id } = req.params;
   const {
     fullName,
     email,
