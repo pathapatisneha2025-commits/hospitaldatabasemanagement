@@ -446,7 +446,11 @@ router.put('/update/:id', upload.single('image'), async (req, res) => {
     const existingEmployee = existingRes.rows[0];
 
     // Handle image
-    const imageUrl = file ? file.path : existingEmployee.image;
+ let imageUrl = existingEmployee.image;
+
+    if (file) {
+      imageUrl = `/uploads/${file.filename}`;
+    }
 
     // Handle password
     let hashedPassword = existingEmployee.password;
