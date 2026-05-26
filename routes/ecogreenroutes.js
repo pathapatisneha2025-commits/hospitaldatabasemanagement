@@ -1114,16 +1114,12 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
 
     console.log("=== Incoming Order ===", order);
 
-    // ✅ Required validation
     if (!order.c2Code || !order.storeId || !order.prodCode) {
       return res.status(400).json({
         message: "Required fields missing",
       });
     }
 
-    // =========================
-    // 🔒 SAFE HELPERS
-    // =========================
     const safeNumber = (val) => {
       const num = Number(val);
       return isNaN(num) ? 0 : num;
@@ -1139,14 +1135,11 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
 
     await client.query("BEGIN");
 
-    // =========================
-    // 🆔 IDs
-    // =========================
     const localId = Math.floor(Math.random() * 999999999);
     const otp = Math.floor(1000 + Math.random() * 9000);
     const patientId = order.userId || null;
 
-  let cartItems = [];
+    let cartItems = [];
 
     if (patientId) {
       const cartRes = await client.query(
@@ -1161,114 +1154,106 @@ router.post("/ordermedicne/create_sales_order", async (req, res) => {
 
     console.log("🛒 CART ITEMS:", cartItems);
 
-    // attach cart to order for ERP if needed
-    order.cartItems = cartItems;
-    // =========================
-    // 🟢 INSERT ORDER (SAFE)
-    // =========================
-   const insertOrder = `
-  INSERT INTO orders (
-    id,
-    patient_id,
-    patient_name,
-    patient_email,
-    mobile_no,
-    address_id,
-    address,
-    payment_method,
-    expected_delivery,
-    subtotal,
-    delivery_fee,
-    tax,
-    total,
-    order_summary,
-    status,
-    otp,
-    created_at
-  )
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
-  RETURNING *
-`;
-   const dbResult = await client.query(insertOrder, [
-  localId,
-  order.userId || null,
+    const insertOrder = `
+      INSERT INTO orders (
+        id,
+        patient_id,
+        patient_name,
+        patient_email,
+        mobile_no,
+        address_id,
+        address,
+        payment_method,
+        expected_delivery,
+        subtotal,
+        delivery_fee,
+        tax,
+        total,
+        order_summary,
+        status,
+        otp,
+        created_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+      RETURNING *
+    `;
 
-  order.patientName || null,
-  order.patientEmail || null,
-  order.mobileNo || null,
-
-  order.addressId || null,
-
-  safeJSON(order.patientAddress),
-
-  order.paymentMethod || "",
-  order.expectedDelivery || null,
-
-  safeNumber(order.subtotal),
-  safeNumber(order.deliveryFee),
-  safeNumber(order.tax),
-  safeNumber(order.orderTotal),
-
-  safeJSON(order.materialInfo),
-
-  order.status || "pending",
-  otp,
-]);
+    const dbResult = await client.query(insertOrder, [
+      localId,
+      order.userId || null,
+      order.patientName || null,
+      order.patientEmail || null,
+      order.mobileNo || null,
+      order.addressId || null,
+      safeJSON(order.patientAddress),
+      order.paymentMethod || "",
+      order.expectedDelivery || null,
+      safeNumber(order.subtotal),
+      safeNumber(order.deliveryFee),
+      safeNumber(order.tax),
+      safeNumber(order.orderTotal),
+      safeJSON(order.materialInfo),
+      "pending",
+      otp,
+    ]);
 
     const savedOrder = dbResult.rows[0];
 
     console.log("=== ORDER SAVED ===", savedOrder);
 
     // =========================
-    // 🟡 ERP CALL
+    // COMMIT DB FIRST
     // =========================
-    if (!order.apiKey) {
-      order.apiKey = await getToken();
-    }
+    await client.query("COMMIT");
 
-    order.orderId = localId;
-
-    const response = await fetch(
-      "http://117.211.64.158:21000/ws_c2_services_create_sale_order",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order),
-      }
-    );
-
-    const rawText = await response.text();
-
-    let erpData;
+    // =========================
+    // 🟡 SEND TO VENDOR API (AFTER DB SUCCESS)
+    // =========================
     try {
-      erpData = JSON.parse(rawText);
-    } catch (err) {
-      console.error("❌ ERP invalid JSON:", rawText);
+      const vendorPayload = {
+        ...order,
+        orderId: localId,
+        otp,
+        cartItems,
+      };
 
-      await client.query(
-        `UPDATE orders SET status = $1 WHERE id = $2`,
-        ["failed", localId]
+      const vendorResponse = await fetch(
+        "http://117.211.64.158:21000/ws_c2_services_create_sale_order",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(vendorPayload),
+        }
       );
 
-      await client.query("COMMIT");
+      const vendorText = await vendorResponse.text();
 
-      return res.status(500).json({
-        message: "ERP returned invalid response",
-        raw: rawText,
-      });
+      let vendorData;
+      try {
+        vendorData = JSON.parse(vendorText);
+      } catch {
+        vendorData = { raw: vendorText };
+      }
+
+      console.log("🏪 VENDOR RESPONSE:", vendorData);
+
+      // OPTIONAL: store vendor response in DB (if column exists)
+      // await pool.query(
+      //   "UPDATE orders SET vendor_response = $1 WHERE id = $2",
+      //   [JSON.stringify(vendorData), localId]
+      // );
+
+    } catch (vendorError) {
+      console.error("❌ Vendor API failed:", vendorError.message);
+      // IMPORTANT: do NOT fail order because vendor failed
     }
 
     // =========================
-    // 🟣 FINAL STATUS UPDATE
+    // CLEAR CART
     // =========================
-    // const finalStatus = response.ok ? "confirmed" : "failed";
-
-    // await client.query(
-    //   `UPDATE orders SET status = $1 WHERE id = $2`,
-    //   [finalStatus, localId]
-    // );
-
-if (response.ok && patientId) {
+    if (patientId) {
       await client.query(
         "DELETE FROM cart WHERE patient_id = $1",
         [patientId]
@@ -1277,24 +1262,29 @@ if (response.ok && patientId) {
       console.log("🧹 Cart cleared for patient:", patientId);
     }
 
-    await client.query("COMMIT");
-    return res.status(response.ok ? 200 : 400).json({
-      message: response.ok
-        ? "Order placed successfully"
-        : "ERP failed",
-      id: localId,
-      otp: otp,
-      data: erpData,
+    return res.status(200).json({
+      success: true,
+      message: "Order placed successfully",
+      orderId: localId,
+      otp,
+      data: savedOrder,
     });
+
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (e) {
+      console.log("Rollback failed:", e.message);
+    }
 
     console.error("=== SERVER ERROR ===", error);
 
     return res.status(500).json({
+      success: false,
       message: "Server error",
       error: error.message,
     });
+
   } finally {
     client.release();
   }
