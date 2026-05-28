@@ -666,6 +666,22 @@ router.post("/local-customers", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch customers" });
   }
 });
+router.get("/local-customer/all", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM local_customers ORDER BY added_date DESC`
+    );
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error("FETCH LOCAL CUSTOMERS ERROR:", err.message);
+    res.status(500).json({ error: "Failed to fetch local customers" });
+  }
+});
 router.get('/local-customers/:mobile', async (req, res) => {
   const { mobile } = req.params;
 
