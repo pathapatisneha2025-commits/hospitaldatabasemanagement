@@ -704,7 +704,7 @@ router.post("/send-bulk", async (req, res) => {
       numbers.map((num) =>
         client.messages.create({
           from: whatsappFrom,
-          to: `whatsapp:+91${num}`,
+          to: `whatsapp:${num}`,
           body: message,
         })
       )
