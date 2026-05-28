@@ -709,9 +709,8 @@ router.post("/send-bulk", async (req, res) => {
 });
 
 
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
-});
+
+
 router.get("/local-customer/all", async (req, res) => {
   try {
     const result = await pool.query(
