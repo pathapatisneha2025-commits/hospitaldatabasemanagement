@@ -23,6 +23,13 @@ const storage = new CloudinaryStorage({
 });
 
 const upload = multer({ storage });
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+const whatsappFrom =
+  process.env.TWILIO_WHATSAPP_FROM;
 /* =========================================================
    ✅ Test Route
 ========================================================= */
@@ -665,6 +672,44 @@ router.post("/local-customers", async (req, res) => {
     console.error("Local Customers Error:", err.message);
     res.status(500).json({ error: "Failed to fetch customers" });
   }
+});
+
+router.post("/send-bulk", async (req, res) => {
+  const { numbers, message } = req.body;
+
+  if (!numbers || !message) {
+    return res.status(400).json({
+      error: "Numbers and message required",
+    });
+  }
+
+  try {
+    const results = await Promise.all(
+      numbers.map((num) =>
+        client.messages.create({
+          from: whatsappFrom,
+          to: `whatsapp:+91${num}`,
+          body: message,
+        })
+      )
+    );
+
+    res.json({
+      success: true,
+      sent: results.length,
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
 });
 router.get("/local-customer/all", async (req, res) => {
   try {
