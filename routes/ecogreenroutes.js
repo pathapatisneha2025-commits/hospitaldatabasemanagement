@@ -29,6 +29,20 @@ const client = twilio(
   "117c7370edb989dbeb1f53c184b25aad"
 );
 
+(async () => {
+  try {
+    const account = await client.api.accounts(
+      "ACc17379631387c9dc6d4a11c6e2d5cce0"
+    ).fetch();
+
+    console.log("✅ AUTH SUCCESS:", account.friendlyName);
+  } catch (err) {
+    console.log("❌ AUTH FAILED");
+    console.log("Code:", err.code);
+    console.log("Message:", err.message);
+  }
+})();
+
 const whatsappFrom = "whatsapp:+14155238886";
 /* =========================================================
    ✅ Test Route
