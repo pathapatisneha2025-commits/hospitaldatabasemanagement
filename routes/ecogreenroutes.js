@@ -24,8 +24,12 @@ const storage = new CloudinaryStorage({
 });
 
 const upload = multer({ storage });
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM;
+const client = twilio(
+  "ACc17379631387c9dc6d4a11c6e2d5cce0",
+  "117c7370edb989dbeb1f53c184b25aad"
+);
+
+const whatsappFrom = "whatsapp:+14155238886";
 /* =========================================================
    ✅ Test Route
 ========================================================= */
