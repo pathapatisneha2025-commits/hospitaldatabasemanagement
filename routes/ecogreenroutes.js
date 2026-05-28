@@ -671,6 +671,8 @@ router.post("/local-customers", async (req, res) => {
 });
 
 router.post("/send-bulk", async (req, res) => {
+    console.log("📩 Request Body:", req.body);
+
   const { numbers, message } = req.body;
 
   if (!numbers || !message) {
