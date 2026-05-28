@@ -24,26 +24,8 @@ const storage = new CloudinaryStorage({
 });
 
 const upload = multer({ storage });
-const client = twilio(
-  "ACc17379631387c9dc6d4a11c6e2d5cce0",
-  "117c7370edb989dbeb1f53c184b25aad"
-);
-
-(async () => {
-  try {
-    const account = await client.api.accounts(
-      "ACc17379631387c9dc6d4a11c6e2d5cce0"
-    ).fetch();
-
-    console.log("✅ AUTH SUCCESS:", account.friendlyName);
-  } catch (err) {
-    console.log("❌ AUTH FAILED");
-    console.log("Code:", err.code);
-    console.log("Message:", err.message);
-  }
-})();
-
-const whatsappFrom = "whatsapp:+14155238886";
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM;
 /* =========================================================
    ✅ Test Route
 ========================================================= */
@@ -704,7 +686,7 @@ router.post("/send-bulk", async (req, res) => {
       numbers.map((num) =>
         client.messages.create({
           from: whatsappFrom,
-          to: `whatsapp:${num}`,
+          to: `whatsapp:+91${num}`,
           body: message,
         })
       )
