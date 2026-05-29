@@ -132,7 +132,7 @@ const getToken = async () => {
   return tokenData.apiKey;
 };
 
-router.post("/item-master", async (req, res) => { 
+router.post("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime } = req.body;
 
   if (!c2Code || !storeId || !prodCode) {
@@ -143,37 +143,61 @@ router.post("/item-master", async (req, res) => {
     const apiKey = await getToken();
 
     let formattedDateTime = inputDateTime
-      .replace('T', ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/\s*:\s*/g, ':')
+      .replace("T", " ")
+      .replace(/\s+/g, " ")
+      .replace(/\s*:\s*/g, ":")
       .trim();
 
     if (!/:\d{2}$/.test(formattedDateTime)) {
       formattedDateTime += ":00";
     }
 
-    const vendorUrl = `http://117.211.64.158:21000/ws_c2_services_get_master_data`;
-    const postBody = { c2Code, storeId, prodCode, inputDateTime: formattedDateTime, apiKey };
+    const vendorUrl =
+      "http://117.211.64.158:21000/ws_c2_services_get_master_data";
+
+    const postBody = {
+      c2Code,
+      storeId,
+      prodCode,
+      inputDateTime: formattedDateTime,
+      apiKey,
+    };
 
     const response = await fetch(vendorUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(postBody)
+      body: JSON.stringify(postBody),
     });
 
     const text = await response.text();
+
     let vendorData;
-    try { vendorData = JSON.parse(text); } 
-    catch { return res.status(500).json({ error: "Vendor returned invalid JSON", rawResponse: text }); }
+    try {
+      vendorData = JSON.parse(text);
+    } catch {
+      return res.status(500).json({
+        error: "Vendor returned invalid JSON",
+        rawResponse: text,
+      });
+    }
 
     let itemsArray = [];
+
     if (Array.isArray(vendorData)) itemsArray = vendorData;
     else if (Array.isArray(vendorData.data)) itemsArray = vendorData.data;
     else if (Array.isArray(vendorData.items)) itemsArray = vendorData.items;
     else if (Array.isArray(vendorData.records)) itemsArray = vendorData.records;
     else if (vendorData.code && vendorData.message) {
-      return res.status(400).json({ error: "Vendor API error", vendorMessage: vendorData.message });
-    } else return res.status(500).json({ error: "Invalid data format received", rawVendorData: vendorData });
+      return res.status(400).json({
+        error: "Vendor API error",
+        vendorMessage: vendorData.message,
+      });
+    } else {
+      return res.status(500).json({
+        error: "Invalid data format received",
+        rawVendorData: vendorData,
+      });
+    }
 
     const insertedItems = [];
 
@@ -190,10 +214,12 @@ router.post("/item-master", async (req, res) => {
             packTypCode, packTypName, scheduleCode, scheduleName,
             categoryHeadCode, categoryHeadName,
             categoryClassCode, categoryClassName,
-            allowDisc, gstCode, parentItemCode, parentItemName
+            allowDisc, gstCode,
+            parentItemCode, parentItemName,
+            molecule_info
           ) VALUES (
             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-            $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33
+            $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
           )
           ON CONFLICT (item_code) DO UPDATE SET
             item_name = EXCLUDED.item_name,
@@ -226,87 +252,133 @@ router.post("/item-master", async (req, res) => {
             allowDisc = EXCLUDED.allowDisc,
             gstCode = EXCLUDED.gstCode,
             parentItemCode = EXCLUDED.parentItemCode,
-            parentItemName = EXCLUDED.parentItemName
+            parentItemName = EXCLUDED.parentItemName,
+            molecule_info = EXCLUDED.molecule_info
         `;
 
         const values = [
-          item.itemCode, item.itemName, item.itemShortName || null, item.itemFullName || null,
-          item.brandCode || null, item.brandName || null, item.categoryCode || null, item.categoryName || null,
-          item.contentCode || null, item.contentName || null, item.packCode || null, item.packName || null,
-          item.itemQtyPerBox || 0, item.itemAddedDate || null, item.itemUpdatedDate || null,
-          item.hsnSacCode || null, item.hsnSacName || null,
-          item.minSaleQty || 1, item.note || null, item.mfacName || '-', item.mfacCode || '-',
-          item.packTypCode || '-', item.packTypName || '-', item.scheduleCode || '-', item.scheduleName || '-',
-          item.categoryHeadCode || 'CH0005', item.categoryHeadName || 'MEDICINE',
-          item.categoryClassCode || 'CAT005', item.categoryClassName || 'MEDICINE',
-          item.allowDisc || 'YES', item.gstCode || '00', item.parentItemCode || null, item.parentItemName || null
+          item.itemCode,
+          item.itemName,
+          item.itemShortName || null,
+          item.itemFullName || null,
+
+          item.brandCode || null,
+          item.brandName || null,
+          item.categoryCode || null,
+          item.categoryName || null,
+
+          item.contentCode || null,
+          item.contentName || null,
+          item.packCode || null,
+          item.packName || null,
+
+          item.itemQtyPerBox || 0,
+          item.itemAddedDate || null,
+          item.itemUpdatedDate || null,
+
+          item.hsnSacCode || null,
+          item.hsnSacName || null,
+
+          item.minSaleQty || 1,
+          item.note || null,
+
+          item.mfacName || "-",
+          item.mfacCode || "-",
+
+          item.packTypCode || "-",
+          item.packTypName || "-",
+
+          item.scheduleCode || "-",
+          item.scheduleName || "-",
+
+          item.categoryHeadCode || "CH0005",
+          item.categoryHeadName || "MEDICINE",
+
+          item.categoryClassCode || "CAT005",
+          item.categoryClassName || "MEDICINE",
+
+          item.allowDisc || "YES",
+          item.gstCode || "00",
+
+          item.parentItemCode || null,
+          item.parentItemName || null,
+
+          // ✅ NEW FIELD (JSONB)
+          JSON.stringify(item.moleculeInfo || [])
         ];
 
         await pool.query(query, values);
 
-insertedItems.push({
-  itemCode: item.itemCode,
-  itemName: item.itemName,
-  itemShortName: item.itemShortName || null,
-  itemFullName: item.itemFullName || null,
+        insertedItems.push({
+          itemCode: item.itemCode,
+          itemName: item.itemName,
+          itemShortName: item.itemShortName || null,
+          itemFullName: item.itemFullName || null,
 
-  brandCode: item.brandCode || null,
-  brandName: item.brandName || null,
-  categoryCode: item.categoryCode || null,
-  categoryName: item.categoryName || null,
+          brandCode: item.brandCode || null,
+          brandName: item.brandName || null,
+          categoryCode: item.categoryCode || null,
+          categoryName: item.categoryName || null,
 
-  contentCode: item.contentCode || null,
-  contentName: item.contentName || null,
-  packCode: item.packCode || null,
-  packName: item.packName || null,
+          contentCode: item.contentCode || null,
+          contentName: item.contentName || null,
+          packCode: item.packCode || null,
+          packName: item.packName || null,
 
-  itemQtyPerBox: item.itemQtyPerBox || 0,
-  itemAddedDate: item.itemAddedDate || null,
-  itemUpdatedDate: item.itemUpdatedDate || null,
+          itemQtyPerBox: item.itemQtyPerBox || 0,
+          itemAddedDate: item.itemAddedDate || null,
+          itemUpdatedDate: item.itemUpdatedDate || null,
 
-  hsnSacCode: item.hsnSacCode || null,
-  hsnSacName: item.hsnSacName || null,
+          hsnSacCode: item.hsnSacCode || null,
+          hsnSacName: item.hsnSacName || null,
 
-  minSaleQty: item.minSaleQty || 1,
-  note: item.note || null,
+          minSaleQty: item.minSaleQty || 1,
+          note: item.note || null,
 
-  mfacName: item.mfacName || null,
-  mfacCode: item.mfacCode || null,
+          mfacName: item.mfacName || null,
+          mfacCode: item.mfacCode || null,
 
-  packTypCode: item.packTypCode || null,
-  packTypName: item.packTypName || null,
+          packTypCode: item.packTypCode || null,
+          packTypName: item.packTypName || null,
 
-  scheduleCode: item.scheduleCode || null,
-  scheduleName: item.scheduleName || null,
+          scheduleCode: item.scheduleCode || null,
+          scheduleName: item.scheduleName || null,
 
-  categoryHeadCode: item.categoryHeadCode || null,
-  categoryHeadName: item.categoryHeadName || null,
+          categoryHeadCode: item.categoryHeadCode || null,
+          categoryHeadName: item.categoryHeadName || null,
 
-  categoryClassCode: item.categoryClassCode || null,
-  categoryClassName: item.categoryClassName || null,
+          categoryClassCode: item.categoryClassCode || null,
+          categoryClassName: item.categoryClassName || null,
 
-  allowDisc: item.allowDisc || null,
-  gstCode: item.gstCode || null,
+          allowDisc: item.allowDisc || null,
+          gstCode: item.gstCode || null,
 
-  parentItemCode: item.parentItemCode || null,
-  parentItemName: item.parentItemName || null,
+          parentItemCode: item.parentItemCode || null,
+          parentItemName: item.parentItemName || null,
 
-  status: "inserted"
-});
+          // ✅ NEW RESPONSE FIELD
+          moleculeInfo: item.moleculeInfo || [],
+
+          status: "inserted",
+        });
       } catch (itemErr) {
-        console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
+        console.error(
+          `Insert failed ${item.itemCode}:`,
+          itemErr.message
+        );
       }
     }
 
     res.status(200).json({
       message: "Item master synced successfully",
       totalItems: itemsArray.length,
-      insertedItems
+      insertedItems,
     });
-
   } catch (err) {
     console.error("Item Master Error:", err.message);
-    res.status(500).json({ error: "Failed to fetch or store item master" });
+    res.status(500).json({
+      error: "Failed to fetch or store item master",
+    });
   }
 });
 router.post("/stock-details", async (req, res) => {
