@@ -1517,12 +1517,12 @@ router.post("/sales-invoice", async (req, res) => {
       data.patient_name || null,
       data.patient_contact_no || null,
 
-      // ✅ PATIENT ADDRESS
+      // Patient Address
       data.patient_address
         ? JSON.stringify(data.patient_address)
         : null,
 
-      // ✅ PHARMACY ADDED HERE
+      // Pharmacy
       data.pharmacy
         ? JSON.stringify(data.pharmacy)
         : null,
@@ -1533,7 +1533,11 @@ router.post("/sales-invoice", async (req, res) => {
         ? JSON.stringify(data.order_items)
         : null,
 
-      data.user_email || null
+      data.user_email || null,
+
+      // ✅ NEW FIELDS
+      data.reminder_date || null,
+      data.d_remind_date || null
     ];
 
     const query = `
@@ -1554,15 +1558,17 @@ router.post("/sales-invoice", async (req, res) => {
         patient_name,
         patient_contact_no,
         patient_address,
-
-        -- ✅ NEW COLUMN
         pharmacy,
-
         store_id,
         order_items,
-        user_email
+        user_email,
+
+        reminder_date,
+        d_remind_date
       )
-      VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
+      VALUES (
+        ${values.map((_, i) => `$${i + 1}`).join(",")}
+      )
       RETURNING id
     `;
 
@@ -1579,7 +1585,7 @@ router.post("/sales-invoice", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: "Internal Server Error"
+      error: err.message
     });
   }
 });
