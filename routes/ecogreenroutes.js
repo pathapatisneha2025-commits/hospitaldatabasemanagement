@@ -1153,7 +1153,7 @@ router.put("/update-bus-details/:orderId", async (req, res) => {
       driver_contact,
     };
 
-    const [result] = await db.query(
+    const [result] = await pool.query(
       `
       UPDATE ecogreenpurchase_orders
       SET bus_details = ?
