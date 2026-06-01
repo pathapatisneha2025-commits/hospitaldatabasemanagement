@@ -1081,9 +1081,11 @@ router.post("/assign_bus_to_order", async (req, res) => {
       });
     }
 
-    // 1️⃣ Get bus_id from bus_no
+    // 1️⃣ Get full bus details
     const busResult = await pool.query(
-      `SELECT id FROM  order_bus_details WHERE bus_no = $1`,
+      `SELECT id, bus_no, bus_name, driver_name, driver_contact 
+       FROM order_bus_details 
+       WHERE bus_no = $1`,
       [bus_no]
     );
 
@@ -1094,27 +1096,31 @@ router.post("/assign_bus_to_order", async (req, res) => {
       });
     }
 
-    const bus_id = busResult.rows[0].id;
+    const bus = busResult.rows[0];
 
-    // 2️⃣ Update purchase order
+    // 2️⃣ Update order with full snapshot
     const result = await pool.query(
       `
       UPDATE ecogreenpurchase_orders
       SET 
         bus_id = $1,
-        delivery_boy = $2
-      WHERE id = $3
+        delivery_boy = $2,
+        bus_details = $3
+      WHERE id = $4
       RETURNING *
       `,
-      [bus_id, delivery_boy_id || null, order_id]
+      [
+        bus.id,
+        delivery_boy_id || null,
+        JSON.stringify({
+          bus_no: bus.bus_no,
+          bus_name: bus.bus_name,
+          driver_name: bus.driver_name,
+          driver_contact: bus.driver_contact,
+        }),
+        order_id,
+      ]
     );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
 
     return res.json({
       success: true,
