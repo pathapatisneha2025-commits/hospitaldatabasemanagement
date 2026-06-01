@@ -1003,6 +1003,73 @@ router.put("/update_delivery_type/:id", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+router.post("/save_bus_details", async (req, res) => {
+  try {
+    const {
+      order_id,
+      bus_no,
+      driver_name,
+      driver_contact,
+      delivery_boy_id,
+    } = req.body;
+
+    const existing = await pool.query(
+      "SELECT * FROM order_bus_details WHERE order_id = $1",
+      [order_id]
+    );
+
+    if (existing.rows.length > 0) {
+      // UPDATE
+      await pool.query(
+        `UPDATE order_bus_details 
+         SET bus_no=$1, driver_name=$2, driver_contact=$3, delivery_boy_id=$4
+         WHERE order_id=$5`,
+        [bus_no, driver_name, driver_contact, delivery_boy_id, order_id]
+      );
+    } else {
+      // INSERT
+      await pool.query(
+        `INSERT INTO order_bus_details 
+         (order_id, bus_no, driver_name, driver_contact, delivery_boy_id)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [order_id, bus_no, driver_name, driver_contact, delivery_boy_id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+
+router.get("/bus_details/:order_id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM order_bus_details WHERE order_id=$1",
+      [req.params.order_id]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows[0] || null,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+router.get("/all_buses", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT DISTINCT bus_no FROM order_bus_details"
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
 router.post("/assign_delivery_boy", async (req, res) => {
   const { order_id, delivery_boy, assigned_by } = req.body;
 
