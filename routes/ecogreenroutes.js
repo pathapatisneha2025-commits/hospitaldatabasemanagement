@@ -987,6 +987,22 @@ router.get('/ecogreenpurchase_orders', async (req, res) => {
     });
   }
 });
+router.put("/update_delivery_type/:id", async (req, res) => {
+  const { id } = req.params;
+  const { delivery_type } = req.body;
+
+  try {
+    await pool.query(
+      "UPDATE ecogreenpurchase_orders SET delivery_type = $1 WHERE id = $2",
+      [delivery_type, id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
 router.post("/assign_delivery_boy", async (req, res) => {
   const { order_id, delivery_boy, assigned_by } = req.body;
 
