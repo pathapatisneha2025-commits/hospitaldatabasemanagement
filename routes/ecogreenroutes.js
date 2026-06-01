@@ -1257,7 +1257,23 @@ router.put("/mark-delivered/:orderId", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+router.post("/assign_employee", async (req, res) => {
+  try {
+    const { order_id, employee_id } = req.body;
 
+    await pool.query(
+      `UPDATE ecogreenpurchase_orders
+       SET assigned_employee = $1
+       WHERE id = $2`,
+      [employee_id, order_id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false });
+  }
+});
 router.get("/delivered/ecogreenpurchase-orders", async (req, res) => {
   try {
     const query = `
