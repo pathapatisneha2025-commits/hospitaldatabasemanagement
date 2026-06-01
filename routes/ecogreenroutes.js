@@ -1077,13 +1077,14 @@ router.post("/assign_bus_to_order", async (req, res) => {
     if (!order_id || !bus_no) {
       return res.status(400).json({
         success: false,
+
         message: "order_id and bus_no are required",
       });
     }
 
     // 1️⃣ Get FULL bus details
     const busResult = await pool.query(
-      `SELECT id, bus_no, bus_name, driver_name, driver_contact 
+      `SELECT id, bus_no,  driver_name, driver_contact 
        FROM order_bus_details 
        WHERE bus_no = $1`,
       [bus_no]
