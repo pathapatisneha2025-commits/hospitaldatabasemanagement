@@ -1137,6 +1137,53 @@ router.post("/assign_bus_to_order", async (req, res) => {
     });
   }
 });
+router.put("/update-bus-details/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const {
+      bus_no,
+      driver_name,
+      driver_contact,
+    } = req.body;
+
+    const busDetails = {
+      bus_no,
+      driver_name,
+      driver_contact,
+    };
+
+    const [result] = await db.query(
+      `
+      UPDATE ecogreenpurchase_orders
+      SET bus_details = ?
+      WHERE id = ?
+      `,
+      [JSON.stringify(busDetails), orderId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Bus details updated successfully",
+      bus_details: busDetails,
+    });
+  } catch (error) {
+    console.error("Update bus details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update bus details",
+      error: error.message,
+    });
+  }
+});
 router.post("/assign_delivery_boy", async (req, res) => {
   const { order_id, delivery_boy, assigned_by } = req.body;
 
