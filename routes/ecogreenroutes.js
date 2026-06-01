@@ -1137,15 +1137,11 @@ router.post("/assign_bus_to_order", async (req, res) => {
     });
   }
 });
-router.put("/update-bus-details/:orderId", async (req, res) => {
+router.put("/update-bus-details/:srno", async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const { srno } = req.params;
 
-    const {
-      bus_no,
-      driver_name,
-      driver_contact,
-    } = req.body;
+    const { bus_no, driver_name, driver_contact } = req.body;
 
     const busDetails = {
       bus_no,
@@ -1156,16 +1152,16 @@ router.put("/update-bus-details/:orderId", async (req, res) => {
     const [result] = await db.query(
       `
       UPDATE ecogreenpurchase_orders
-      SET bus_details = ?
-      WHERE id = ?
+      SET bus_details = $1
+      WHERE srno = $2
       `,
-      [JSON.stringify(busDetails), orderId]
+      [JSON.stringify(busDetails), srno]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Order not found",
+        message: "Order not found for srno",
       });
     }
 
