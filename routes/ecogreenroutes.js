@@ -1083,7 +1083,7 @@ router.post("/assign_bus_to_order", async (req, res) => {
 
     // 1️⃣ Get bus_id from bus_no
     const busResult = await pool.query(
-      `SELECT id FROM bus_master WHERE bus_no = $1`,
+      `SELECT id FROM  order_bus_details WHERE bus_no = $1`,
       [bus_no]
     );
 
