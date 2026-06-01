@@ -1141,11 +1141,7 @@ router.put("/update-bus-details/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const {
-      bus_no,
-      driver_name,
-      driver_contact,
-    } = req.body;
+    const { bus_no, driver_name, driver_contact } = req.body;
 
     const busDetails = {
       bus_no,
@@ -1153,16 +1149,19 @@ router.put("/update-bus-details/:orderId", async (req, res) => {
       driver_contact,
     };
 
-    const [result] = await pool.query(
-      `
+    const query = `
       UPDATE ecogreenpurchase_orders
-      SET bus_details = ?
-      WHERE id = ?
-      `,
-      [JSON.stringify(busDetails), orderId]
-    );
+      SET bus_details = $1
+      WHERE id = $2
+      RETURNING *
+    `;
 
-    if (result.affectedRows === 0) {
+    const result = await pool.query(query, [
+      JSON.stringify(busDetails),
+      orderId,
+    ]);
+
+    if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: "Order not found",
