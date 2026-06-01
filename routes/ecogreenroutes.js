@@ -1070,6 +1070,66 @@ router.get("/all_buses", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+router.post("/assign_bus_to_order", async (req, res) => {
+  try {
+    const { order_id, bus_no, delivery_boy_id } = req.body;
+
+    if (!order_id || !bus_no) {
+      return res.status(400).json({
+        success: false,
+        message: "order_id and bus_no are required",
+      });
+    }
+
+    // 1️⃣ Get bus_id from bus_no
+    const busResult = await pool.query(
+      `SELECT id FROM bus_master WHERE bus_no = $1`,
+      [bus_no]
+    );
+
+    if (busResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Bus not found",
+      });
+    }
+
+    const bus_id = busResult.rows[0].id;
+
+    // 2️⃣ Update purchase order
+    const result = await pool.query(
+      `
+      UPDATE ecogreenpurchase_orders
+      SET 
+        bus_id = $1,
+        delivery_boy = $2
+      WHERE id = $3
+      RETURNING *
+      `,
+      [bus_id, delivery_boy_id || null, order_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Bus assigned successfully",
+      data: result.rows[0],
+    });
+
+  } catch (err) {
+    console.error("assign_bus_to_order error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
 router.post("/assign_delivery_boy", async (req, res) => {
   const { order_id, delivery_boy, assigned_by } = req.body;
 
