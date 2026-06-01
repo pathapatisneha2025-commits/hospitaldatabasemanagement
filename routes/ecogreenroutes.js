@@ -1062,7 +1062,7 @@ router.get("/bus_details/:order_id", async (req, res) => {
 router.get("/all_buses", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT DISTINCT bus_no FROM order_bus_details"
+      "SELECT * FROM order_bus_details"
     );
 
     res.json({ success: true, data: result.rows });
