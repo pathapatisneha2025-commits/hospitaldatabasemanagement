@@ -1261,11 +1261,20 @@ router.post("/assign_employee", async (req, res) => {
   try {
     const { order_id, employee_id } = req.body;
 
+    // get employee email
+    const emp = await pool.query(
+      `SELECT email FROM employees WHERE id = $1`,
+      [employee_id]
+    );
+
+    const email = emp.rows[0]?.email || null;
+
     await pool.query(
       `UPDATE ecogreenpurchase_orders
-       SET assigned_employee = $1
-       WHERE id = $2`,
-      [employee_id, order_id]
+       SET assigned_employee = $1,
+           assigned_employee_email = $2
+       WHERE id = $3`,
+      [employee_id, email, order_id]
     );
 
     res.json({ success: true });
