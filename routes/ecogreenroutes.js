@@ -1081,7 +1081,7 @@ router.post("/assign_bus_to_order", async (req, res) => {
       });
     }
 
-    // 1️⃣ Get full bus details
+    // 1️⃣ Get FULL bus details
     const busResult = await pool.query(
       `SELECT id, bus_no, bus_name, driver_name, driver_contact 
        FROM order_bus_details 
@@ -1098,7 +1098,7 @@ router.post("/assign_bus_to_order", async (req, res) => {
 
     const bus = busResult.rows[0];
 
-    // 2️⃣ Update order with full snapshot
+    // 2️⃣ Update order with BOTH bus_id + bus_details
     const result = await pool.query(
       `
       UPDATE ecogreenpurchase_orders
