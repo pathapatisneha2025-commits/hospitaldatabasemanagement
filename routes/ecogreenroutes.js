@@ -2111,6 +2111,125 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     client.release();
   }
 });
+router.post("/sales-invoice/manual-assign-delivery", async (req, res) => {
+  const { invoice_id, order_no, delivered_by_id } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const isInvalidValue = (v) =>
+      v === undefined ||
+      v === null ||
+      String(v).trim() === "";
+
+    // ==============================
+    // VALIDATION
+    // ==============================
+    if (
+      isInvalidValue(invoice_id) ||
+      isInvalidValue(order_no) ||
+      isInvalidValue(delivered_by_id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "invoice_id, order_no and delivered_by_id are required",
+      });
+    }
+
+    // ==============================
+    // VALIDATE DELIVERY BOY
+    // ==============================
+    const empRes = await client.query(
+      `
+      SELECT id, full_name
+      FROM employees
+      WHERE id = $1 AND role = 'Hd delivery'
+      `,
+      [delivered_by_id]
+    );
+
+    if (!empRes.rows.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid delivery boy",
+      });
+    }
+
+    const selectedBoy = empRes.rows[0];
+
+    // ==============================
+    // CHECK ORDER EXISTS
+    // ==============================
+    const orderRes = await client.query(
+      `
+      SELECT invoice_id, order_no
+      FROM ecogreensales_invoices
+      WHERE invoice_id = $1 AND order_no = $2
+      `,
+      [invoice_id, order_no]
+    );
+
+    if (!orderRes.rows.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // ==============================
+    // UPDATE ORDER (MANUAL ASSIGN)
+    // ==============================
+    const result = await client.query(
+      `
+      UPDATE ecogreensales_invoices
+      SET 
+        delivered_by_id = $1,
+        delivered_by = $2,
+        assigned_at = NOW(),
+        status = 'assigned'
+      WHERE 
+        invoice_id = $3 
+        AND order_no = $4
+      RETURNING *
+      `,
+      [
+        selectedBoy.id,
+        selectedBoy.full_name,
+        invoice_id,
+        order_no,
+      ]
+    );
+
+    if (!result.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        success: false,
+        message: "Update failed",
+      });
+    }
+
+    await client.query("COMMIT");
+
+    res.json({
+      success: true,
+      assigned_to: selectedBoy,
+      data: result.rows[0],
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Manual assign error:", err);
+
+    res.status(500).json({
+      success: false,
+      error: "Manual assign failed",
+    });
+  } finally {
+    client.release();
+  }
+});
 router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
   const { id } = req.params;
 
