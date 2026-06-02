@@ -2255,10 +2255,14 @@ router.post("/sales-invoice/manual-assign-delivery", async (req, res) => {
 });
 
 router.put("/update_invoice_transport", async (req, res) => {
-  const { invoice_id, bus_details, delivered_by_id } = req.body;
+  const {
+    invoice_id,
+    bus_details,
+    delivered_by_id,
+  } = req.body;
 
   try {
-    const result = await pool.query(
+    await pool.query(
       `UPDATE ecogreensales_invoices
        SET 
          bus_details = $1,
@@ -2271,27 +2275,10 @@ router.put("/update_invoice_transport", async (req, res) => {
       ]
     );
 
-    // ✅ IMPORTANT: check if row actually updated
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No invoice found to update",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Transport updated successfully",
-      updatedRows: result.rowCount,
-    });
-
+    res.json({ success: true });
   } catch (err) {
-    console.error("UPDATE ERROR:", err);
-
-    res.status(500).json({
-      success: false,
-      message: "Server error while updating transport",
-    });
+    console.error(err);
+    res.status(500).json({ success: false });
   }
 });
 router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
