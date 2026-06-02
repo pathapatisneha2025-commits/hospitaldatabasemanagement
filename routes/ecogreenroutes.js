@@ -1364,7 +1364,7 @@ router.put("/mark-completed/:srno", async (req, res) => {
     const updateQuery = `
       UPDATE ecogreenpurchase_orders
       SET 
-        status = 'Completed',
+        status = 'Received',
         completed_at = (NOW() AT TIME ZONE 'Asia/Kolkata')
       WHERE srno = $1
       RETURNING *;
