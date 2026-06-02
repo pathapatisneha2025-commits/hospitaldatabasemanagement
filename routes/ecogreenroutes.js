@@ -2253,6 +2253,43 @@ router.post("/sales-invoice/manual-assign-delivery", async (req, res) => {
     client.release();
   }
 });
+
+router.put("/update_invoice_transport", async (req, res) => {
+  const {
+    invoice_id,
+    bus_id,
+    bus_no,
+    driver_name,
+    driver_contact,
+    delivered_by_id,
+  } = req.body;
+
+  try {
+    await pool.query(
+      `UPDATE ecogreensales_invoices
+       SET 
+         bus_id = $1,
+         bus_no = $2,
+         driver_name = $3,
+         driver_contact = $4,
+         delivered_by_id = $5
+       WHERE invoice_id = $6`,
+      [
+        bus_id,
+        bus_no,
+        driver_name,
+        driver_contact,
+        delivered_by_id,
+        invoice_id,
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
 router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
   const { id } = req.params;
 
