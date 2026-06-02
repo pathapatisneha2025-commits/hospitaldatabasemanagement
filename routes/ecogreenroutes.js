@@ -1955,7 +1955,7 @@ router.get("/sales-invoice/all", async (req, res) => {
 });
 
 router.post("/sales-invoice/assign-delivery", async (req, res) => {
-  const { order_ref, delivered_by_id } = req.body;
+  const { invoice_id, order_no, delivered_by_id } = req.body;
 
   const client = await pool.connect();
 
@@ -1984,11 +1984,18 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     // CASE 2: AUTO ASSIGN
     // ==============================
     else {
+      if (!invoice_id || !order_no) {
+        return res.status(400).json({
+          success: false,
+          message: "invoice_id and order_no are required for auto assign",
+        });
+      }
+
       const orderRes = await client.query(
         `SELECT order_no, invoice_id, patient_address
          FROM ecogreensales_invoices
-         WHERE invoice_id = $1 OR order_no = $1`,
-        [order_ref]
+         WHERE invoice_id = $1 AND order_no = $2`,
+        [invoice_id, order_no]
       );
 
       if (!orderRes.rows.length) {
@@ -1997,8 +2004,8 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
 
       const order = orderRes.rows[0];
 
-      // safe JSON parse
       let address = order.patient_address;
+
       try {
         address =
           typeof address === "string"
@@ -2010,19 +2017,16 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
 
       const pincode = address?.pincode;
 
-      // ==============================
-      // STRICT VALIDATION (YOUR REQUIREMENT)
-      // ==============================
-      const hasInvoice = !!order.invoice_id;
-      const hasOrderNo = !!order.order_no;
-      const isLocal = String(pincode) === "757001";
-
-      const shouldAutoAssign = hasInvoice && hasOrderNo && isLocal;
+      // STRICT CONDITION
+      const shouldAutoAssign =
+        order.order_no &&
+        order.invoice_id &&
+        String(pincode) === "757001";
 
       if (!shouldAutoAssign) {
         return res.json({
           success: false,
-          message: "Auto assign blocked: invoice/order/pincode mismatch",
+          message: "Not eligible for auto assignment",
         });
       }
 
@@ -2042,9 +2046,7 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
         return res.status(400).json({ error: "No delivery boys found" });
       }
 
-      // ==============================
       // ROUND ROBIN
-      // ==============================
       const countRes = await client.query(`
         SELECT COUNT(*)::int AS count
         FROM ecogreensales_invoices
@@ -2057,7 +2059,7 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     }
 
     // ==============================
-    // UPDATE ORDER
+    // UPDATE ORDER (STRICT MATCH)
     // ==============================
     const result = await client.query(
       `
@@ -2067,15 +2069,10 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
         delivered_by = $2,
         assigned_at = NOW(),
         status = 'assigned'
-      WHERE invoice_id = (
-        SELECT invoice_id
-        FROM ecogreensales_invoices
-        WHERE invoice_id = $3 OR order_no = $3
-        LIMIT 1
-      )
+      WHERE invoice_id = $3 AND order_no = $4
       RETURNING *
       `,
-      [selectedBoy.id, selectedBoy.full_name, order_ref]
+      [selectedBoy.id, selectedBoy.full_name, invoice_id, order_no]
     );
 
     await client.query("COMMIT");
