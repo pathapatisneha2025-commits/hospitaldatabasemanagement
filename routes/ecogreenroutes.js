@@ -1955,7 +1955,7 @@ router.get("/sales-invoice/all", async (req, res) => {
 });
 
 router.post("/sales-invoice/assign-delivery", async (req, res) => {
-  const { order_id, delivered_by_id } = req.body;
+  const { invoice_id, delivered_by_id } = req.body;
 
   const client = await pool.connect();
 
@@ -1967,23 +1967,62 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     // ==============================
     // CASE 1: MANUAL ASSIGN
     // ==============================
-    if (delivered_by_id !== undefined && delivered_by_id !== null && delivered_by_id !== "") {
-  const emp = await client.query(
-    `SELECT id, full_name FROM employees WHERE id = $1`,
-    [delivered_by_id]
-  );
+    if (delivered_by_id) {
+      const emp = await client.query(
+        `SELECT id, full_name FROM employees WHERE id = $1`,
+        [delivered_by_id]
+      );
 
-  if (!emp.rows.length) {
-    return res.status(400).json({ error: "Invalid delivery boy" });
-  }
+      if (!emp.rows.length) {
+        return res.status(400).json({ error: "Invalid delivery boy" });
+      }
 
-  selectedBoy = emp.rows[0];
-} 
+      selectedBoy = emp.rows[0];
+    }
 
     // ==============================
-    // CASE 2: AUTO ASSIGN
+    // CASE 2: AUTO ASSIGN (STRICT)
     // ==============================
     else {
+      // 🔥 GET ORDER USING INVOICE_ID ONLY
+      const orderRes = await client.query(
+        `SELECT order_no, invoice_id, patient_address
+         FROM ecogreensales_invoices
+         WHERE invoice_id = $1`,
+        [invoice_id]
+      );
+
+      if (!orderRes.rows.length) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+
+      const order = orderRes.rows[0];
+
+      const address =
+        typeof order.patient_address === "string"
+          ? JSON.parse(order.patient_address)
+          : order.patient_address;
+
+      const pincode = address?.pincode;
+
+      // ==============================
+      // STRICT AUTO ASSIGN CONDITION
+      // ==============================
+      const shouldAutoAssign =
+        order.order_no &&
+        order.invoice_id &&
+        pincode === "757001";
+
+      if (!shouldAutoAssign) {
+        return res.json({
+          success: false,
+          message: "Not eligible for auto assignment",
+        });
+      }
+
+      // ==============================
+      // GET DELIVERY BOYS
+      // ==============================
       const empRes = await client.query(`
         SELECT id, full_name
         FROM employees
@@ -1993,10 +2032,13 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
 
       const boys = empRes.rows;
 
-      if (boys.length === 0) {
+      if (!boys.length) {
         return res.status(400).json({ error: "No delivery boys found" });
       }
 
+      // ==============================
+      // ROUND ROBIN
+      // ==============================
       const countRes = await client.query(`
         SELECT COUNT(*)::int AS count
         FROM ecogreensales_invoices
@@ -2009,7 +2051,7 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     }
 
     // ==============================
-    // UPDATE ORDER
+    // UPDATE ORDER USING invoice_id ONLY
     // ==============================
     const result = await client.query(
       `
@@ -2019,10 +2061,10 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
         delivered_by = $2,
         assigned_at = NOW(),
         status = 'assigned'
-      WHERE order_id = $3
+      WHERE invoice_id = $3
       RETURNING *
       `,
-      [selectedBoy.id, selectedBoy.full_name, order_id]
+      [selectedBoy.id, selectedBoy.full_name, invoice_id]
     );
 
     await client.query("COMMIT");
