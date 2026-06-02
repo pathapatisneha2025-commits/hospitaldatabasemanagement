@@ -1295,9 +1295,13 @@ router.put("/mark-delivered/:orderId", async (req, res) => {
       SET
         status = 'Delivered',
         delivered_at = NOW(),
-        delivery_duration_minutes = ROUND(
-          EXTRACT(EPOCH FROM (NOW() - assigned_at)) / 60
-        )
+        delivery_duration =
+          FLOOR(EXTRACT(EPOCH FROM (NOW() - assigned_at)) / 3600)::TEXT
+          || 'h ' ||
+          FLOOR(
+            MOD(EXTRACT(EPOCH FROM (NOW() - assigned_at)) / 60, 60)
+          )::TEXT
+          || 'm'
       WHERE id = $1
       RETURNING *;
     `;
