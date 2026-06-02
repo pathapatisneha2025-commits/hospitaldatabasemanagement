@@ -1900,16 +1900,23 @@ router.post("/sales-invoice", async (req, res) => {
     });
   }
 });
-router.post("/sales-invoice/update-delivery-type", async (req, res) => {
+router.put("/sales-invoice/update-delivery-type", async (req, res) => {
   const { invoice_id, delivery_type } = req.body;
 
   try {
-    await pool.query(
+    const result = await pool.query(
       `UPDATE ecogreensales_invoices
        SET delivery_type = $1
        WHERE invoice_id = $2`,
       [delivery_type, invoice_id]
     );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No invoice found with given invoice_id",
+      });
+    }
 
     res.json({ success: true });
   } catch (err) {
