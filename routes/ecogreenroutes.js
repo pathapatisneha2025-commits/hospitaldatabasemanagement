@@ -2257,19 +2257,9 @@ router.post("/sales-invoice/manual-assign-delivery", async (req, res) => {
 router.put("/update_invoice_transport", async (req, res) => {
   const {
     invoice_id,
-    bus_id,
-    bus_no,
-    driver_name,
-    driver_contact,
+    bus_details,
     delivered_by_id,
   } = req.body;
-
-  const bus_details = {
-    bus_id,
-    bus_no,
-    driver_name,
-    driver_contact,
-  };
 
   try {
     await pool.query(
@@ -2279,7 +2269,7 @@ router.put("/update_invoice_transport", async (req, res) => {
          delivered_by_id = $2
        WHERE invoice_id = $3`,
       [
-        bus_details,
+        bus_details || null,
         delivered_by_id || null,
         invoice_id,
       ]
