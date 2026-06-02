@@ -1294,10 +1294,12 @@ router.put("/mark-delivered/:orderId", async (req, res) => {
       UPDATE ecogreenpurchase_orders
       SET
         status = 'Delivered',
-        delivered_at = NOW()
+        delivered_at = NOW(),
+        delivery_duration_minutes = ROUND(
+          EXTRACT(EPOCH FROM (NOW() - assigned_at)) / 60
+        )
       WHERE id = $1
-      RETURNING *,
-        (NOW() - assigned_at) AS delivery_duration;
+      RETURNING *;
     `;
 
     const result = await pool.query(query, [orderId]);
