@@ -1955,143 +1955,112 @@ router.get("/sales-invoice/all", async (req, res) => {
 });
 
 router.post("/sales-invoice/assign-delivery", async (req, res) => {
-  const { invoice_id, order_no, delivered_by_id } = req.body;
+  const { invoice_id, order_no } = req.body;
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    let selectedBoy;
-
-    // ==============================
-    // VALIDATION (COMMON FOR BOTH)
-    // ==============================
     const isInvalidValue = (v) =>
       v === undefined ||
       v === null ||
-      String(v).trim() === "" ||
-      String(v).trim() === "0";
+      String(v).trim() === "";
 
     // ==============================
-    // CASE 1: MANUAL ASSIGN
+    // VALIDATION
     // ==============================
-    if (delivered_by_id) {
-      if (isInvalidValue(delivered_by_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid delivery boy id",
-        });
-      }
-
-      const emp = await client.query(
-        `SELECT id, full_name FROM employees WHERE id = $1`,
-        [delivered_by_id]
-      );
-
-      if (!emp.rows.length) {
-        return res.status(400).json({ error: "Invalid delivery boy" });
-      }
-
-      selectedBoy = emp.rows[0];
+    if (isInvalidValue(invoice_id) || isInvalidValue(order_no)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid invoice_id and order_no required",
+      });
     }
 
     // ==============================
-    // CASE 2: AUTO ASSIGN
+    // GET ORDER
     // ==============================
-    else {
-      // STRICT INPUT CHECK
-      if (isInvalidValue(invoice_id) || isInvalidValue(order_no)) {
-        return res.status(400).json({
-          success: false,
-          message: "Valid invoice_id and order_no required for auto assign",
-        });
-      }
+    const orderRes = await client.query(
+      `
+      SELECT order_no, invoice_id, patient_address
+      FROM ecogreensales_invoices
+      WHERE invoice_id = $1 AND order_no = $2
+      `,
+      [invoice_id, order_no]
+    );
 
-      const orderRes = await client.query(
-        `
-        SELECT order_no, invoice_id, patient_address
-        FROM ecogreensales_invoices
-        WHERE invoice_id = $1 AND order_no = $2
-        `,
-        [invoice_id, order_no]
-      );
+    if (!orderRes.rows.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
 
-      if (!orderRes.rows.length) {
-        return res.status(404).json({
-          success: false,
-          message: "Order not found with given invoice_id & order_no",
-        });
-      }
+    const order = orderRes.rows[0];
 
-      const order = orderRes.rows[0];
+    // ==============================
+    // PARSE ADDRESS SAFELY
+    // ==============================
+    let address = order.patient_address;
 
-      // ==============================
-      // PARSE ADDRESS SAFELY
-      // ==============================
-      let address = order.patient_address;
+    try {
+      address =
+        typeof address === "string"
+          ? JSON.parse(address)
+          : address;
+    } catch (e) {
+      address = null;
+    }
 
-      try {
-        address =
-          typeof address === "string"
-            ? JSON.parse(address)
-            : address;
-      } catch (e) {
-        address = null;
-      }
+    const pincode = address?.pincode;
 
-      const pincode = address?.pincode;
+    // ==============================
+    // AUTO ASSIGN CONDITION ONLY
+    // ==============================
+    const shouldAutoAssign =
+      String(pincode || "").trim() === "757001";
 
-      // ==============================
-      // STRICT AUTO ASSIGN CONDITION
-      // ==============================
-      const shouldAutoAssign =
-        String(order.order_no).trim() === String(order_no).trim() &&
-        String(order.invoice_id).trim() === String(invoice_id).trim() &&
-        String(pincode).trim() === "757001";
-
-      if (!shouldAutoAssign) {
-        return res.json({
-          success: false,
-          message: "Not eligible for auto assignment (pincode or order mismatch)",
-        });
-      }
-
-      // ==============================
-      // GET DELIVERY BOYS
-      // ==============================
-      const empRes = await client.query(`
-        SELECT id, full_name
-        FROM employees
-        WHERE role = 'Hd delivery'
-        ORDER BY id ASC
-      `);
-
-      const boys = empRes.rows;
-
-      if (!boys.length) {
-        return res.status(400).json({
-          success: false,
-          message: "No delivery boys found",
-        });
-      }
-
-      // ==============================
-      // ROUND ROBIN ASSIGNMENT
-      // ==============================
-      const countRes = await client.query(`
-        SELECT COUNT(*)::int AS count
-        FROM ecogreensales_invoices
-        WHERE delivered_by_id IS NOT NULL
-      `);
-
-      const index = countRes.rows[0].count % boys.length;
-
-      selectedBoy = boys[index];
+    if (!shouldAutoAssign) {
+      return res.json({
+        success: false,
+        message: "Not eligible for auto assignment",
+      });
     }
 
     // ==============================
-    // FINAL UPDATE (STRICT MATCH ONLY)
+    // GET DELIVERY BOYS
+    // ==============================
+    const empRes = await client.query(`
+      SELECT id, full_name
+      FROM employees
+      WHERE role = 'Hd delivery'
+      ORDER BY id ASC
+    `);
+
+    const boys = empRes.rows;
+
+    if (!boys.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No delivery boys found",
+      });
+    }
+
+    // ==============================
+    // ROUND ROBIN ASSIGNMENT
+    // ==============================
+    const countRes = await client.query(`
+      SELECT COUNT(*)::int AS count
+      FROM ecogreensales_invoices
+      WHERE delivered_by_id IS NOT NULL
+    `);
+
+    const index = countRes.rows[0].count % boys.length;
+
+    const selectedBoy = boys[index];
+
+    // ==============================
+    // UPDATE ORDER
     // ==============================
     const result = await client.query(
       `
@@ -2118,7 +2087,7 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(404).json({
         success: false,
-        message: "Update failed: order not found during final update",
+        message: "Update failed",
       });
     }
 
