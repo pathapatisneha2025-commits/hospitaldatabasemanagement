@@ -2264,22 +2264,23 @@ router.put("/update_invoice_transport", async (req, res) => {
     delivered_by_id,
   } = req.body;
 
+  const bus_details = {
+    bus_id,
+    bus_no,
+    driver_name,
+    driver_contact,
+  };
+
   try {
     await pool.query(
       `UPDATE ecogreensales_invoices
        SET 
-         bus_id = $1,
-         bus_no = $2,
-         driver_name = $3,
-         driver_contact = $4,
-         delivered_by_id = $5
-       WHERE invoice_id = $6`,
+         bus_details = $1,
+         delivered_by_id = $2
+       WHERE invoice_id = $3`,
       [
-        bus_id,
-        bus_no,
-        driver_name,
-        driver_contact,
-        delivered_by_id,
+        bus_details,
+        delivered_by_id || null,
         invoice_id,
       ]
     );
