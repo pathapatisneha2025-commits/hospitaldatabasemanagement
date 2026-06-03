@@ -2360,26 +2360,25 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
     console.log(" SAFE invoice_id:", safeInvoiceId);
 
     const query = `
-      UPDATE ecogreensales_invoices
-      SET 
-        payment_collected = true,
-        amount_collected = $1,
-        payment_mode_collected = $2,
-        collected_by = $3,
-        collection_remarks = $4,
-        collected_at = NOW()
-      WHERE  invoice_id = $6
-      RETURNING *
-    `;
+  UPDATE ecogreensales_invoices
+  SET 
+    payment_collected = true,
+    amount_collected = $1,
+    payment_mode_collected = $2,
+    collected_by = $3,
+    collection_remarks = $4,
+    collected_at = NOW()
+  WHERE invoice_id = $5
+  RETURNING *
+`;
 
-    const result = await pool.query(query, [
-      amount,
-      JSON.stringify(paymentDetails),
-      collected_by,
-      remarks,
-      safeOrderNo,
-      safeInvoiceId,
-    ]);
+const result = await pool.query(query, [
+  amount,
+  JSON.stringify(paymentDetails),
+  collected_by,
+  remarks,
+  safeInvoiceId
+]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
