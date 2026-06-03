@@ -1923,23 +1923,23 @@ router.put("/sales-invoice/update-delivery-type", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-router.get("/sales-invoice/by-order/:orderNo", async (req, res) => {
-  const { orderNo } = req.params;
+router.get("/sales-invoice/by-order/:invoiceId", async (req, res) => {
+  const { invoiceId } = req.params;
 
   try {
     const query = `
       SELECT *
       FROM ecogreensales_invoices
-      WHERE order_no = $1
+      WHERE invoice_id = $1
       LIMIT 1
     `;
 
-    const result = await pool.query(query, [orderNo]);
+    const result = await pool.query(query, [invoiceId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Invoice not found for this orderNo",
+        message: "Invoice not found for this invoiceId",
       });
     }
 
