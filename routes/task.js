@@ -441,29 +441,29 @@ router.post("/update-status", async (req, res) => {
   try {
     const now = new Date();
 
+    const taskRes = await pool.query(
+      `SELECT start_time FROM tasks WHERE id = $1`,
+      [id]
+    );
+
+    const startTime = taskRes.rows[0]?.start_time;
+
     let query = `UPDATE tasks SET status = $1`;
     let values = [status];
     let index = 2;
 
-    // ✅ START
+    // START
     if (status === "in_progress") {
       query += `, start_time = $${index}`;
       values.push(now);
       index++;
     }
 
-    // ✅ COMPLETE
+    // COMPLETE
     if (status === "completed") {
       query += `, completed_time = $${index}`;
       values.push(now);
       index++;
-
-      const task = await pool.query(
-        `SELECT start_time FROM tasks WHERE id = $1`,
-        [id]
-      );
-
-      const startTime = task.rows[0]?.start_time;
 
       if (startTime) {
         const diffMs = new Date(now) - new Date(startTime);
@@ -481,7 +481,7 @@ router.post("/update-status", async (req, res) => {
       }
     }
 
-    // 🔥 FIX: REJECT reason save
+    // REJECT
     if (status === "rejected") {
       query += `, reject_reason = $${index}`;
       values.push(reject_reason || "No reason provided");
@@ -498,4 +498,5 @@ router.post("/update-status", async (req, res) => {
     console.log(err);
     res.status(500).json({ error: "Server error" });
   }
-});module.exports = router;
+});
+module.exports = router;
