@@ -2368,7 +2368,7 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
         collected_by = $3,
         collection_remarks = $4,
         collected_at = NOW()
-      WHERE order_no = $5 OR invoice_id = $6
+      WHERE  invoice_id = $6
       RETURNING *
     `;
 
