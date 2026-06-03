@@ -1991,7 +1991,7 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
       String(v).trim() === "";
 
     // ==============================
-    // VALIDATION
+    // VALIDATION (allow "0" but not empty)
     // ==============================
     if (isInvalidValue(invoice_id) || isInvalidValue(order_no)) {
       return res.status(400).json({
@@ -2000,8 +2000,10 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
       });
     }
 
+    const orderNoStr = String(order_no).trim();
+
     // ==============================
-    // GET ORDER
+    // GET ORDER (IMPORTANT FIX HERE)
     // ==============================
     const orderRes = await client.query(
       `
@@ -2038,15 +2040,22 @@ router.post("/sales-invoice/assign-delivery", async (req, res) => {
     const pincode = address?.pincode;
 
     // ==============================
-    // AUTO ASSIGN CONDITION ONLY
+    // AUTO ASSIGN CONDITION (FIXED)
     // ==============================
-    const shouldAutoAssign =
+    const isValidPincode =
       String(pincode || "").trim() === "757001";
+
+    const isValidOrderNo =
+      orderNoStr !== "" && orderNoStr !== null;
+
+    const shouldAutoAssign =
+      isValidPincode && isValidOrderNo;
 
     if (!shouldAutoAssign) {
       return res.json({
         success: false,
-        message: "Not eligible for auto assignment",
+        message:
+          "Not eligible for auto assignment (pincode/order_no rule failed)",
       });
     }
 
