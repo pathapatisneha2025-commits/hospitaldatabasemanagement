@@ -1923,8 +1923,15 @@ router.put("/sales-invoice/update-delivery-type", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-router.get("/sales-invoice/by-order/:invoiceId", async (req, res) => {
-  const { invoiceId } = req.params;
+router.get("/sales-invoice/by-order", async (req, res) => {
+  const { invoiceId } = req.query;
+
+  if (!invoiceId) {
+    return res.status(400).json({
+      success: false,
+      message: "invoiceId is required",
+    });
+  }
 
   try {
     const query = `
@@ -1959,6 +1966,7 @@ router.get("/sales-invoice/by-order/:invoiceId", async (req, res) => {
       success: true,
       data: invoice,
     });
+
   } catch (err) {
     console.error("Error fetching sales invoice:", err);
     res.status(500).json({ error: "Internal Server Error" });
