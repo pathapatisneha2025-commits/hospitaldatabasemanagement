@@ -439,8 +439,9 @@ router.post("/update-status", async (req, res) => {
   const { id, status, reject_reason } = req.body;
 
   try {
-    const now = new Date();
-
+const now = new Date(
+  new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+);
     const taskRes = await pool.query(
       `SELECT start_time FROM tasks WHERE id = $1`,
       [id]
