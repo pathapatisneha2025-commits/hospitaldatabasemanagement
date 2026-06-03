@@ -2325,21 +2325,24 @@ router.get("/sales-invoice/by-delivery-boy/:id", async (req, res) => {
 router.post("/sales-invoice/payment/collect", async (req, res) => {
   const {
     order_no,
+    invoice_id, //  ADDED HERE
     amount_collected,
     payment_mode_collected,
     collected_by,
     remarks = null,
   } = req.body;
 
-  if (!order_no) {
+  if (!order_no && !invoice_id) {
     return res.status(400).json({
       success: false,
-      message: "order_no is required",
+      message: "order_no or invoice_id is required",
     });
   }
 
   try {
-    const safeOrderNo = String(order_no).trim();
+    const safeOrderNo = order_no ? String(order_no).trim() : null;
+    const safeInvoiceId = invoice_id ? String(invoice_id).trim() : null;
+
     const amount = Number(amount_collected);
 
     if (isNaN(amount)) {
@@ -2353,7 +2356,8 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
       payment_mode_collected,
     };
 
-    console.log("✅ SAFE order_no:", safeOrderNo);
+    console.log(" SAFE order_no:", safeOrderNo);
+    console.log(" SAFE invoice_id:", safeInvoiceId);
 
     const query = `
       UPDATE ecogreensales_invoices
@@ -2364,7 +2368,7 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
         collected_by = $3,
         collection_remarks = $4,
         collected_at = NOW()
-      WHERE order_no = $5
+      WHERE order_no = $5 OR invoice_id = $6
       RETURNING *
     `;
 
@@ -2374,6 +2378,7 @@ router.post("/sales-invoice/payment/collect", async (req, res) => {
       collected_by,
       remarks,
       safeOrderNo,
+      safeInvoiceId,
     ]);
 
     if (result.rows.length === 0) {
