@@ -451,6 +451,8 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
           success: true,
           faceVerified: true,
           logout: true,
+            capturedUrl, // <-- ADD
+
           message: "Employee logout marked successfully",
           data: {
             employeeId: employeeId || null,
@@ -466,6 +468,8 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
         success: true,
         faceVerified: true,
         logout: true,
+          capturedUrl, // <-- ADD
+
         message: "Logout marked (no On Duty found)",
         data: {
           employeeId: employeeId || null,
