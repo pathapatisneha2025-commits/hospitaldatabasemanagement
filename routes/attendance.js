@@ -180,7 +180,40 @@ const upload = multer({ storage });
 //   }
 // });
 
+const markAttendance = async ({
+  employeeId,
+  subadminId,
+  adminId,
+  phone,
+  capturedUrl,
+}) => {
+  let columnToUse, valueToUse;
 
+  if (employeeId) {
+    columnToUse = "employee_id";
+    valueToUse = employeeId;
+  } else if (subadminId) {
+    columnToUse = "subadmin_id";
+    valueToUse = subadminId;
+  } else if (adminId) {
+    columnToUse = "admin_id";
+    valueToUse = adminId;
+  } else if (phone) {
+    columnToUse = "phone";
+    valueToUse = phone;
+  }
+
+  const status = "On Duty";
+
+  const result = await pool.query(
+    `INSERT INTO attendance (${columnToUse}, timestamp, image_url, status)
+     VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata'), $2, $3)
+     RETURNING id, ${columnToUse}, status, timestamp`,
+    [valueToUse, capturedUrl, status]
+  );
+
+  return result.rows[0];
+};
 
 
 router.post("/verify-face", upload.single("image"), async (req, res) => {
@@ -337,69 +370,62 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
       });
     }
 
-    // ==========================
-    // ATTENDANCE AUTO MARK
-    // ==========================
-    const actualEmployeeId =
-      resolvedEmployeeId || employeeId || null;
+   // ==========================
+// ATTENDANCE AUTO MARK
+// ==========================
+const actualEmployeeId =
+  resolvedEmployeeId || employeeId || null;
 
-    if (actualEmployeeId) {
-      const alreadyMarked = await pool.query(
-        `
-        SELECT id
-        FROM attendance
-        WHERE employee_id = $1
-        AND DATE(timestamp) =
-            DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
-        LIMIT 1
-        `,
-        [actualEmployeeId]
-      );
+if (actualEmployeeId || subadminId || adminId || phone) {
 
-      if (alreadyMarked.rowCount > 0) {
-        return res.json({
-          success: true,
-          faceVerified: true,
-          attendanceMarked: false,
-          alreadyMarked: true,
-          message: "Attendance already marked today",
-          capturedUrl,
-          employeeId: actualEmployeeId,
-        });
-      }
+  const alreadyMarked = await pool.query(
+    `
+    SELECT id
+    FROM attendance
+    WHERE ${actualEmployeeId ? "employee_id" : subadminId ? "subadmin_id" : adminId ? "admin_id" : "phone"} = $1
+    AND DATE(timestamp) =
+        DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
+    LIMIT 1
+    `,
+    [
+      actualEmployeeId || subadminId || adminId || phone
+    ]
+  );
 
-      const attendanceRes = await pool.query(
-        `
-        INSERT INTO attendance
-        (
-          employee_id,
-          timestamp,
-          image_url,
-          status
-        )
-        VALUES
-        (
-          $1,
-          (NOW() AT TIME ZONE 'Asia/Kolkata'),
-          $2,
-          'On Duty'
-        )
-        RETURNING id,timestamp,status
-        `,
-        [actualEmployeeId, capturedUrl]
-      );
+  if (alreadyMarked.rowCount > 0) {
+    return res.json({
+      success: true,
+      faceVerified: true,
+      attendanceMarked: false,
+      alreadyMarked: true,
+      message: "Attendance already marked today",
+      capturedUrl,
+    });
+  }
 
-      return res.json({
-        success: true,
-        faceVerified: true,
-        attendanceMarked: true,
-        message: "Face verified and attendance marked",
-        capturedUrl,
-        employeeId: actualEmployeeId,
-        timestamp: attendanceRes.rows[0].timestamp,
-        status: attendanceRes.rows[0].status,
-      });
-    }
+  // USE YOUR FUNCTION HERE
+  const attendanceRow = await markAttendance({
+    employeeId: actualEmployeeId,
+    subadminId,
+    adminId,
+    phone,
+    capturedUrl,
+  });
+
+  return res.json({
+    success: true,
+    faceVerified: true,
+    attendanceMarked: true,
+    message: "Face verified and attendance marked",
+    capturedUrl,
+    employeeId: actualEmployeeId,
+    subadminId,
+    adminId,
+    phone,
+    timestamp: attendanceRow.timestamp,
+    status: attendanceRow.status,
+  });
+}
 
     return res.json({
       success: true,
@@ -440,7 +466,7 @@ router.post("/verify-location", (req, res) => {
     employeeId,
     subadminId,
     adminId,
-    phone,          // ✅ ADD PHONE
+    phone,          //  ADD PHONE
     latitude,
     longitude
   } = req.body;
@@ -473,7 +499,7 @@ router.post("/verify-location", (req, res) => {
     employeeId: employeeId || null,
     subadminId: subadminId || null,
     adminId: adminId || null,
-    phone: phone || null,     // ✅ RETURN PHONE
+    phone: phone || null,     //  RETURN PHONE
     distance,
   });
 });
@@ -481,7 +507,7 @@ router.post("/verify-location", (req, res) => {
 
 
 
-// ✅ Mark attendance
+//  Mark attendance
 router.post("/mark-attendance", async (req, res) => {
   try {
     const {
@@ -600,7 +626,7 @@ try {
 
 
 // ------------------------------------------------------
-// ✅ ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
+//  ATTENDANCE EXPORT (CSV + EXCEL) WITH BREAK LOGS JOINED
 // ------------------------------------------------------
 router.get("/export", async (req, res) => {
   try {
@@ -679,7 +705,7 @@ router.get("/export", async (req, res) => {
 });
 
 
- // ✅ Fetch all "On Duty" attendance records
+ //  Fetch all "On Duty" attendance records
 // router.get("/login/all", async (req, res) => {
 //   try {
 //     const result = await pool.query(`
@@ -717,7 +743,7 @@ router.get("/export", async (req, res) => {
 //   }
 // });
 
-// ✅ Fetch all "On Duty" attendance records (ID + Phone based)
+//  Fetch all "On Duty" attendance records (ID + Phone based)
 router.get("/login/all", async (req, res) => {
   try {
     const result = await pool.query(`
