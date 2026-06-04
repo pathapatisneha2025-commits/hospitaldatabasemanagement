@@ -335,68 +335,144 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const actualEmployeeId = resolvedEmployeeId || employeeId || null;
     const status = action === "logout" ? "Off Duty" : "On Duty";
 
-    // =========================================================
-    // 🔴 LOGOUT FLOW
-    // =========================================================
-    if (action === "logout") {
+  
+   // =========================================================
+// 🔴 LOGOUT FLOW (SAME AS /logout ROUTE)
+// =========================================================
+if (action === "logout") {
+  const status = "Off Duty";
 
-      let onDuty;
+  const formatHours = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return `${hrs}h ${mins}m`;
+  };
 
-      if (employeeId || phone) {
-        onDuty = await pool.query(
-          `SELECT id, timestamp FROM attendance
-           WHERE ${employeeId ? "employee_id" : "phone"} = $1
-           AND status = 'On Duty'
-           ORDER BY timestamp DESC LIMIT 1`,
-          [employeeId || phone]
-        );
-      }
+  const parseHoursStrToSeconds = (str) => {
+    if (!str) return 0;
+    str = String(str);
+    const match = str.match(/(\d+)h\s*(\d+)?m?/);
+    if (!match) return 0;
+    return parseInt(match[1] || 0, 10) * 3600 + parseInt(match[2] || 0, 10) * 60;
+  };
 
-      let sessionHours = "0h 0m";
-      let insert = null;
+  let onDuty;
 
-      if (onDuty && onDuty.rows.length > 0) {
-        const onDutyTime = onDuty.rows[0].timestamp;
+  if (employeeId) {
+    onDuty = await pool.query(
+      `SELECT id, timestamp FROM attendance
+       WHERE employee_id = $1 AND status = 'On Duty'
+       ORDER BY timestamp DESC LIMIT 1`,
+      [employeeId]
+    );
+  } else if (phone) {
+    onDuty = await pool.query(
+      `SELECT id, timestamp FROM attendance
+       WHERE phone = $1 AND status = 'On Duty'
+       ORDER BY timestamp DESC LIMIT 1`,
+      [phone]
+    );
+  }
 
-        const sessionRes = await pool.query(
-          `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
-          [onDutyTime]
-        );
+  let sessionHours = "0h 0m";
 
-        const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
-        sessionHours = `${Math.floor(sessionSeconds / 3600)}h ${Math.floor(
-          (sessionSeconds % 3600) / 60
-        )}m`;
+  if (onDuty.rows.length > 0) {
+    const onDutyTime = onDuty.rows[0].timestamp;
 
-        insert = await pool.query(
-          `INSERT INTO attendance
-          (employee_id, phone, timestamp, image_url, status, session_hours)
-          VALUES ($1,$2,NOW() AT TIME ZONE 'Asia/Kolkata',$3,$4,$5)
-          RETURNING id, timestamp`,
-          [
-            employeeId || null,
-            phone || null,
-            capturedUrl,
-            status,
-            sessionHours,
-          ]
-        );
-      }
+    const sessionRes = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
+      [onDutyTime]
+    );
 
-      return res.json({
-        success: true,
-        faceVerified: true,
-        logout: true,
-        message: "Logout successful",
-        data: {
-          employeeId: employeeId || null,
-          phone: phone || null,
-          timestamp: insert?.rows?.[0]?.timestamp || null,
-          sessionHours,
-        },
-      });
-    }
+    const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
+    sessionHours = formatHours(sessionSeconds);
 
+    const id = employeeId || phone;
+
+    const fetchPrev = async (query, param) => {
+      const r = await pool.query(query, [param]);
+      return r.rows.reduce(
+        (sum, x) => sum + parseHoursStrToSeconds(x.session_hours),
+        0
+      );
+    };
+
+    const daily = sessionSeconds + await fetchPrev(
+      employeeId
+        ? `SELECT session_hours FROM attendance WHERE employee_id = $1 AND DATE(timestamp) = CURRENT_DATE`
+        : `SELECT session_hours FROM attendance WHERE phone = $1 AND DATE(timestamp) = CURRENT_DATE`,
+      id
+    );
+
+    const weekly = sessionSeconds + await fetchPrev(
+      employeeId
+        ? `SELECT session_hours FROM attendance WHERE employee_id = $1
+           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`
+        : `SELECT session_hours FROM attendance WHERE phone = $1
+           AND DATE_PART('week', timestamp) = DATE_PART('week', CURRENT_DATE)
+           AND DATE_PART('year', timestamp) = DATE_PART('year', CURRENT_DATE)`,
+      id
+    );
+
+    const monthly = sessionSeconds + await fetchPrev(
+      employeeId
+        ? `SELECT session_hours FROM attendance WHERE employee_id = $1
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`
+        : `SELECT session_hours FROM attendance WHERE phone = $1
+           AND DATE_TRUNC('month', timestamp) = DATE_TRUNC('month', CURRENT_DATE)`,
+      id
+    );
+
+    const insert = await pool.query(
+      `INSERT INTO attendance
+        (employee_id, phone, timestamp, image_url, status, session_hours,
+         daily_hours, weekly_hours, monthly_hours)
+       VALUES ($1,$2,NOW() AT TIME ZONE 'Asia/Kolkata',$3,$4,$5,$6,$7,$8)
+       RETURNING id, timestamp`,
+      [
+        employeeId || null,
+        phone || null,
+        capturedUrl,
+        status,
+        sessionHours,
+        formatHours(daily),
+        formatHours(weekly),
+        formatHours(monthly),
+      ]
+    );
+
+    return res.json({
+      success: true,
+      faceVerified: true,
+      logout: true,
+      message: "Employee logout marked successfully",
+      data: {
+        employeeId: employeeId || null,
+        phone: phone || null,
+        status,
+        timestamp: insert.rows[0].timestamp,
+        sessionHours,
+        daily_hours: formatHours(daily),
+        weekly_hours: formatHours(weekly),
+        monthly_hours: formatHours(monthly),
+      },
+    });
+  }
+
+  // fallback (no On Duty found)
+  return res.json({
+    success: true,
+    faceVerified: true,
+    logout: true,
+    message: "Logout marked (no On Duty found)",
+    data: {
+      employeeId: employeeId || null,
+      phone: phone || null,
+      status,
+    },
+  });
+}
     // =========================================================
     // 🟢 LOGIN FLOW
     // =========================================================
