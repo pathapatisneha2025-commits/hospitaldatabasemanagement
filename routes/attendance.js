@@ -26,163 +26,6 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-router.post("/verify-face", upload.single("image"), async (req, res) => {
-  try {
-    const employeeId = req.body.employeeId
-      ? parseInt(req.body.employeeId, 10)
-      : null;
-    const subadminId = req.body.subadminId
-      ? parseInt(req.body.subadminId, 10)
-      : null;
-    const adminId = req.body.adminId
-      ? parseInt(req.body.adminId, 10)
-      : null;
-    const phone = req.body.phone || null;
-    const file = req.file;
-
-    //  Require image
-    if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: "Image required",
-      });
-    }
-
-    //  Require at least ONE identifier
-    if (!employeeId && !subadminId && !adminId && !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee ID or phone required",
-      });
-    }
-
-    const capturedUrl = file.path;
-
-    // --------------------------------------------------
-    //  RESOLVE REGISTERED IMAGE
-    // --------------------------------------------------
-    let registeredUrl = null;
-    let resolvedEmployeeId = null;
-
-    // 1️EMPLOYEE ID
-    if (employeeId) {
-      const empRes = await pool.query(
-        "SELECT id, image FROM employees WHERE id = $1",
-        [employeeId]
-      );
-
-      if (empRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Employee not found",
-        });
-      }
-
-      registeredUrl = empRes.rows[0].image;
-      resolvedEmployeeId = empRes.rows[0].id;
-    }
-
-    // 2️ PHONE → EMPLOYEE
-   else if (phone) {
-  const empRes = await pool.query(
-    "SELECT id, image FROM employees WHERE mobile = $1",
-    [phone]
-  );
-
-  if (empRes.rowCount === 0) {
-    return res.status(404).json({
-      success: false,
-      message: "No employee registered with this phone",
-    });
-  }
-
-  registeredUrl = empRes.rows[0].image;
-  resolvedEmployeeId = empRes.rows[0].id;
-}
-
-
-    // 3️ SUBADMIN
-    else if (subadminId) {
-      const subRes = await pool.query(
-        "SELECT image FROM subadmin WHERE id = $1",
-        [subadminId]
-      );
-
-      if (subRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Subadmin not found",
-        });
-      }
-
-      registeredUrl = subRes.rows[0].image;
-    }
-
-    // 4️ ADMIN
-    else if (adminId) {
-      const adminRes = await pool.query(
-        "SELECT image FROM admin WHERE id = $1",
-        [adminId]
-      );
-
-      if (adminRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Admin not found",
-        });
-      }
-
-      registeredUrl = adminRes.rows[0].image;
-    }
-
-    // --------------------------------------------------
-    // ⬇DOWNLOAD IMAGES
-    // --------------------------------------------------
-    const [registeredImg, capturedImg] = await Promise.all([
-      axios.get(registeredUrl, { responseType: "arraybuffer" }),
-      axios.get(capturedUrl, { responseType: "arraybuffer" }),
-    ]);
-
-    // --------------------------------------------------
-    // AWS REKOGNITION
-    // --------------------------------------------------
-    const params = {
-      SourceImage: { Bytes: Buffer.from(registeredImg.data) },
-      TargetImage: { Bytes: Buffer.from(capturedImg.data) },
-      SimilarityThreshold: 80,
-    };
-
-    const rekognitionResult = await rekognition
-      .compareFaces(params)
-      .promise();
-
-    const faceVerified =
-      rekognitionResult.FaceMatches &&
-      rekognitionResult.FaceMatches.length > 0;
-
-    // --------------------------------------------------
-    //  RESPONSE
-    // --------------------------------------------------
-    return res.json({
-      success: true,
-      faceVerified,
-      message: faceVerified ? "Face verified" : "Face not verified",
-      capturedUrl,
-      employeeId: resolvedEmployeeId || employeeId || null,
-      phone: phone || null,
-    });
-  } catch (error) {
-    console.error("Face verification error:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-});
-
-
-
-
 // router.post("/verify-face", upload.single("image"), async (req, res) => {
 //   try {
 //     const employeeId = req.body.employeeId
@@ -195,9 +38,9 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 //       ? parseInt(req.body.adminId, 10)
 //       : null;
 //     const phone = req.body.phone || null;
-
 //     const file = req.file;
 
+//     //  Require image
 //     if (!file) {
 //       return res.status(400).json({
 //         success: false,
@@ -205,6 +48,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 //       });
 //     }
 
+//     //  Require at least ONE identifier
 //     if (!employeeId && !subadminId && !adminId && !phone) {
 //       return res.status(400).json({
 //         success: false,
@@ -214,12 +58,13 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 
 //     const capturedUrl = file.path;
 
+//     // --------------------------------------------------
+//     //  RESOLVE REGISTERED IMAGE
+//     // --------------------------------------------------
 //     let registeredUrl = null;
 //     let resolvedEmployeeId = null;
 
-//     // ==========================
-//     // EMPLOYEE
-//     // ==========================
+//     // 1️EMPLOYEE ID
 //     if (employeeId) {
 //       const empRes = await pool.query(
 //         "SELECT id, image FROM employees WHERE id = $1",
@@ -237,29 +82,26 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 //       resolvedEmployeeId = empRes.rows[0].id;
 //     }
 
-//     // ==========================
-//     // PHONE
-//     // ==========================
-//     else if (phone) {
-//       const empRes = await pool.query(
-//         "SELECT id, image FROM employees WHERE mobile = $1",
-//         [phone]
-//       );
+//     // 2️ PHONE → EMPLOYEE
+//    else if (phone) {
+//   const empRes = await pool.query(
+//     "SELECT id, image FROM employees WHERE mobile = $1",
+//     [phone]
+//   );
 
-//       if (empRes.rowCount === 0) {
-//         return res.status(404).json({
-//           success: false,
-//           message: "No employee registered with this phone",
-//         });
-//       }
+//   if (empRes.rowCount === 0) {
+//     return res.status(404).json({
+//       success: false,
+//       message: "No employee registered with this phone",
+//     });
+//   }
 
-//       registeredUrl = empRes.rows[0].image;
-//       resolvedEmployeeId = empRes.rows[0].id;
-//     }
+//   registeredUrl = empRes.rows[0].image;
+//   resolvedEmployeeId = empRes.rows[0].id;
+// }
 
-//     // ==========================
-//     // SUBADMIN
-//     // ==========================
+
+//     // 3️ SUBADMIN
 //     else if (subadminId) {
 //       const subRes = await pool.query(
 //         "SELECT image FROM subadmin WHERE id = $1",
@@ -276,9 +118,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 //       registeredUrl = subRes.rows[0].image;
 //     }
 
-//     // ==========================
-//     // ADMIN
-//     // ==========================
+//     // 4️ ADMIN
 //     else if (adminId) {
 //       const adminRes = await pool.query(
 //         "SELECT image FROM admin WHERE id = $1",
@@ -295,24 +135,20 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 //       registeredUrl = adminRes.rows[0].image;
 //     }
 
-//     // ==========================
-//     // DOWNLOAD IMAGES
-//     // ==========================
+//     // --------------------------------------------------
+//     // ⬇DOWNLOAD IMAGES
+//     // --------------------------------------------------
 //     const [registeredImg, capturedImg] = await Promise.all([
 //       axios.get(registeredUrl, { responseType: "arraybuffer" }),
 //       axios.get(capturedUrl, { responseType: "arraybuffer" }),
 //     ]);
 
-//     // ==========================
+//     // --------------------------------------------------
 //     // AWS REKOGNITION
-//     // ==========================
+//     // --------------------------------------------------
 //     const params = {
-//       SourceImage: {
-//         Bytes: Buffer.from(registeredImg.data),
-//       },
-//       TargetImage: {
-//         Bytes: Buffer.from(capturedImg.data),
-//       },
+//       SourceImage: { Bytes: Buffer.from(registeredImg.data) },
+//       TargetImage: { Bytes: Buffer.from(capturedImg.data) },
 //       SimilarityThreshold: 80,
 //     };
 
@@ -324,98 +160,262 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
 //       rekognitionResult.FaceMatches &&
 //       rekognitionResult.FaceMatches.length > 0;
 
-//     // ==========================
-//     // FACE NOT VERIFIED
-//     // ==========================
-//     if (!faceVerified) {
-//       return res.json({
-//         success: true,
-//         faceVerified: false,
-//         attendanceMarked: false,
-//         message: "Face not verified",
-//         capturedUrl,
-//       });
-//     }
-
-//     // ==========================
-//     // ATTENDANCE AUTO MARK
-//     // ==========================
-//     const actualEmployeeId =
-//       resolvedEmployeeId || employeeId || null;
-
-//     if (actualEmployeeId) {
-//       const alreadyMarked = await pool.query(
-//         `
-//         SELECT id
-//         FROM attendance
-//         WHERE employee_id = $1
-//         AND DATE(timestamp) =
-//             DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
-//         LIMIT 1
-//         `,
-//         [actualEmployeeId]
-//       );
-
-//       if (alreadyMarked.rowCount > 0) {
-//         return res.json({
-//           success: true,
-//           faceVerified: true,
-//           attendanceMarked: false,
-//           alreadyMarked: true,
-//           message: "Attendance already marked today",
-//           capturedUrl,
-//           employeeId: actualEmployeeId,
-//         });
-//       }
-
-//       const attendanceRes = await pool.query(
-//         `
-//         INSERT INTO attendance
-//         (
-//           employee_id,
-//           timestamp,
-//           image_url,
-//           status
-//         )
-//         VALUES
-//         (
-//           $1,
-//           (NOW() AT TIME ZONE 'Asia/Kolkata'),
-//           $2,
-//           'On Duty'
-//         )
-//         RETURNING id,timestamp,status
-//         `,
-//         [actualEmployeeId, capturedUrl]
-//       );
-
-//       return res.json({
-//         success: true,
-//         faceVerified: true,
-//         attendanceMarked: true,
-//         message: "Face verified and attendance marked",
-//         capturedUrl,
-//         employeeId: actualEmployeeId,
-//         timestamp: attendanceRes.rows[0].timestamp,
-//         status: attendanceRes.rows[0].status,
-//       });
-//     }
-
+//     // --------------------------------------------------
+//     //  RESPONSE
+//     // --------------------------------------------------
 //     return res.json({
 //       success: true,
-//       faceVerified: true,
-//       attendanceMarked: false,
-//       message: "Face verified",
+//       faceVerified,
+//       message: faceVerified ? "Face verified" : "Face not verified",
 //       capturedUrl,
+//       employeeId: resolvedEmployeeId || employeeId || null,
+//       phone: phone || null,
 //     });
 //   } catch (error) {
-//     console.error("Face verification error:", error);
-//     return res.status(500).json({
+//     console.error("Face verification error:", error.message);
+//     res.status(500).json({
 //       success: false,
 //       message: "Server error",
 //     });
 //   }
 // });
+
+
+
+
+router.post("/verify-face", upload.single("image"), async (req, res) => {
+  try {
+    const employeeId = req.body.employeeId
+      ? parseInt(req.body.employeeId, 10)
+      : null;
+    const subadminId = req.body.subadminId
+      ? parseInt(req.body.subadminId, 10)
+      : null;
+    const adminId = req.body.adminId
+      ? parseInt(req.body.adminId, 10)
+      : null;
+    const phone = req.body.phone || null;
+
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Image required",
+      });
+    }
+
+    if (!employeeId && !subadminId && !adminId && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID or phone required",
+      });
+    }
+
+    const capturedUrl = file.path;
+
+    let registeredUrl = null;
+    let resolvedEmployeeId = null;
+
+    // ==========================
+    // EMPLOYEE
+    // ==========================
+    if (employeeId) {
+      const empRes = await pool.query(
+        "SELECT id, image FROM employees WHERE id = $1",
+        [employeeId]
+      );
+
+      if (empRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found",
+        });
+      }
+
+      registeredUrl = empRes.rows[0].image;
+      resolvedEmployeeId = empRes.rows[0].id;
+    }
+
+    // ==========================
+    // PHONE
+    // ==========================
+    else if (phone) {
+      const empRes = await pool.query(
+        "SELECT id, image FROM employees WHERE mobile = $1",
+        [phone]
+      );
+
+      if (empRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "No employee registered with this phone",
+        });
+      }
+
+      registeredUrl = empRes.rows[0].image;
+      resolvedEmployeeId = empRes.rows[0].id;
+    }
+
+    // ==========================
+    // SUBADMIN
+    // ==========================
+    else if (subadminId) {
+      const subRes = await pool.query(
+        "SELECT image FROM subadmin WHERE id = $1",
+        [subadminId]
+      );
+
+      if (subRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Subadmin not found",
+        });
+      }
+
+      registeredUrl = subRes.rows[0].image;
+    }
+
+    // ==========================
+    // ADMIN
+    // ==========================
+    else if (adminId) {
+      const adminRes = await pool.query(
+        "SELECT image FROM admin WHERE id = $1",
+        [adminId]
+      );
+
+      if (adminRes.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found",
+        });
+      }
+
+      registeredUrl = adminRes.rows[0].image;
+    }
+
+    // ==========================
+    // DOWNLOAD IMAGES
+    // ==========================
+    const [registeredImg, capturedImg] = await Promise.all([
+      axios.get(registeredUrl, { responseType: "arraybuffer" }),
+      axios.get(capturedUrl, { responseType: "arraybuffer" }),
+    ]);
+
+    // ==========================
+    // AWS REKOGNITION
+    // ==========================
+    const params = {
+      SourceImage: {
+        Bytes: Buffer.from(registeredImg.data),
+      },
+      TargetImage: {
+        Bytes: Buffer.from(capturedImg.data),
+      },
+      SimilarityThreshold: 80,
+    };
+
+    const rekognitionResult = await rekognition
+      .compareFaces(params)
+      .promise();
+
+    const faceVerified =
+      rekognitionResult.FaceMatches &&
+      rekognitionResult.FaceMatches.length > 0;
+
+    // ==========================
+    // FACE NOT VERIFIED
+    // ==========================
+    if (!faceVerified) {
+      return res.json({
+        success: true,
+        faceVerified: false,
+        attendanceMarked: false,
+        message: "Face not verified",
+        capturedUrl,
+      });
+    }
+
+    // ==========================
+    // ATTENDANCE AUTO MARK
+    // ==========================
+    const actualEmployeeId =
+      resolvedEmployeeId || employeeId || null;
+
+    if (actualEmployeeId) {
+      const alreadyMarked = await pool.query(
+        `
+        SELECT id
+        FROM attendance
+        WHERE employee_id = $1
+        AND DATE(timestamp) =
+            DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
+        LIMIT 1
+        `,
+        [actualEmployeeId]
+      );
+
+      if (alreadyMarked.rowCount > 0) {
+        return res.json({
+          success: true,
+          faceVerified: true,
+          attendanceMarked: false,
+          alreadyMarked: true,
+          message: "Attendance already marked today",
+          capturedUrl,
+          employeeId: actualEmployeeId,
+        });
+      }
+
+      const attendanceRes = await pool.query(
+        `
+        INSERT INTO attendance
+        (
+          employee_id,
+          timestamp,
+          image_url,
+          status
+        )
+        VALUES
+        (
+          $1,
+          (NOW() AT TIME ZONE 'Asia/Kolkata'),
+          $2,
+          'On Duty'
+        )
+        RETURNING id,timestamp,status
+        `,
+        [actualEmployeeId, capturedUrl]
+      );
+
+      return res.json({
+        success: true,
+        faceVerified: true,
+        attendanceMarked: true,
+        message: "Face verified and attendance marked",
+        capturedUrl,
+        employeeId: actualEmployeeId,
+        timestamp: attendanceRes.rows[0].timestamp,
+        status: attendanceRes.rows[0].status,
+      });
+    }
+
+    return res.json({
+      success: true,
+      faceVerified: true,
+      attendanceMarked: false,
+      message: "Face verified",
+      capturedUrl,
+    });
+  } catch (error) {
+    console.error("Face verification error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
 // Location verification
 const OFFICE_LAT = 17.678126;
 const OFFICE_LNG = 83.199073;
