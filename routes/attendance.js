@@ -243,7 +243,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     }
 
     // ================= FIXED CAPTURED URL =================
-    const capturedUrl = file?.location || file?.url || file?.path;
+    const capturedUrl =  file.path;
 
     if (!capturedUrl) {
       return res.status(400).json({
