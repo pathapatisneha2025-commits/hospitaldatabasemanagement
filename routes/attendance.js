@@ -223,7 +223,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
       subadminId,
       adminId,
       phone,
-      action = "login", // "login" | "logout"
+      action = "login",
     } = req.body;
 
     const file = req.file;
@@ -336,7 +336,7 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const status = action === "logout" ? "Off Duty" : "On Duty";
 
     // =========================================================
-    // 🔴 LOGOUT FLOW (FULL LOGIC INSIDE HERE)
+    // 🔴 LOGOUT FLOW
     // =========================================================
     if (action === "logout") {
 
@@ -352,45 +352,48 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
         );
       }
 
-      if (!onDuty || onDuty.rows.length === 0) {
-        return res.json({
-          success: true,
-          message: "No On Duty found, logout marked anyway",
-          faceVerified: true,
-        });
+      let sessionHours = "0h 0m";
+      let insert = null;
+
+      if (onDuty && onDuty.rows.length > 0) {
+        const onDutyTime = onDuty.rows[0].timestamp;
+
+        const sessionRes = await pool.query(
+          `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
+          [onDutyTime]
+        );
+
+        const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
+        sessionHours = `${Math.floor(sessionSeconds / 3600)}h ${Math.floor(
+          (sessionSeconds % 3600) / 60
+        )}m`;
+
+        insert = await pool.query(
+          `INSERT INTO attendance
+          (employee_id, phone, timestamp, image_url, status, session_hours)
+          VALUES ($1,$2,NOW() AT TIME ZONE 'Asia/Kolkata',$3,$4,$5)
+          RETURNING id, timestamp`,
+          [
+            employeeId || null,
+            phone || null,
+            capturedUrl,
+            status,
+            sessionHours,
+          ]
+        );
       }
-
-      const onDutyTime = onDuty.rows[0].timestamp;
-
-      const sessionRes = await pool.query(
-        `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
-        [onDutyTime]
-      );
-
-      const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
-      const sessionHours = `${Math.floor(sessionSeconds / 3600)}h ${Math.floor((sessionSeconds % 3600) / 60)}m`;
-
-      const insert = await pool.query(
-        `INSERT INTO attendance
-        (employee_id, phone, timestamp, image_url, status, session_hours)
-        VALUES ($1,$2,NOW() AT TIME ZONE 'Asia/Kolkata',$3,$4,$5)
-        RETURNING id, timestamp`,
-        [
-          employeeId || null,
-          phone || null,
-          capturedUrl,
-          status,
-          sessionHours,
-        ]
-      );
 
       return res.json({
         success: true,
         faceVerified: true,
         logout: true,
         message: "Logout successful",
-        timestamp: insert.rows[0].timestamp,
-        sessionHours,
+        data: {
+          employeeId: employeeId || null,
+          phone: phone || null,
+          timestamp: insert?.rows?.[0]?.timestamp || null,
+          sessionHours,
+        },
       });
     }
 
@@ -401,7 +404,15 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     const alreadyMarked = await pool.query(
       `
       SELECT id FROM attendance
-      WHERE ${actualEmployeeId ? "employee_id" : subadminId ? "subadmin_id" : adminId ? "admin_id" : "phone"} = $1
+      WHERE ${
+        actualEmployeeId
+          ? "employee_id"
+          : subadminId
+          ? "subadmin_id"
+          : adminId
+          ? "admin_id"
+          : "phone"
+      } = $1
       AND DATE(timestamp) = DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
       LIMIT 1
       `,
