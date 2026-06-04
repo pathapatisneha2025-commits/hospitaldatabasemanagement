@@ -218,16 +218,13 @@ const markAttendance = async ({
 
 router.post("/verify-face", upload.single("image"), async (req, res) => {
   try {
-    const employeeId = req.body.employeeId
-      ? parseInt(req.body.employeeId, 10)
-      : null;
-    const subadminId = req.body.subadminId
-      ? parseInt(req.body.subadminId, 10)
-      : null;
-    const adminId = req.body.adminId
-      ? parseInt(req.body.adminId, 10)
-      : null;
-    const phone = req.body.phone || null;
+    const {
+      employeeId,
+      subadminId,
+      adminId,
+      phone,
+      action = "login", // "login" | "logout"
+    } = req.body;
 
     const file = req.file;
 
@@ -250,190 +247,195 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
     let registeredUrl = null;
     let resolvedEmployeeId = null;
 
-    // ==========================
-    // EMPLOYEE
-    // ==========================
+    // ================= EMPLOYEE =================
     if (employeeId) {
       const empRes = await pool.query(
         "SELECT id, image FROM employees WHERE id = $1",
         [employeeId]
       );
 
-      if (empRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Employee not found",
-        });
+      if (!empRes.rowCount) {
+        return res.status(404).json({ success: false, message: "Employee not found" });
       }
 
       registeredUrl = empRes.rows[0].image;
       resolvedEmployeeId = empRes.rows[0].id;
     }
 
-    // ==========================
-    // PHONE
-    // ==========================
+    // ================= PHONE =================
     else if (phone) {
       const empRes = await pool.query(
         "SELECT id, image FROM employees WHERE mobile = $1",
         [phone]
       );
 
-      if (empRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "No employee registered with this phone",
-        });
+      if (!empRes.rowCount) {
+        return res.status(404).json({ success: false, message: "Phone not found" });
       }
 
       registeredUrl = empRes.rows[0].image;
       resolvedEmployeeId = empRes.rows[0].id;
     }
 
-    // ==========================
-    // SUBADMIN
-    // ==========================
+    // ================= SUBADMIN =================
     else if (subadminId) {
       const subRes = await pool.query(
         "SELECT image FROM subadmin WHERE id = $1",
         [subadminId]
       );
 
-      if (subRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Subadmin not found",
-        });
+      if (!subRes.rowCount) {
+        return res.status(404).json({ success: false, message: "Subadmin not found" });
       }
 
       registeredUrl = subRes.rows[0].image;
     }
 
-    // ==========================
-    // ADMIN
-    // ==========================
+    // ================= ADMIN =================
     else if (adminId) {
       const adminRes = await pool.query(
         "SELECT image FROM admin WHERE id = $1",
         [adminId]
       );
 
-      if (adminRes.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Admin not found",
-        });
+      if (!adminRes.rowCount) {
+        return res.status(404).json({ success: false, message: "Admin not found" });
       }
 
       registeredUrl = adminRes.rows[0].image;
     }
 
-    // ==========================
-    // DOWNLOAD IMAGES
-    // ==========================
+    // ================= FACE COMPARE =================
     const [registeredImg, capturedImg] = await Promise.all([
       axios.get(registeredUrl, { responseType: "arraybuffer" }),
       axios.get(capturedUrl, { responseType: "arraybuffer" }),
     ]);
 
-    // ==========================
-    // AWS REKOGNITION
-    // ==========================
     const params = {
-      SourceImage: {
-        Bytes: Buffer.from(registeredImg.data),
-      },
-      TargetImage: {
-        Bytes: Buffer.from(capturedImg.data),
-      },
+      SourceImage: { Bytes: Buffer.from(registeredImg.data) },
+      TargetImage: { Bytes: Buffer.from(capturedImg.data) },
       SimilarityThreshold: 80,
     };
 
-    const rekognitionResult = await rekognition
-      .compareFaces(params)
-      .promise();
+    const result = await rekognition.compareFaces(params).promise();
 
     const faceVerified =
-      rekognitionResult.FaceMatches &&
-      rekognitionResult.FaceMatches.length > 0;
+      result.FaceMatches && result.FaceMatches.length > 0;
 
-    // ==========================
-    // FACE NOT VERIFIED
-    // ==========================
+    // ================= FACE FAILED =================
     if (!faceVerified) {
       return res.json({
         success: true,
         faceVerified: false,
-        attendanceMarked: false,
         message: "Face not verified",
         capturedUrl,
       });
     }
 
-   // ==========================
-// ATTENDANCE AUTO MARK
-// ==========================
-const actualEmployeeId =
-  resolvedEmployeeId || employeeId || null;
+    const actualEmployeeId = resolvedEmployeeId || employeeId || null;
+    const status = action === "logout" ? "Off Duty" : "On Duty";
 
-if (actualEmployeeId || subadminId || adminId || phone) {
+    // =========================================================
+    // 🔴 LOGOUT FLOW (FULL LOGIC INSIDE HERE)
+    // =========================================================
+    if (action === "logout") {
 
-  const alreadyMarked = await pool.query(
-    `
-    SELECT id
-    FROM attendance
-    WHERE ${actualEmployeeId ? "employee_id" : subadminId ? "subadmin_id" : adminId ? "admin_id" : "phone"} = $1
-    AND DATE(timestamp) =
-        DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
-    LIMIT 1
-    `,
-    [
-      actualEmployeeId || subadminId || adminId || phone
-    ]
-  );
+      let onDuty;
 
-  if (alreadyMarked.rowCount > 0) {
+      if (employeeId || phone) {
+        onDuty = await pool.query(
+          `SELECT id, timestamp FROM attendance
+           WHERE ${employeeId ? "employee_id" : "phone"} = $1
+           AND status = 'On Duty'
+           ORDER BY timestamp DESC LIMIT 1`,
+          [employeeId || phone]
+        );
+      }
+
+      if (!onDuty || onDuty.rows.length === 0) {
+        return res.json({
+          success: true,
+          message: "No On Duty found, logout marked anyway",
+          faceVerified: true,
+        });
+      }
+
+      const onDutyTime = onDuty.rows[0].timestamp;
+
+      const sessionRes = await pool.query(
+        `SELECT EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'Asia/Kolkata' - $1)) AS seconds`,
+        [onDutyTime]
+      );
+
+      const sessionSeconds = parseInt(sessionRes.rows[0].seconds, 10);
+      const sessionHours = `${Math.floor(sessionSeconds / 3600)}h ${Math.floor((sessionSeconds % 3600) / 60)}m`;
+
+      const insert = await pool.query(
+        `INSERT INTO attendance
+        (employee_id, phone, timestamp, image_url, status, session_hours)
+        VALUES ($1,$2,NOW() AT TIME ZONE 'Asia/Kolkata',$3,$4,$5)
+        RETURNING id, timestamp`,
+        [
+          employeeId || null,
+          phone || null,
+          capturedUrl,
+          status,
+          sessionHours,
+        ]
+      );
+
+      return res.json({
+        success: true,
+        faceVerified: true,
+        logout: true,
+        message: "Logout successful",
+        timestamp: insert.rows[0].timestamp,
+        sessionHours,
+      });
+    }
+
+    // =========================================================
+    // 🟢 LOGIN FLOW
+    // =========================================================
+
+    const alreadyMarked = await pool.query(
+      `
+      SELECT id FROM attendance
+      WHERE ${actualEmployeeId ? "employee_id" : subadminId ? "subadmin_id" : adminId ? "admin_id" : "phone"} = $1
+      AND DATE(timestamp) = DATE(NOW() AT TIME ZONE 'Asia/Kolkata')
+      LIMIT 1
+      `,
+      [actualEmployeeId || subadminId || adminId || phone]
+    );
+
+    if (alreadyMarked.rowCount > 0) {
+      return res.json({
+        success: true,
+        faceVerified: true,
+        attendanceMarked: false,
+        alreadyMarked: true,
+        message: "Attendance already marked today",
+        capturedUrl,
+      });
+    }
+
+    const attendanceRow = await markAttendance({
+      employeeId: actualEmployeeId,
+      subadminId,
+      adminId,
+      phone,
+      capturedUrl,
+    });
+
     return res.json({
       success: true,
       faceVerified: true,
-      attendanceMarked: false,
-      alreadyMarked: true,
-      message: "Attendance already marked today",
-      capturedUrl,
+      attendanceMarked: true,
+      message: "Login successful (attendance marked)",
+      timestamp: attendanceRow.timestamp,
+      status: attendanceRow.status,
     });
-  }
 
-  // USE YOUR FUNCTION HERE
-  const attendanceRow = await markAttendance({
-    employeeId: actualEmployeeId,
-    subadminId,
-    adminId,
-    phone,
-    capturedUrl,
-  });
-
-  return res.json({
-    success: true,
-    faceVerified: true,
-    attendanceMarked: true,
-    message: "Face verified and attendance marked",
-    capturedUrl,
-    employeeId: actualEmployeeId,
-    subadminId,
-    adminId,
-    phone,
-    timestamp: attendanceRow.timestamp,
-    status: attendanceRow.status,
-  });
-}
-
-    return res.json({
-      success: true,
-      faceVerified: true,
-      attendanceMarked: false,
-      message: "Face verified",
-      capturedUrl,
-    });
   } catch (error) {
     console.error("Face verification error:", error);
     return res.status(500).json({
@@ -785,7 +787,7 @@ router.get("/login/all", async (req, res) => {
 
 
 
-// ✅ Delete Attendance + Breaks by IDs
+//  Delete Attendance + Breaks by IDs
 router.delete("/delete", async (req, res) => {
   try {
     const { loginId, logoutId, breakIds } = req.body; // breakIds = array of break_log IDs
@@ -838,7 +840,7 @@ router.delete("/delete", async (req, res) => {
   }
 });
 
-// ✅ Update Attendance + specific Break status by ID
+//  Update Attendance + specific Break status by ID
 router.put("/update", async (req, res) => {
   try {
     const { loginId, logoutId, checkIn, checkOut, breakUpdates } = req.body;
@@ -891,7 +893,7 @@ router.put("/update", async (req, res) => {
 
 
 
-// ✅ Logout Route with proper daily, weekly, monthly hours
+//  Logout Route with proper daily, weekly, monthly hours
 router.post("/logout", async (req, res) => {
   try {
     const {
