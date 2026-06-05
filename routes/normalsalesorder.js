@@ -196,40 +196,28 @@ router.delete("/sales-order/:order_id", async (req, res) => {
 // =======================
 // 6. CONVERT TO INVOICE
 // =======================
-router.post("/convert-invoice/:order_id", async (req, res) => {
+router.post("/convert-invoice", async (req, res) => {
   try {
-    const orderRes = await pool.query(
-      "SELECT * FROM salesorders WHERE order_id=$1",
-      [req.params.order_id]
-    );
+    const order = req.body; // 👈 FULL ORDER COMES FROM FRONTEND
 
-    const order = orderRes.rows[0];
-
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
+    if (!order || !order.order_items || order.order_items.length === 0) {
+      return res.status(400).json({ error: "Invalid order data" });
     }
 
-    // 🧠 Get sequence number
-    const result = await pool.query(
-      `SELECT COUNT(*) FROM salesinvoices`
-    );
-
+    // 🧠 Generate invoice sequence
+    const result = await pool.query(`SELECT COUNT(*) FROM salesinvoices`);
     const seq = parseInt(result.rows[0].count) + 1;
 
-    // 🧠 Build ERP invoice ID
     const store = order.store_id || "001";
-    const year = new Date().getFullYear().toString().slice(2); // 26
-    const invoice_id = `${store}/${year}/S-${seq}`;
+    const year = new Date().getFullYear().toString().slice(2);
 
-    const invoiceItems = order.order_items;
+    const invoice_id = `${store}/${year}/S-${seq}`;
 
     const insert = await pool.query(
       `INSERT INTO salesinvoices (
         invoice_id,
-        order_id,
         created_at,
         createduser,
-        order_no,
         order_type,
         payment_status,
         total_price,
@@ -242,34 +230,24 @@ router.post("/convert-invoice/:order_id", async (req, res) => {
         invoice_items,
         status
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       RETURNING *`,
       [
         invoice_id,
-        order.order_id,
         new Date(),
-        order.createduser,
-        order.order_no,
-        order.order_type,
+        order.createduser || "",
+        order.order_type || "",
         "PENDING",
-        order.total_price,
-        order.total_discount,
+        order.total_price || 0,
+        order.total_discount || 0,
         order.shipping_charge || 0,
-        order.order_for,
-        order.delivered_by,
-        JSON.stringify(order.patient_address),
-        JSON.stringify(order.pharmacy),
-        JSON.stringify(invoiceItems),
+        order.order_for || "",
+        order.delivered_by || "",
+        JSON.stringify(order.patient_address || {}),
+        JSON.stringify(order.pharmacy || {}),
+        JSON.stringify(order.order_items || []),
         "GENERATED"
       ]
-    );
-
-    // update order
-    await pool.query(
-      `UPDATE salesorders
-       SET invoice_id=$1, status='CONVERTED'
-       WHERE order_id=$2`,
-      [invoice_id, order.order_id]
     );
 
     res.json({
@@ -280,7 +258,7 @@ router.post("/convert-invoice/:order_id", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Conversion failed" });
+    res.status(500).json({ error: "Invoice conversion failed" });
   }
 });
 router.post("/invoice", async (req, res) => {
