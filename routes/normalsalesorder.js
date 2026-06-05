@@ -205,7 +205,7 @@ router.post("/convert-invoice", async (req, res) => {
     }
 
     // 🧠 Generate invoice sequence
-    const result = await pool.query(`SELECT COUNT(*) FROM salesinvoices`);
+    const result = await pool.query(`SELECT COUNT(*) FROM slaesinvoices`);
     const seq = parseInt(result.rows[0].count) + 1;
 
     const store = order.store_id || "001";
@@ -214,7 +214,7 @@ router.post("/convert-invoice", async (req, res) => {
     const invoice_id = `${store}/${year}/S-${seq}`;
 
     const insert = await pool.query(
-      `INSERT INTO salesinvoices (
+      `INSERT INTO slaesinvoices (
         invoice_id,
         created_at,
         createduser,
@@ -266,7 +266,7 @@ router.post("/invoice", async (req, res) => {
     const invoice = req.body;
 
     const result = await pool.query(
-      `INSERT INTO salesinvoices (
+      `INSERT INTO slaesinvoices (
         invoice_id,
         order_id,
         created_at,
@@ -320,7 +320,7 @@ router.post("/invoice", async (req, res) => {
 router.get("/invoice/:invoice_id", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM salesinvoices WHERE invoice_id=$1",
+      "SELECT * FROM slaesinvoices WHERE invoice_id=$1",
       [req.params.invoice_id]
     );
 
