@@ -205,11 +205,25 @@ router.post("/convert-invoice/:order_id", async (req, res) => {
 
     const order = orderRes.rows[0];
 
-    const invoice_id = "INV-" + Date.now();
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
 
-    const invoiceItems = order.order_items; // 🟢 JSONB directly reused
-
+    // 🧠 Get sequence number
     const result = await pool.query(
+      `SELECT COUNT(*) FROM salesinvoices`
+    );
+
+    const seq = parseInt(result.rows[0].count) + 1;
+
+    // 🧠 Build ERP invoice ID
+    const store = order.store_id || "001";
+    const year = new Date().getFullYear().toString().slice(2); // 26
+    const invoice_id = `${store}/${year}/S-${seq}`;
+
+    const invoiceItems = order.order_items;
+
+    const insert = await pool.query(
       `INSERT INTO salesinvoices (
         invoice_id,
         order_id,
@@ -245,7 +259,7 @@ router.post("/convert-invoice/:order_id", async (req, res) => {
         order.delivered_by,
         JSON.stringify(order.patient_address),
         JSON.stringify(order.pharmacy),
-        JSON.stringify(invoiceItems), //  IMPORTANT
+        JSON.stringify(invoiceItems),
         "GENERATED"
       ]
     );
@@ -260,7 +274,8 @@ router.post("/convert-invoice/:order_id", async (req, res) => {
 
     res.json({
       success: true,
-      invoice_id
+      invoice_id,
+      data: insert.rows[0]
     });
 
   } catch (err) {
