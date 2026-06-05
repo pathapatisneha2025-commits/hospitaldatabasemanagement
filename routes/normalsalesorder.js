@@ -11,6 +11,22 @@ router.post("/sales-order", async (req, res) => {
   try {
     const order = req.body;
 
+    // ✅ SAFE JSON NORMALIZATION
+    const pharmacy =
+      typeof order.pharmacy === "string"
+        ? JSON.parse(order.pharmacy)
+        : order.pharmacy;
+
+    const patient_address =
+      typeof order.patient_address === "string"
+        ? JSON.parse(order.patient_address)
+        : order.patient_address;
+
+    const order_items =
+      typeof order.order_items === "string"
+        ? JSON.parse(order.order_items)
+        : order.order_items;
+
     const result = await pool.query(
       `INSERT INTO salesorders (
         order_id,
@@ -48,10 +64,10 @@ router.post("/sales-order", async (req, res) => {
         order.patient_contact_no,
         order.store_id,
         order.user_email,
-        order.pharmacy,
-        order.patient_address,
+        JSON.stringify(pharmacy),
+        JSON.stringify(patient_address),
         "DRAFT",
-        order.order_items,
+        JSON.stringify(order_items),
       ]
     );
 
@@ -61,7 +77,7 @@ router.post("/sales-order", async (req, res) => {
       data: result.rows[0],
     });
   } catch (err) {
-    console.error(err);
+    console.error("CREATE SALES ORDER ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
