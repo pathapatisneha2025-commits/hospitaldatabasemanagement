@@ -99,49 +99,54 @@ router.get("/attendancesummary/:employee_id", async (req, res) => {
     const totalDays = workingDaysResult.rows[0]?.working_days || 0;
 
     // 2️⃣ Attendance summary
-    const attendanceResult = await pool.query(
-      `
-      SELECT 
-        COUNT(*) FILTER (WHERE a.status = 'On Duty') AS total_present,
-        COUNT(*) FILTER (WHERE a.status = 'Absent') AS total_absent,
+   const attendanceResult = await pool.query(
+  `
+  WITH daily_logs AS (
+    SELECT 
+      DATE(a.timestamp) AS work_date,
+      
+      MIN(CASE WHEN a.status = 'On Duty' THEN a.timestamp END) AS check_in,
+      MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END) AS check_out
 
-        -- Late arrival (only scheduled days)
-        COUNT(*) FILTER (
-          WHERE a.status = 'On Duty'
-          AND e.schedule_in IS NOT NULL
-          AND a.check_in IS NOT NULL
-          AND a.check_in::time > e.schedule_in
-        ) AS total_late,
+    FROM attendance a
+    LEFT JOIN employees e ON e.id = $1
+    WHERE 
+      (
+        a.employee_id = $1
+        OR a.phone = e.mobile
+      )
+      AND EXTRACT(MONTH FROM a.timestamp) = $2
+      AND EXTRACT(YEAR FROM a.timestamp) = $3
+    GROUP BY DATE(a.timestamp)
+  )
 
-        -- Early departure (only scheduled days)
-        COUNT(*) FILTER (
-          WHERE a.status = 'On Duty'
-          AND e.schedule_out IS NOT NULL
-          AND a.check_out IS NOT NULL
-          AND a.check_out::time < e.schedule_out
-        ) AS total_early_departures,
+  SELECT 
+    COUNT(*) AS total_present,
 
-        -- Missing punches (ONLY On Duty days)
-        COUNT(*) FILTER (
-          WHERE a.status = 'On Duty'
-          AND (
-            a.check_in IS NULL
-            OR a.check_out IS NULL
-          )
-        ) AS total_missing_punches
+    -- late arrival
+    COUNT(*) FILTER (
+      WHERE check_in IS NOT NULL
+      AND e.schedule_in IS NOT NULL
+      AND check_in::time > e.schedule_in
+    ) AS total_late,
 
-      FROM attendance a
-      LEFT JOIN employees e ON e.id = $1
-      WHERE 
-        (
-          a.employee_id = $1
-          OR a.phone = e.mobile
-        )
-        AND EXTRACT(MONTH FROM a.timestamp) = $2
-        AND EXTRACT(YEAR FROM a.timestamp) = $3;
-      `,
-      [req.params.employee_id, currentMonth, currentYear]
-    );
+    -- early departure
+    COUNT(*) FILTER (
+      WHERE check_out IS NOT NULL
+      AND e.schedule_out IS NOT NULL
+      AND check_out::time < e.schedule_out
+    ) AS total_early_departures,
+
+    -- missing punch
+    COUNT(*) FILTER (
+      WHERE check_in IS NULL OR check_out IS NULL
+    ) AS total_missing_punches
+
+  FROM daily_logs d
+  LEFT JOIN employees e ON e.id = $1;
+  `,
+  [req.params.employee_id, currentMonth, currentYear]
+);
 
     const summary = attendanceResult.rows[0] || {};
 
