@@ -934,6 +934,7 @@ router.get('/location/:orderId', async (req, res) => {
 
         dl.delivery_boy_id,
         e.full_name AS delivery_boy_name,
+        e.mobile AS delivery_boy_mobile,   --  ADDED MOBILE
 
         o.otp
 
@@ -973,6 +974,7 @@ router.get('/location/:orderId', async (req, res) => {
       deliveryBoy: {
         id: row.delivery_boy_id,
         name: row.delivery_boy_name,
+        mobile: row.delivery_boy_mobile,   // ✅ ADDED HERE
       },
       otp: row.otp,
     });
@@ -985,7 +987,6 @@ router.get('/location/:orderId', async (req, res) => {
     });
   }
 });
-
 
 
 
