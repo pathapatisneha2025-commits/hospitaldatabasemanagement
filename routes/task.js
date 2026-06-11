@@ -385,7 +385,7 @@ router.post("/reassign", async (req, res) => {
       UPDATE tasks
       SET
         assignto = $1::text[],
-        status = 'pending',
+        status = 'reassigned',
         updated_at = NOW(),
         reassigned_at = NOW(),
         reject_reason = NULL
