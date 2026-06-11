@@ -302,5 +302,44 @@ router.delete("/delete/:id", async (req, res) => {
     });
   }
 });
+router.post("/update-status", async (req, res) => {
+  try {
+    const { id, status, reject_reason = "", completed_time = null } = req.body;
 
+    const query = `
+      UPDATE admintasks
+      SET status = $1,
+          reject_reason = $2,
+          completed_time = $3
+      WHERE id = $4
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      status,
+      reject_reason,
+      completed_time,
+      id,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin task not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Admin task updated successfully",
+      data: result.rows[0],
+    });
+  } catch (err) {
+    console.error("Admin task update error:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
 module.exports = router;
