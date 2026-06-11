@@ -383,7 +383,7 @@ router.post("/reassign", async (req, res) => {
       SET 
         assignedto = $1,
         employeeids = $2,
-        status = 'Pending'
+        status = 'reassigned'
       WHERE id = $3
       RETURNING *;
     `;
