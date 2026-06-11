@@ -925,18 +925,56 @@ router.get('/location/:orderId', async (req, res) => {
   const { orderId } = req.params;
 
   try {
-    const result = await pool.query(`
-      SELECT latitude, longitude, updated_at
-      FROM deliverylocations_orders
-      WHERE order_id = $1
-      ORDER BY updated_at DESC
+    const result = await pool.query(
+      `
+      SELECT
+        dl.latitude,
+        dl.longitude,
+        dl.updated_at,
+        o.otp,
+        o.delivery_boy_id,
+        e.full_name AS delivery_boy_name
+      FROM deliverylocations_orders dl
+      LEFT JOIN orders o
+        ON dl.order_id = o.id
+      LEFT JOIN employee e
+        ON o.delivery_boy_id = e.id
+      WHERE dl.order_id = $1
+      ORDER BY dl.updated_at DESC
       LIMIT 1
-    `, [orderId]);
+      `,
+      [orderId]
+    );
 
-    res.json({ success: true, location: result.rows[0] || null });
+    if (result.rows.length === 0) {
+      return res.json({
+        success: false,
+        message: "No delivery boy assigned",
+        location: null,
+      });
+    }
+
+    const row = result.rows[0];
+
+    res.json({
+      success: true,
+      location: {
+        latitude: row.latitude,
+        longitude: row.longitude,
+        updated_at: row.updated_at,
+      },
+      deliveryBoy: {
+        id: row.delivery_boy_id,
+        name: row.delivery_boy_name,
+      },
+      otp: row.otp,
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: 'Database error' });
+    res.status(500).json({
+      success: false,
+      error: "Database error",
+    });
   }
 });
 
