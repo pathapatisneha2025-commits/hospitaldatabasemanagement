@@ -927,32 +927,64 @@ router.get('/location/:orderId', async (req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT 
+      SELECT
         dl.latitude,
         dl.longitude,
         dl.updated_at,
-        e.full_name AS delivery_boy_name
+
+        dl.delivery_boy_id,
+        e.full_name AS delivery_boy_name,
+
+        o.otp
+
       FROM deliverylocations_orders dl
+
       LEFT JOIN employees e
-        ON e.id = dl.delivery_boy_id
+        ON dl.delivery_boy_id = e.id
+
+      LEFT JOIN orders o
+        ON dl.order_id = o.id
+
       WHERE dl.order_id = $1
+
       ORDER BY dl.updated_at DESC
       LIMIT 1
       `,
       [orderId]
     );
 
+    if (result.rows.length === 0) {
+      return res.json({
+        success: false,
+        message: "No delivery data found",
+        location: null,
+      });
+    }
+
+    const row = result.rows[0];
+
     res.json({
       success: true,
-      location: result.rows[0] || null
+      location: {
+        latitude: row.latitude,
+        longitude: row.longitude,
+        updated_at: row.updated_at,
+      },
+      deliveryBoy: {
+        id: row.delivery_boy_id,
+        name: row.delivery_boy_name,
+      },
+      otp: row.otp,
     });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: 'Database error' });
+    res.status(500).json({
+      success: false,
+      error: "Database error",
+    });
   }
 });
-
 
 
 
