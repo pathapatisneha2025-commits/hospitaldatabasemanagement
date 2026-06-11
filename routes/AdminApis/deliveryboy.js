@@ -932,13 +932,13 @@ router.get('/location/:orderId', async (req, res) => {
         dl.longitude,
         dl.updated_at,
         o.otp,
-        o.delivery_boy_id,
+        dl.delivery_boy_id,
         e.full_name AS delivery_boy_name
       FROM deliverylocations_orders dl
       LEFT JOIN orders o
         ON dl.order_id = o.id
       LEFT JOIN employees e
-        ON o.delivery_boy_id = e.id
+        ON dl.delivery_boy_id = e.id
       WHERE dl.order_id = $1
       ORDER BY dl.updated_at DESC
       LIMIT 1
