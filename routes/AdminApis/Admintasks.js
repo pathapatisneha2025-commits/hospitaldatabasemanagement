@@ -342,4 +342,73 @@ router.post("/update-status", async (req, res) => {
     });
   }
 });
+router.post("/reassign", async (req, res) => {
+  try {
+    const { task_id, assignedTo } = req.body;
+
+    if (!task_id || !assignedTo) {
+      return res.status(400).json({
+        success: false,
+        message: "task_id and assignedTo are required",
+      });
+    }
+
+    // 1️⃣ Convert emails → employee IDs (same logic as /add)
+    let employeeIds = [];
+
+    if (Array.isArray(assignedTo) && assignedTo.length > 0) {
+      const placeholders = assignedTo.map((_, i) => `$${i + 1}`).join(",");
+
+      const employeeQuery = `
+        SELECT id
+        FROM employees
+        WHERE email IN (${placeholders})
+      `;
+
+      const employeeResult = await pool.query(employeeQuery, assignedTo);
+
+      employeeIds = employeeResult.rows.map((row) => row.id);
+
+      if (employeeIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid employees found for assigned emails",
+        });
+      }
+    }
+
+    // 2️⃣ Update Admin Task
+    const query = `
+      UPDATE admintasks
+      SET 
+        assignedto = $1,
+        employeeids = $2,
+        status = 'Pending'
+      WHERE id = $3
+      RETURNING *;
+    `;
+
+    const values = [
+      assignedTo,
+      employeeIds.length ? employeeIds : null,
+      task_id,
+    ];
+
+    const result = await pool.query(query, values);
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin task reassigned successfully",
+      data: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Reassign admin task error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
 module.exports = router;
