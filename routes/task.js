@@ -382,15 +382,15 @@ router.post("/reassign", async (req, res) => {
 
     const updatedTask = await pool.query(
       `
-     UPDATE tasks
-SET
-  assignto = $1::text[],
+      UPDATE tasks
+      SET
+        assignto = $1::text[],
   status = 'reassigned',
-  updated_at = NOW(),
-  reassigned_at = NOW(),
-  reject_reason = NULL
-WHERE id = $2
-RETURNING *
+        updated_at = NOW(),
+        reassigned_at = NOW(),
+        reject_reason = NULL
+      WHERE id = $2
+      RETURNING *
       `,
       [validEmails, task_id]
     );
