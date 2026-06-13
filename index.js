@@ -180,7 +180,7 @@ app.use("/sales_orders",Normalsalesorder);
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
     startReminderJob();
-    autoLogoutJob();
+    AutologoutJob();
 
 
 });
