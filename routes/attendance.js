@@ -1909,26 +1909,20 @@ router.get("/attendance-correction/pending", async (req, res) => {
   }
 });
 router.post("/attendance-correction/approve/:id", async (req, res) => {
-  const client = await pool.connect();
+  const client = await pool.query();
 
   try {
     await client.query("BEGIN");
 
     const correctionId = req.params.id;
 
-    // Get correction request
     const correctionResult = await client.query(
-      `
-      SELECT *
-      FROM attendance_corrections
-      WHERE id = $1
-      `,
+      `SELECT * FROM attendance_corrections WHERE id = $1`,
       [correctionId]
     );
 
     if (correctionResult.rows.length === 0) {
       await client.query("ROLLBACK");
-
       return res.status(404).json({
         success: false,
         message: "Correction request not found",
@@ -1939,7 +1933,6 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
     if (correction.status === "APPROVED") {
       await client.query("ROLLBACK");
-
       return res.status(400).json({
         success: false,
         message: "Request already approved",
@@ -1950,17 +1943,15 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
       employee_id,
       corrected_time,
       type,
-      attendance_date,
+      created_at,
     } = correction;
+
+    // ✅ FIX: derive date
+    const attendance_date = created_at.toISOString().split("T")[0];
 
     // Find attendance row
     const attendanceResult = await client.query(
-      `
-      SELECT *
-      FROM attendance
-      WHERE employee_id = $1
-      AND date = $2
-      `,
+      `SELECT * FROM attendance WHERE employee_id = $1 AND date = $2`,
       [employee_id, attendance_date]
     );
 
@@ -1969,94 +1960,47 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
       if (type === "MISSED_IN") {
         await client.query(
-          `
-          UPDATE attendance
-          SET
-            punch_in = $1,
-            updated_at = NOW()
-          WHERE id = $2
-          `,
+          `UPDATE attendance
+           SET punch_in = $1,
+               updated_at = NOW()
+           WHERE id = $2`,
           [corrected_time, attendance.id]
         );
       }
 
       if (type === "MISSED_OUT") {
         await client.query(
-          `
-          UPDATE attendance
-          SET
-            punch_out = $1,
-            updated_at = NOW()
-          WHERE id = $2
-          `,
+          `UPDATE attendance
+           SET punch_out = $1,
+               updated_at = NOW()
+           WHERE id = $2`,
           [corrected_time, attendance.id]
         );
       }
     } else {
-      // Create attendance row if missing
-
       if (type === "MISSED_IN") {
         await client.query(
-          `
-          INSERT INTO attendance
-          (
-            employee_id,
-            date,
-            punch_in,
-            created_at
-          )
-          VALUES
-          (
-            $1,
-            $2,
-            $3,
-            NOW()
-          )
-          `,
-          [
-            employee_id,
-            attendance_date,
-            corrected_time,
-          ]
+          `INSERT INTO attendance (employee_id, date, punch_in, created_at)
+           VALUES ($1, $2, $3, NOW())`,
+          [employee_id, attendance_date, corrected_time]
         );
       }
 
       if (type === "MISSED_OUT") {
         await client.query(
-          `
-          INSERT INTO attendance
-          (
-            employee_id,
-            date,
-            punch_out,
-            created_at
-          )
-          VALUES
-          (
-            $1,
-            $2,
-            $3,
-            NOW()
-          )
-          `,
-          [
-            employee_id,
-            attendance_date,
-            corrected_time,
-          ]
+          `INSERT INTO attendance (employee_id, date, punch_out, created_at)
+           VALUES ($1, $2, $3, NOW())`,
+          [employee_id, attendance_date, corrected_time]
         );
       }
     }
 
-    // Approve correction request
+    // Approve request
     await client.query(
-      `
-      UPDATE attendance_corrections
-      SET
-        status = 'APPROVED',
-        approved_at = NOW()
-      WHERE id = $1
-      `,
+      `UPDATE attendance_corrections
+       SET status = 'APPROVED',
+           approved_at = NOW()
+       WHERE id = $1`,
       [correctionId]
     );
 
@@ -2064,9 +2008,9 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
     res.json({
       success: true,
-      message:
-        "Request approved and attendance updated successfully",
+      message: "Attendance updated successfully",
     });
+
   } catch (err) {
     await client.query("ROLLBACK");
 
