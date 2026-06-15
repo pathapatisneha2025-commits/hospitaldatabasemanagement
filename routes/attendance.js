@@ -1912,7 +1912,6 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
   try {
     const correctionId = req.params.id;
 
-    // 1. Get correction
     const correctionResult = await pool.query(
       `SELECT * FROM attendance_corrections WHERE id = $1`,
       [correctionId]
@@ -1943,9 +1942,11 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
     const attendance_date = created_at.toISOString().split("T")[0];
 
-    // 2. Check attendance
+    // ✅ FIXED: use timestamp column
     const attendanceResult = await pool.query(
-      `SELECT * FROM attendance WHERE employee_id = $1 AND date = $2`,
+      `SELECT * FROM attendance 
+       WHERE employee_id = $1 
+       AND timestamp::date = $2`,
       [employee_id, attendance_date]
     );
 
@@ -1975,22 +1976,21 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
     } else {
       if (type === "MISSED_IN") {
         await pool.query(
-          `INSERT INTO attendance (employee_id, date, punch_in, created_at)
-           VALUES ($1, $2, $3, NOW())`,
-          [employee_id, attendance_date, corrected_time]
+          `INSERT INTO attendance (employee_id, timestamp, punch_in)
+           VALUES ($1, NOW(), $2)`,
+          [employee_id, corrected_time]
         );
       }
 
       if (type === "MISSED_OUT") {
         await pool.query(
-          `INSERT INTO attendance (employee_id, date, punch_out, created_at)
-           VALUES ($1, $2, $3, NOW())`,
-          [employee_id, attendance_date, corrected_time]
+          `INSERT INTO attendance (employee_id, timestamp, punch_out)
+           VALUES ($1, NOW(), $2)`,
+          [employee_id, corrected_time]
         );
       }
     }
 
-    // 3. Approve request
     await pool.query(
       `UPDATE attendance_corrections
        SET status = 'APPROVED',
