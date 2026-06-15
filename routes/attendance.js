@@ -2115,7 +2115,7 @@ router.post("/manual-edit", async (req, res) => {
 });
 router.get("/overtime/pending", async (req, res) => {
   try {
-    const result = await db.query(`
+    const result = await pool.query(`
       SELECT 
         employee_id,
         DATE(timestamp) AS date,
