@@ -2113,17 +2113,25 @@ router.post("/manual-edit", async (req, res) => {
     });
   }
 });
-router.get("/overtime/pending", async (req, res) => {
+router.get("/overtime/monthly", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        a.employee_id,
-        e.full_name,
-        e.department,
+        employee_id,
+        full_name,
+        department,
+        TO_CHAR(date, 'YYYY-MM') AS month,
+        SUM(overtime_hours) AS total_overtime_hours
+      FROM (
 
-        TO_CHAR(a.timestamp, 'YYYY-MM') AS month,
+        SELECT 
+          a.employee_id,
+          e.full_name,
+          e.department,
+          DATE(a.timestamp) AS date,
 
-        SUM(
+          MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END) AS off_duty_time,
+
           CASE 
             WHEN 
               MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
@@ -2134,18 +2142,25 @@ router.get("/overtime/pending", async (req, res) => {
                 - (DATE(a.timestamp) + e.schedule_out::time)
               )) / 3600
             ELSE 0
-          END
-        ) AS total_overtime_hours
+          END AS overtime_hours
 
-      FROM attendance a
-      LEFT JOIN employees e 
-        ON e.id = a.employee_id
+        FROM attendance a
+        LEFT JOIN employees e ON e.id = a.employee_id
+
+        GROUP BY 
+          a.employee_id,
+          e.full_name,
+          e.department,
+          e.schedule_out,
+          DATE(a.timestamp)
+
+      ) daily_ot
 
       GROUP BY 
-        a.employee_id,
-        e.full_name,
-        e.department,
-        TO_CHAR(a.timestamp, 'YYYY-MM')
+        employee_id,
+        full_name,
+        department,
+        TO_CHAR(date, 'YYYY-MM')
 
       ORDER BY month DESC;
     `);
@@ -2156,7 +2171,6 @@ router.get("/overtime/pending", async (req, res) => {
     res.status(500).json({ message: "Error fetching monthly overtime" });
   }
 });
-
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
