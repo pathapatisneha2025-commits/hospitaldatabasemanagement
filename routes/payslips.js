@@ -743,6 +743,24 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const expectedHours = 270;
     const proportionalIncentive = monthlyHours > expectedHours ? (baseSalary / expectedHours) * monthlyHours : 0;
 
+ const otRes = await pool.query(
+      `
+      SELECT overtime_hours, overtime_amount
+      FROM overtime_approvals
+      WHERE employee_id = $1
+        AND month = $2
+        AND status = 'APPROVED'
+      `,
+      [employeeId, month]
+    );
+
+    let overtimeHours = 0;
+    let overtimeAmount = 0;
+
+    if (otRes.rows.length > 0) {
+      overtimeHours = Number(otRes.rows[0].overtime_hours) || 0;
+      overtimeAmount = Number(otRes.rows[0].overtime_amount) || 0;
+    }
     // 3️⃣ Fetch deduction & unauthorized penalty from salary_deductions table
     const deductionResult = await pool.query(
       `SELECT deduction_per_day, unauthorized_penalty
@@ -886,6 +904,8 @@ const breakPenalty = lateBreakCount * perBreakPenalty;
        .text(`Role: ${employee.role}`)
        .text(`Base Salary: ${baseSalary.toFixed(2)}`)
        .text(`Deductions (Leaves): ${deductions.toFixed(2)}`)
+         .text(`Overtime Hours: ${overtimeHours}`)
+      .text(`Overtime Amount: ${overtimeAmount}`)
        .text(`Proportional Incentive: ${proportionalIncentive.toFixed(2)}`)
        .text(`Unauthorized Leaves: ${unauthorizedLeaves}`)
        .text(`Unauthorized Penalty: ${unauthorizedPenaltyTotal}`)
