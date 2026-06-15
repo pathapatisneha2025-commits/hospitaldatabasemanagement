@@ -2130,13 +2130,12 @@ router.get("/overtime/pending", async (req, res) => {
         CASE 
           WHEN 
             MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
-            > CONCAT(DATE(a.timestamp), ' ', e.schedule_out)
+            > (DATE(a.timestamp) + e.schedule_out::time)
           THEN 
-            TIMESTAMPDIFF(
-              MINUTE,
-              CONCAT(DATE(a.timestamp), ' ', e.schedule_out),
+            EXTRACT(EPOCH FROM (
               MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
-            ) / 60
+              - (DATE(a.timestamp) + e.schedule_out::time)
+            )) / 3600
           ELSE 0
         END AS overtime_hours
 
@@ -2152,7 +2151,15 @@ router.get("/overtime/pending", async (req, res) => {
         e.schedule_out,
         DATE(a.timestamp)
 
-      HAVING overtime_hours > 0
+      HAVING 
+        CASE 
+          WHEN 
+            MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
+            > (DATE(a.timestamp) + e.schedule_out::time)
+          THEN 1
+          ELSE 0
+        END = 1
+
       ORDER BY date DESC
     `);
 
