@@ -2121,26 +2121,23 @@ router.get("/overtime/pending", async (req, res) => {
         e.full_name,
         e.department,
 
-        DATE(a.timestamp) AS date,
+        TO_CHAR(a.timestamp, 'YYYY-MM') AS month,
 
-        MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END) AS off_duty_time,
-
-        e.schedule_out AS shift_end_time,
-
-        CASE 
-          WHEN 
-            MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
-            > (DATE(a.timestamp) + e.schedule_out::time)
-          THEN 
-            EXTRACT(EPOCH FROM (
+        SUM(
+          CASE 
+            WHEN 
               MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
-              - (DATE(a.timestamp) + e.schedule_out::time)
-            )) / 3600
-          ELSE 0
-        END AS overtime_hours
+              > (DATE(a.timestamp) + e.schedule_out::time)
+            THEN 
+              EXTRACT(EPOCH FROM (
+                MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
+                - (DATE(a.timestamp) + e.schedule_out::time)
+              )) / 3600
+            ELSE 0
+          END
+        ) AS total_overtime_hours
 
       FROM attendance a
-
       LEFT JOIN employees e 
         ON e.id = a.employee_id
 
@@ -2148,25 +2145,15 @@ router.get("/overtime/pending", async (req, res) => {
         a.employee_id,
         e.full_name,
         e.department,
-        e.schedule_out,
-        DATE(a.timestamp)
+        TO_CHAR(a.timestamp, 'YYYY-MM')
 
-      HAVING 
-        CASE 
-          WHEN 
-            MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
-            > (DATE(a.timestamp) + e.schedule_out::time)
-          THEN 1
-          ELSE 0
-        END = 1
-
-      ORDER BY date DESC
+      ORDER BY month DESC;
     `);
 
     res.json(result.rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Error computing overtime" });
+    res.status(500).json({ message: "Error fetching monthly overtime" });
   }
 });
 
