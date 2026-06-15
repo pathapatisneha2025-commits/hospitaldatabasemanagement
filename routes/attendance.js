@@ -2117,12 +2117,18 @@ router.get("/overtime/monthly", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        a.employee_id,
-        e.full_name,
-        e.department,
-        TO_CHAR(a.timestamp, 'YYYY-MM') AS month,
+        t.employee_id,
+        t.full_name,
+        t.department,
+        t.month,
+        SUM(t.overtime_hours) AS total_overtime_hours
+      FROM (
+        SELECT 
+          a.employee_id,
+          e.full_name,
+          e.department,
+          TO_CHAR(a.timestamp, 'YYYY-MM') AS month,
 
-        SUM(
           CASE 
             WHEN 
               MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
@@ -2133,40 +2139,36 @@ router.get("/overtime/monthly", async (req, res) => {
                 - (DATE(a.timestamp) + e.schedule_out::time)
               )) / 3600
             ELSE 0
-          END
-        ) AS total_overtime_hours
+          END AS overtime_hours
 
-      FROM attendance a
-      LEFT JOIN employees e 
-        ON e.id = a.employee_id
+        FROM attendance a
+        LEFT JOIN employees e 
+          ON e.id = a.employee_id
+
+        GROUP BY 
+          a.employee_id,
+          e.full_name,
+          e.department,
+          TO_CHAR(a.timestamp, 'YYYY-MM'),
+          DATE(a.timestamp),
+          e.schedule_out
+      ) t
 
       GROUP BY 
-        a.employee_id,
-        e.full_name,
-        e.department,
-        TO_CHAR(a.timestamp, 'YYYY-MM')
+        t.employee_id,
+        t.full_name,
+        t.department,
+        t.month
 
-      HAVING 
-        SUM(
-          CASE 
-            WHEN 
-              MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
-              > (DATE(a.timestamp) + e.schedule_out::time)
-            THEN 1
-            ELSE 0
-          END
-        ) > 0
-
-      ORDER BY month DESC
+      HAVING SUM(t.overtime_hours) > 0
+      ORDER BY t.month DESC
     `);
 
-    // convert numeric safely
     const cleaned = result.rows
       .map(r => ({
         ...r,
         total_overtime_hours: parseFloat(r.total_overtime_hours || 0),
-      }))
-      .filter(r => r.total_overtime_hours > 0);
+      }));
 
     res.json(cleaned);
   } catch (err) {
