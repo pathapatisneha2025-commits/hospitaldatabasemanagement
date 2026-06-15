@@ -2014,8 +2014,8 @@ router.post("/manual-edit", async (req, res) => {
     const {
       employee_id,
       date,
-      punch_in,
-      punch_out,
+      time,   // use single time instead of punch_in/out
+      status,
       reason,
       admin_id,
     } = req.body;
@@ -2027,7 +2027,6 @@ router.post("/manual-edit", async (req, res) => {
       });
     }
 
-    // 1. CHECK EXISTING RECORD (FIXED FOR TIMESTAMP)
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
@@ -2035,20 +2034,23 @@ router.post("/manual-edit", async (req, res) => {
       [employee_id, date]
     );
 
+    const correctedTimestamp = time
+      ? new Date(`${date}T${time}`)
+      : new Date();
+
     if (existing.rows.length > 0) {
-      // 2. UPDATE EXISTING RECORD
       await pool.query(
         `UPDATE attendance
-         SET punch_in = $1,
-             punch_out = $2,
+         SET timestamp = $1,
+             status = $2,
              reason = $3,
              updated_by = $4,
              updated_at = NOW()
          WHERE employee_id = $5 
          AND timestamp::date = $6`,
         [
-          punch_in,
-          punch_out,
+          correctedTimestamp,
+          status || "On Duty",
           reason,
           admin_id || null,
           employee_id,
@@ -2059,25 +2061,17 @@ router.post("/manual-edit", async (req, res) => {
       return res.json({
         success: true,
         message: "Attendance updated successfully",
-        action: "updated",
       });
     }
 
-    // 3. INSERT NEW RECORD (timestamp-based)
-    const punchTime =
-      punch_in
-        ? new Date(`${date}T${punch_in}`)
-        : new Date(`${date}T09:00:00`);
-
     await pool.query(
       `INSERT INTO attendance 
-        (employee_id, timestamp, punch_in, punch_out, reason, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+        (employee_id, timestamp, status, reason, created_by)
+       VALUES ($1, $2, $3, $4, $5)`,
       [
         employee_id,
-        punchTime,
-        punch_in,
-        punch_out,
+        correctedTimestamp,
+        status || "On Duty",
         reason,
         admin_id || null,
       ]
@@ -2086,11 +2080,10 @@ router.post("/manual-edit", async (req, res) => {
     return res.json({
       success: true,
       message: "Attendance created successfully",
-      action: "created",
     });
 
   } catch (err) {
-    console.error("Manual Edit Error:", err);
+    console.error(err);
     return res.status(500).json({
       success: false,
       message: "Server error",
