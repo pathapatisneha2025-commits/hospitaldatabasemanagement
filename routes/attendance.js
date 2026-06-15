@@ -2047,7 +2047,7 @@ router.post("/manual-edit", async (req, res) => {
       const attendance = existing.rows[0];
 
       // ---------------- UPDATE LOGIC ----------------
-      if (type === "MISSED_IN" || type === "OVERRIDE_IN") {
+      if (type === "MISSED_IN" ) {
         result = await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
@@ -2064,7 +2064,7 @@ router.post("/manual-edit", async (req, res) => {
         );
       }
 
-      if (type === "MISSED_OUT" || type === "OVERRIDE_OUT") {
+      if (type === "MISSED_OUT" ) {
         result = await pool.query(
           `UPDATE attendance
            SET status = $1,
@@ -2082,7 +2082,7 @@ router.post("/manual-edit", async (req, res) => {
     } else {
       // ---------------- INSERT LOGIC ----------------
 
-      if (type === "MISSED_IN" || type === "OVERRIDE_IN") {
+      if (type === "MISSED_IN" ) {
         result = await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status, created_by)
            VALUES ($1, $2, $3, $4)`,
@@ -2095,7 +2095,7 @@ router.post("/manual-edit", async (req, res) => {
         );
       }
 
-      if (type === "MISSED_OUT" || type === "OVERRIDE_OUT") {
+      if (type === "MISSED_OUT" ) {
         result = await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status, created_by)
            VALUES ($1, NOW(), $2, $3)`,
