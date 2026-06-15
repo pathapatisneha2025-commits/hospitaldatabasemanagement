@@ -1845,6 +1845,44 @@ router.get("/employee-history", async (req, res) => {
     });
   }
 });
+
+router.post("/attendance-correction/request", async (req, res) => {
+  try {
+    const {
+      employeeId,
+      department,
+      type,
+      correctedTime,
+      reason,
+      requestedBy,
+      status,
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO attendance_corrections
+      (employee_id, department, type, corrected_time, reason, requested_by, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *`,
+      [
+        employeeId,
+        department,
+        type,
+        correctedTime,
+        reason,
+        requestedBy,
+        status || "PENDING",
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Request submitted",
+      data: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
