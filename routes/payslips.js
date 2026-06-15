@@ -718,24 +718,31 @@ router.get("/pdf/:year/:month/:employeeId", async (req, res) => {
     const perBreakPenalty = Number(employee.break_penalty) || 0;
 
     // 2️⃣ FETCH APPROVED OVERTIME ONLY (IMPORTANT)
-    const otRes = await pool.query(
-      `
-      SELECT overtime_hours, overtime_amount
-      FROM overtime_approvals
-      WHERE employee_id = $1
-        AND month = $2
-        AND status = 'APPROVED'
-      `,
-      [employeeId, month]
-    );
+ // 🔥 FIX MONTH FORMAT
+const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
-    let overtimeHours = 0;
-    let overtimeAmount = 0;
+// FETCH APPROVED OVERTIME ONLY (SAFE + CORRECT)
+const otRes = await pool.query(
+  `
+  SELECT overtime_hours, overtime_amount
+  FROM overtime_approvals
+  WHERE employee_id = $1
+    AND month = $2
+    AND status ILIKE 'APPROVED'
+  `,
+  [employeeId, monthKey]
+);
 
-    if (otRes.rows.length > 0) {
-      overtimeHours = Number(otRes.rows[0].overtime_hours) || 0;
-      overtimeAmount = Number(otRes.rows[0].overtime_amount) || 0;
-    }
+// SUM ALL OVERTIME (IMPORTANT FIX)
+const overtimeHours = otRes.rows.reduce(
+  (sum, r) => sum + Number(r.overtime_hours || 0),
+  0
+);
+
+const overtimeAmount = otRes.rows.reduce(
+  (sum, r) => sum + Number(r.overtime_amount || 0),
+  0
+);
 
     // 3️⃣ attendance hours (your existing logic)
     const monthRes = await pool.query(
