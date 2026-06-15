@@ -1908,6 +1908,176 @@ router.get("/attendance-correction/pending", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+router.post("/attendance-correction/approve/:id", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const correctionId = req.params.id;
+
+    // Get correction request
+    const correctionResult = await client.query(
+      `
+      SELECT *
+      FROM attendance_corrections
+      WHERE id = $1
+      `,
+      [correctionId]
+    );
+
+    if (correctionResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        success: false,
+        message: "Correction request not found",
+      });
+    }
+
+    const correction = correctionResult.rows[0];
+
+    if (correction.status === "APPROVED") {
+      await client.query("ROLLBACK");
+
+      return res.status(400).json({
+        success: false,
+        message: "Request already approved",
+      });
+    }
+
+    const {
+      employee_id,
+      corrected_time,
+      type,
+      attendance_date,
+    } = correction;
+
+    // Find attendance row
+    const attendanceResult = await client.query(
+      `
+      SELECT *
+      FROM attendance
+      WHERE employee_id = $1
+      AND date = $2
+      `,
+      [employee_id, attendance_date]
+    );
+
+    if (attendanceResult.rows.length > 0) {
+      const attendance = attendanceResult.rows[0];
+
+      if (type === "MISSED_IN") {
+        await client.query(
+          `
+          UPDATE attendance
+          SET
+            punch_in = $1,
+            updated_at = NOW()
+          WHERE id = $2
+          `,
+          [corrected_time, attendance.id]
+        );
+      }
+
+      if (type === "MISSED_OUT") {
+        await client.query(
+          `
+          UPDATE attendance
+          SET
+            punch_out = $1,
+            updated_at = NOW()
+          WHERE id = $2
+          `,
+          [corrected_time, attendance.id]
+        );
+      }
+    } else {
+      // Create attendance row if missing
+
+      if (type === "MISSED_IN") {
+        await client.query(
+          `
+          INSERT INTO attendance
+          (
+            employee_id,
+            date,
+            punch_in,
+            created_at
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            NOW()
+          )
+          `,
+          [
+            employee_id,
+            attendance_date,
+            corrected_time,
+          ]
+        );
+      }
+
+      if (type === "MISSED_OUT") {
+        await client.query(
+          `
+          INSERT INTO attendance
+          (
+            employee_id,
+            date,
+            punch_out,
+            created_at
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            NOW()
+          )
+          `,
+          [
+            employee_id,
+            attendance_date,
+            corrected_time,
+          ]
+        );
+      }
+    }
+
+    // Approve correction request
+    await client.query(
+      `
+      UPDATE attendance_corrections
+      SET
+        status = 'APPROVED',
+        approved_at = NOW()
+      WHERE id = $1
+      `,
+      [correctionId]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      success: true,
+      message:
+        "Request approved and attendance updated successfully",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  } finally {
+    client.release();
+  }
+});
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
