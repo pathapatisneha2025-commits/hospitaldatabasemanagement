@@ -2008,6 +2008,96 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
     });
   }
 });
+
+router.post("/attendance/manual-edit", async (req, res) => {
+  try {
+    const {
+      employee_id,
+      date,
+      punch_in,
+      punch_out,
+      reason,
+      admin_id,
+    } = req.body;
+
+    if (!employee_id || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "employee_id and date are required",
+      });
+    }
+
+    // 1. CHECK EXISTING RECORD (FIXED FOR TIMESTAMP)
+    const existing = await pool.query(
+      `SELECT * FROM attendance 
+       WHERE employee_id = $1 
+       AND timestamp::date = $2`,
+      [employee_id, date]
+    );
+
+    if (existing.rows.length > 0) {
+      // 2. UPDATE EXISTING RECORD
+      await pool.query(
+        `UPDATE attendance
+         SET punch_in = $1,
+             punch_out = $2,
+             reason = $3,
+             updated_by = $4,
+             updated_at = NOW()
+         WHERE employee_id = $5 
+         AND timestamp::date = $6`,
+        [
+          punch_in,
+          punch_out,
+          reason,
+          admin_id || null,
+          employee_id,
+          date,
+        ]
+      );
+
+      return res.json({
+        success: true,
+        message: "Attendance updated successfully",
+        action: "updated",
+      });
+    }
+
+    // 3. INSERT NEW RECORD (timestamp-based)
+    const punchTime =
+      punch_in
+        ? new Date(`${date}T${punch_in}`)
+        : new Date(`${date}T09:00:00`);
+
+    await pool.query(
+      `INSERT INTO attendance 
+        (employee_id, timestamp, punch_in, punch_out, reason, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        employee_id,
+        punchTime,
+        punch_in,
+        punch_out,
+        reason,
+        admin_id || null,
+      ]
+    );
+
+    return res.json({
+      success: true,
+      message: "Attendance created successfully",
+      action: "created",
+    });
+
+  } catch (err) {
+    console.error("Manual Edit Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
+});
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
