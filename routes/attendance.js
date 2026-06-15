@@ -1937,7 +1937,11 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
     const correctionDate = created_at.toISOString().split("T")[0];
 
-    // 🔥 FIX: match timestamp correctly
+    //FIX: build proper timestamp
+    const correctedTimestamp = new Date(
+      `${correctionDate}T${corrected_time}`
+    );
+
     const attendanceResult = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
@@ -1948,14 +1952,13 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
     if (attendanceResult.rows.length > 0) {
       const attendance = attendanceResult.rows[0];
 
-      // 🔥 update ONLY status + timestamp if needed
       if (type === "MISSED_IN") {
         await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
                status = 'On Duty'
            WHERE id = $2`,
-          [new Date(`2026-01-01T${corrected_time}`), attendance.id]
+          [correctedTimestamp, attendance.id]
         );
       }
 
@@ -1969,12 +1972,11 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
       }
 
     } else {
-      // insert new attendance
       if (type === "MISSED_IN") {
         await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status)
-           VALUES ($1, NOW(), 'On Duty')`,
-          [employee_id]
+           VALUES ($1, $2, 'On Duty')`,
+          [employee_id, correctedTimestamp]
         );
       }
 
@@ -1987,18 +1989,16 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
       }
     }
 
-    // mark correction approved
     await pool.query(
       `UPDATE attendance_corrections
-       SET status = 'APPROVED',
-           approved_at = NOW()
+       SET status = 'APPROVED'
        WHERE id = $1`,
       [correctionId]
     );
 
     res.json({
       success: true,
-      message: "Correction approved successfully",
+      message: "Correct time applied successfully",
     });
 
   } catch (err) {
