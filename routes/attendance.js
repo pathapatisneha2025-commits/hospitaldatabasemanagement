@@ -1883,6 +1883,31 @@ router.post("/attendance-correction/request", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+router.get("/attendance-correction/pending", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        ac.*,
+        e.full_name,
+        e.mobile,
+        e.department,
+        e.schedule_in,
+        e.schedule_out
+      FROM attendance_corrections ac
+      LEFT JOIN employees e ON e.id = ac.employee_id
+      WHERE ac.status = 'PENDING'
+      ORDER BY ac.id DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
