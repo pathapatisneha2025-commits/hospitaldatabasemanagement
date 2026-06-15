@@ -2117,33 +2117,46 @@ router.get("/overtime/pending", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        employee_id,
-        DATE(timestamp) AS date,
+        a.employee_id,
+        e.full_name,
+        e.department,
 
-        MAX(CASE WHEN status = 'Off Duty' THEN timestamp END) AS off_duty_time,
+        DATE(a.timestamp) AS date,
 
-        MAX(shift_end_time) AS shift_end_time,
+        MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END) AS off_duty_time,
+
+        e.schedule_out AS shift_end_time,
 
         CASE 
           WHEN 
-            MAX(CASE WHEN status = 'Off Duty' THEN timestamp END) 
-            > MAX(shift_end_time)
+            MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
+            > CONCAT(DATE(a.timestamp), ' ', e.schedule_out)
           THEN 
             TIMESTAMPDIFF(
               MINUTE,
-              MAX(shift_end_time),
-              MAX(CASE WHEN status = 'Off Duty' THEN timestamp END)
+              CONCAT(DATE(a.timestamp), ' ', e.schedule_out),
+              MAX(CASE WHEN a.status = 'Off Duty' THEN a.timestamp END)
             ) / 60
           ELSE 0
         END AS overtime_hours
 
-      FROM attendance
-      GROUP BY employee_id, DATE(timestamp)
+      FROM attendance a
+
+      LEFT JOIN employees e 
+        ON e.id = a.employee_id
+
+      GROUP BY 
+        a.employee_id,
+        e.full_name,
+        e.department,
+        e.schedule_out,
+        DATE(a.timestamp)
+
       HAVING overtime_hours > 0
       ORDER BY date DESC
     `);
 
-    res.json(result);
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error computing overtime" });
