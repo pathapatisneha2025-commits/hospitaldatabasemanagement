@@ -2014,9 +2014,9 @@ router.post("/manual-edit", async (req, res) => {
     const {
       employee_id,
       date,
-      time,   // use single time instead of punch_in/out
-      status,
-      reason,
+      time,
+      type,        // MISSED_IN / MISSED_OUT / OVERRIDE
+      status,      // optional override status
       admin_id,
     } = req.body;
 
@@ -2027,63 +2027,94 @@ router.post("/manual-edit", async (req, res) => {
       });
     }
 
-    const existing = await pool.query(
-      `SELECT * FROM attendance 
-       WHERE employee_id = $1 
-       AND timestamp::date = $2`,
-      [employee_id, date]
-    );
-
-    const correctedTimestamp = time
+    const correctionTimestamp = time
       ? new Date(`${date}T${time}`)
       : new Date();
 
-    if (existing.rows.length > 0) {
-      await pool.query(
-        `UPDATE attendance
-         SET timestamp = $1,
-             status = $2,
-             reason = $3,
-             updated_by = $4,
-             updated_at = NOW()
-         WHERE employee_id = $5 
-         AND timestamp::date = $6`,
-        [
-          correctedTimestamp,
-          status || "On Duty",
-          reason,
-          admin_id || null,
-          employee_id,
-          date,
-        ]
-      );
-
-      return res.json({
-        success: true,
-        message: "Attendance updated successfully",
-      });
-    }
-
-    await pool.query(
-      `INSERT INTO attendance 
-        (employee_id, timestamp, status, reason, created_by)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        employee_id,
-        correctedTimestamp,
-        status || "On Duty",
-        reason,
-        admin_id || null,
-      ]
+    // Check existing attendance for that day
+    const existing = await pool.query(
+      `SELECT * FROM attendance 
+       WHERE employee_id = $1 
+       AND timestamp::date = $2
+       ORDER BY timestamp ASC
+       LIMIT 1`,
+      [employee_id, date]
     );
+
+    let result;
+
+    if (existing.rows.length > 0) {
+      const attendance = existing.rows[0];
+
+      // ---------------- UPDATE LOGIC ----------------
+      if (type === "MISSED_IN" || type === "OVERRIDE_IN") {
+        result = await pool.query(
+          `UPDATE attendance
+           SET timestamp = $1,
+               status = $2,
+               updated_by = $3,
+               updated_at = NOW()
+           WHERE id = $4`,
+          [
+            correctionTimestamp,
+            status || "On Duty",
+            admin_id || null,
+            attendance.id,
+          ]
+        );
+      }
+
+      if (type === "MISSED_OUT" || type === "OVERRIDE_OUT") {
+        result = await pool.query(
+          `UPDATE attendance
+           SET status = $1,
+               updated_by = $2,
+               updated_at = NOW()
+           WHERE id = $3`,
+          [
+            status || "Completed",
+            admin_id || null,
+            attendance.id,
+          ]
+        );
+      }
+
+    } else {
+      // ---------------- INSERT LOGIC ----------------
+
+      if (type === "MISSED_IN" || type === "OVERRIDE_IN") {
+        result = await pool.query(
+          `INSERT INTO attendance (employee_id, timestamp, status, created_by)
+           VALUES ($1, $2, $3, $4)`,
+          [
+            employee_id,
+            correctionTimestamp,
+            status || "On Duty",
+            admin_id || null,
+          ]
+        );
+      }
+
+      if (type === "MISSED_OUT" || type === "OVERRIDE_OUT") {
+        result = await pool.query(
+          `INSERT INTO attendance (employee_id, timestamp, status, created_by)
+           VALUES ($1, NOW(), $2, $3)`,
+          [
+            employee_id,
+            status || "Completed",
+            admin_id || null,
+          ]
+        );
+      }
+    }
 
     return res.json({
       success: true,
-      message: "Attendance created successfully",
+      message: "Manual attendance updated successfully",
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("Manual Edit Error:", err);
     return res.status(500).json({
       success: false,
       message: "Server error",
