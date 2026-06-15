@@ -2113,6 +2113,43 @@ router.post("/manual-edit", async (req, res) => {
     });
   }
 });
+router.get("/overtime/pending", async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT 
+        employee_id,
+        DATE(timestamp) AS date,
+
+        MAX(CASE WHEN status = 'Off Duty' THEN timestamp END) AS off_duty_time,
+
+        MAX(shift_end_time) AS shift_end_time,
+
+        CASE 
+          WHEN 
+            MAX(CASE WHEN status = 'Off Duty' THEN timestamp END) 
+            > MAX(shift_end_time)
+          THEN 
+            TIMESTAMPDIFF(
+              MINUTE,
+              MAX(shift_end_time),
+              MAX(CASE WHEN status = 'Off Duty' THEN timestamp END)
+            ) / 60
+          ELSE 0
+        END AS overtime_hours
+
+      FROM attendance
+      GROUP BY employee_id, DATE(timestamp)
+      HAVING overtime_hours > 0
+      ORDER BY date DESC
+    `);
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error computing overtime" });
+  }
+});
+
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
