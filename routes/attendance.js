@@ -2009,7 +2009,7 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
   }
 });
 
-router.post("/attendance/manual-edit", async (req, res) => {
+router.post("/manual-edit", async (req, res) => {
   try {
     const {
       employee_id,
