@@ -2186,44 +2186,73 @@ router.post("/overtime/approve", async (req, res) => {
       status,
     } = req.body;
 
-    await pool.query(
+    const existing = await pool.query(
       `
-      INSERT INTO overtime_approvals
-      (
-        employee_id,
-        month,
-        overtime_hours,
-        overtime_amount,
-        status,
-        approved_at
-      )
-      VALUES ($1,$2,$3,$4,$5,NOW())
-
-      ON CONFLICT (employee_id, month)
-      DO UPDATE SET
-        overtime_hours = EXCLUDED.overtime_hours,
-        overtime_amount = EXCLUDED.overtime_amount,
-        status = EXCLUDED.status,
-        approved_at = NOW()
+      SELECT id
+      FROM overtime_approvals
+      WHERE employee_id = $1
+      AND month = $2
       `,
-      [
-        employee_id,
-        month,
-        overtime_hours,
-        overtime_amount,
-        status,
-      ]
+      [employee_id, month]
     );
 
-    res.json({ success: true });
+    if (existing.rows.length > 0) {
+      await pool.query(
+        `
+        UPDATE overtime_approvals
+        SET
+          overtime_hours = $3,
+          overtime_amount = $4,
+          status = $5,
+          approved_at = NOW()
+        WHERE employee_id = $1
+        AND month = $2
+        `,
+        [
+          employee_id,
+          month,
+          overtime_hours,
+          overtime_amount,
+          status,
+        ]
+      );
+    } else {
+      await pool.query(
+        `
+        INSERT INTO overtime_approvals
+        (
+          employee_id,
+          month,
+          overtime_hours,
+          overtime_amount,
+          status,
+          approved_at
+        )
+        VALUES ($1,$2,$3,$4,$5,NOW())
+        `,
+        [
+          employee_id,
+          month,
+          overtime_hours,
+          overtime_amount,
+          status,
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Overtime ${status}`,
+    });
   } catch (err) {
-    console.log(err);
+    console.error(err);
     res.status(500).json({
+      success: false,
       message: "Approval failed",
     });
   }
 });
-// ✅ Delete both login & logout records for an employee (no date filter)
+//  Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
     const { employee_id } = req.params;
