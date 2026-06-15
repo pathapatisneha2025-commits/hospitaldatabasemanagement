@@ -2176,6 +2176,53 @@ router.get("/overtime/monthly", async (req, res) => {
     res.status(500).json({ message: "Error fetching monthly overtime" });
   }
 });
+router.post("/overtime/approve", async (req, res) => {
+  try {
+    const {
+      employee_id,
+      month,
+      overtime_hours,
+      overtime_amount,
+      status,
+    } = req.body;
+
+    await pool.query(
+      `
+      INSERT INTO overtime_approvals
+      (
+        employee_id,
+        month,
+        overtime_hours,
+        overtime_amount,
+        status,
+        approved_at
+      )
+      VALUES ($1,$2,$3,$4,$5,NOW())
+
+      ON CONFLICT (employee_id, month)
+      DO UPDATE SET
+        overtime_hours = EXCLUDED.overtime_hours,
+        overtime_amount = EXCLUDED.overtime_amount,
+        status = EXCLUDED.status,
+        approved_at = NOW()
+      `,
+      [
+        employee_id,
+        month,
+        overtime_hours,
+        overtime_amount,
+        status,
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      message: "Approval failed",
+    });
+  }
+});
 // ✅ Delete both login & logout records for an employee (no date filter)
 router.delete("/deletelogs/:employee_id", async (req, res) => {
   try {
