@@ -2011,19 +2011,12 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
 router.post("/manual-edit", async (req, res) => {
   try {
-    const {
-      employee_id,
-      date,
-      time,
-      type,        // MISSED_IN / MISSED_OUT / OVERRIDE
-      status,      // optional override status
-      admin_id,
-    } = req.body;
+    const { employee_id, date, time, type, status, admin_id } = req.body;
 
-    if (!employee_id || !date) {
+    if (!employee_id || !date || !type) {
       return res.status(400).json({
         success: false,
-        message: "employee_id and date are required",
+        message: "employee_id, date, type are required",
       });
     }
 
@@ -2031,24 +2024,21 @@ router.post("/manual-edit", async (req, res) => {
       ? new Date(`${date}T${time}`)
       : new Date();
 
-    // Check existing attendance for that day
+    // IMPORTANT: fetch ALL records for the day
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
-       AND timestamp::date = $2
-       ORDER BY timestamp ASC
-       LIMIT 1`,
+       AND DATE(timestamp) = $2::date
+       ORDER BY timestamp ASC`,
       [employee_id, date]
     );
 
-    let result;
+    // ---------------- MISSED IN ----------------
+    if (type === "MISSED_IN") {
+      if (existing.rows.length > 0) {
+        const firstIn = existing.rows[0];
 
-    if (existing.rows.length > 0) {
-      const attendance = existing.rows[0];
-
-      // ---------------- UPDATE LOGIC ----------------
-      if (type === "MISSED_IN" ) {
-        result = await pool.query(
+        await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
                status = $2,
@@ -2059,31 +2049,11 @@ router.post("/manual-edit", async (req, res) => {
             correctionTimestamp,
             status || "On Duty",
             admin_id || null,
-            attendance.id,
+            firstIn.id,
           ]
         );
-      }
-
-      if (type === "MISSED_OUT" ) {
-        result = await pool.query(
-          `UPDATE attendance
-           SET status = $1,
-               updated_by = $2,
-               updated_at = NOW()
-           WHERE id = $3`,
-          [
-            status || "Completed",
-            admin_id || null,
-            attendance.id,
-          ]
-        );
-      }
-
-    } else {
-      // ---------------- INSERT LOGIC ----------------
-
-      if (type === "MISSED_IN" ) {
-        result = await pool.query(
+      } else {
+        await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status, created_by)
            VALUES ($1, $2, $3, $4)`,
           [
@@ -2094,13 +2064,34 @@ router.post("/manual-edit", async (req, res) => {
           ]
         );
       }
+    }
 
-      if (type === "MISSED_OUT" ) {
-        result = await pool.query(
+    // ---------------- MISSED OUT ----------------
+    if (type === "MISSED_OUT") {
+      if (existing.rows.length > 0) {
+        const last = existing.rows[existing.rows.length - 1];
+
+        await pool.query(
+          `UPDATE attendance
+           SET timestamp = $1,
+               status = $2,
+               updated_by = $3,
+               updated_at = NOW()
+           WHERE id = $4`,
+          [
+            correctionTimestamp,
+            status || "Completed",
+            admin_id || null,
+            last.id,
+          ]
+        );
+      } else {
+        await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status, created_by)
-           VALUES ($1, NOW(), $2, $3)`,
+           VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
+            correctionTimestamp,
             status || "Completed",
             admin_id || null,
           ]
