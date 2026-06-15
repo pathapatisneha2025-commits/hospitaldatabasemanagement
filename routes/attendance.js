@@ -1933,64 +1933,61 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
       });
     }
 
-    const {
-      employee_id,
-      corrected_time,
-      type,
-      created_at,
-    } = correction;
+    const { employee_id, corrected_time, type, created_at } = correction;
 
-    const attendance_date = created_at.toISOString().split("T")[0];
+    const correctionDate = created_at.toISOString().split("T")[0];
 
-    // ✅ FIXED: use timestamp column
+    // 🔥 FIX: match timestamp correctly
     const attendanceResult = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
        AND timestamp::date = $2`,
-      [employee_id, attendance_date]
+      [employee_id, correctionDate]
     );
 
     if (attendanceResult.rows.length > 0) {
       const attendance = attendanceResult.rows[0];
 
+      // 🔥 update ONLY status + timestamp if needed
       if (type === "MISSED_IN") {
         await pool.query(
           `UPDATE attendance
-           SET punch_in = $1,
-               updated_at = NOW()
+           SET timestamp = $1,
+               status = 'On Duty'
            WHERE id = $2`,
-          [corrected_time, attendance.id]
+          [new Date(`2026-01-01T${corrected_time}`), attendance.id]
         );
       }
 
       if (type === "MISSED_OUT") {
         await pool.query(
           `UPDATE attendance
-           SET punch_out = $1,
-               updated_at = NOW()
+           SET status = 'Completed'
            WHERE id = $2`,
-          [corrected_time, attendance.id]
+          [attendance.id]
         );
       }
 
     } else {
+      // insert new attendance
       if (type === "MISSED_IN") {
         await pool.query(
-          `INSERT INTO attendance (employee_id, timestamp, punch_in)
-           VALUES ($1, NOW(), $2)`,
-          [employee_id, corrected_time]
+          `INSERT INTO attendance (employee_id, timestamp, status)
+           VALUES ($1, NOW(), 'On Duty')`,
+          [employee_id]
         );
       }
 
       if (type === "MISSED_OUT") {
         await pool.query(
-          `INSERT INTO attendance (employee_id, timestamp, punch_out)
-           VALUES ($1, NOW(), $2)`,
-          [employee_id, corrected_time]
+          `INSERT INTO attendance (employee_id, timestamp, status)
+           VALUES ($1, NOW(), 'Completed')`,
+          [employee_id]
         );
       }
     }
 
+    // mark correction approved
     await pool.query(
       `UPDATE attendance_corrections
        SET status = 'APPROVED',
@@ -2001,7 +1998,7 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Attendance updated successfully",
+      message: "Correction approved successfully",
     });
 
   } catch (err) {
