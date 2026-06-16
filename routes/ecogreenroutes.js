@@ -143,10 +143,14 @@ router.post("/item-master", async (req, res) => {
     const apiKey = await getToken();
 
     let formattedDateTime = inputDateTime
-      .replace("T", " ")
-      .replace(/\s+/g, " ")
-      .replace(/\s*:\s*/g, ":")
-      .trim();
+      ?.replace("T", " ")
+      ?.replace(/\s+/g, " ")
+      ?.replace(/\s*:\s*/g, ":")
+      ?.trim();
+
+    if (!formattedDateTime) {
+      return res.status(400).json({ error: "Invalid inputDateTime" });
+    }
 
     if (!/:\d{2}$/.test(formattedDateTime)) {
       formattedDateTime += ":00";
@@ -171,36 +175,55 @@ router.post("/item-master", async (req, res) => {
 
     const text = await response.text();
 
-    let vendorData;
-    try {
-      vendorData = JSON.parse(text);
-    } catch {
+    console.log("RAW VENDOR RESPONSE (first 500 chars):", text.slice(0, 500));
+
+    // ==============================
+    //  SAFE JSON PARSING (FIX)
+    // ==============================
+    if (!text || (!text.trim().startsWith("{") && !text.trim().startsWith("["))) {
       return res.status(500).json({
-        error: "Vendor returned invalid JSON",
+        error: "Vendor returned non-JSON response",
         rawResponse: text,
       });
     }
 
+    let vendorData;
+    try {
+      vendorData = JSON.parse(text);
+    } catch (err) {
+      return res.status(500).json({
+        error: "Vendor returned INVALID JSON (likely '-' or corrupted number)",
+        message: err.message,
+        rawResponse: text.slice(0, 1000),
+      });
+    }
+
+    // ==============================
+    // ARRAY EXTRACTION SAFE
+    // ==============================
     let itemsArray = [];
 
     if (Array.isArray(vendorData)) itemsArray = vendorData;
-    else if (Array.isArray(vendorData.data)) itemsArray = vendorData.data;
-    else if (Array.isArray(vendorData.items)) itemsArray = vendorData.items;
-    else if (Array.isArray(vendorData.records)) itemsArray = vendorData.records;
-    else if (vendorData.code && vendorData.message) {
+    else if (Array.isArray(vendorData?.data)) itemsArray = vendorData.data;
+    else if (Array.isArray(vendorData?.items)) itemsArray = vendorData.items;
+    else if (Array.isArray(vendorData?.records)) itemsArray = vendorData.records;
+    else if (vendorData?.code && vendorData?.message) {
       return res.status(400).json({
         error: "Vendor API error",
         vendorMessage: vendorData.message,
       });
     } else {
       return res.status(500).json({
-        error: "Invalid data format received",
+        error: "Unknown vendor response format",
         rawVendorData: vendorData,
       });
     }
 
     const insertedItems = [];
 
+    // ==============================
+    // DB INSERT LOOP
+    // ==============================
     for (const item of itemsArray) {
       try {
         const query = `
@@ -217,7 +240,8 @@ router.post("/item-master", async (req, res) => {
             allowDisc, gstCode,
             parentItemCode, parentItemName,
             molecule_info
-          ) VALUES (
+          )
+          VALUES (
             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
             $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
           )
@@ -303,7 +327,6 @@ router.post("/item-master", async (req, res) => {
           item.parentItemCode || null,
           item.parentItemName || null,
 
-          // ✅ NEW FIELD (JSONB)
           JSON.stringify(item.moleculeInfo || [])
         ];
 
@@ -312,72 +335,24 @@ router.post("/item-master", async (req, res) => {
         insertedItems.push({
           itemCode: item.itemCode,
           itemName: item.itemName,
-          itemShortName: item.itemShortName || null,
-          itemFullName: item.itemFullName || null,
-
-          brandCode: item.brandCode || null,
-          brandName: item.brandName || null,
-          categoryCode: item.categoryCode || null,
-          categoryName: item.categoryName || null,
-
-          contentCode: item.contentCode || null,
-          contentName: item.contentName || null,
-          packCode: item.packCode || null,
-          packName: item.packName || null,
-
-          itemQtyPerBox: item.itemQtyPerBox || 0,
-          itemAddedDate: item.itemAddedDate || null,
-          itemUpdatedDate: item.itemUpdatedDate || null,
-
-          hsnSacCode: item.hsnSacCode || null,
-          hsnSacName: item.hsnSacName || null,
-
-          minSaleQty: item.minSaleQty || 1,
-          note: item.note || null,
-
-          mfacName: item.mfacName || null,
-          mfacCode: item.mfacCode || null,
-
-          packTypCode: item.packTypCode || null,
-          packTypName: item.packTypName || null,
-
-          scheduleCode: item.scheduleCode || null,
-          scheduleName: item.scheduleName || null,
-
-          categoryHeadCode: item.categoryHeadCode || null,
-          categoryHeadName: item.categoryHeadName || null,
-
-          categoryClassCode: item.categoryClassCode || null,
-          categoryClassName: item.categoryClassName || null,
-
-          allowDisc: item.allowDisc || null,
-          gstCode: item.gstCode || null,
-
-          parentItemCode: item.parentItemCode || null,
-          parentItemName: item.parentItemName || null,
-
-          // ✅ NEW RESPONSE FIELD
-          moleculeInfo: item.moleculeInfo || [],
-
           status: "inserted",
         });
       } catch (itemErr) {
-        console.error(
-          `Insert failed ${item.itemCode}:`,
-          itemErr.message
-        );
+        console.error("Insert failed:", item.itemCode, itemErr.message);
       }
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Item master synced successfully",
       totalItems: itemsArray.length,
       insertedItems,
     });
+
   } catch (err) {
-    console.error("Item Master Error:", err.message);
-    res.status(500).json({
+    console.error("Item Master Error:", err);
+    return res.status(500).json({
       error: "Failed to fetch or store item master",
+      message: err.message,
     });
   }
 });
