@@ -139,47 +139,64 @@ router.post("/item-master", async (req, res) => {
     prodCode,
     inputDateTime,
     page = 1,
-    limit = 50
+    limit = 50,
   } = req.body;
 
-  if (!c2Code || !storeId || !prodCode) {
+  if (!c2Code || !storeId || !prodCode || !inputDateTime) {
     return res.status(400).json({ error: "All fields are required" });
   }
+
+  const safeNumber = (val, fallback = 0) => {
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const safeString = (val, fallback = null) =>
+    val === undefined || val === null || val === "" ? fallback : String(val);
+
+  const safeJson = (val) => {
+    try {
+      if (Array.isArray(val)) return val;
+      if (typeof val === "string") return JSON.parse(val || "[]");
+      return val || [];
+    } catch {
+      return [];
+    }
+  };
 
   try {
     const apiKey = await getToken();
 
     // =========================
-    // FORMAT DATE TIME
+    // SAFE DATE FORMAT
     // =========================
-    let formattedDateTime = inputDateTime
+    let formattedDateTime = String(inputDateTime)
       .replace("T", " ")
       .replace(/\s+/g, " ")
-      .replace(/\s*:\s*/g, ":")
       .trim();
 
-    if (!/:\d{2}$/.test(formattedDateTime)) {
+    if (!formattedDateTime.includes(":")) {
+      formattedDateTime += " 00:00:00";
+    } else if (formattedDateTime.split(":").length === 2) {
       formattedDateTime += ":00";
     }
 
     // =========================
-    // CALL VENDOR API
+    // VENDOR CALL
     // =========================
     const vendorUrl =
       "http://117.211.64.158:21000/ws_c2_services_get_master_data";
 
-    const postBody = {
-      c2Code,
-      storeId,
-      prodCode,
-      inputDateTime: formattedDateTime,
-      apiKey,
-    };
-
     const response = await fetch(vendorUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(postBody),
+      body: JSON.stringify({
+        c2Code,
+        storeId,
+        prodCode,
+        inputDateTime: formattedDateTime,
+        apiKey,
+      }),
     });
 
     const text = await response.text();
@@ -187,7 +204,7 @@ router.post("/item-master", async (req, res) => {
     let vendorData;
     try {
       vendorData = JSON.parse(text);
-    } catch {
+    } catch (e) {
       return res.status(500).json({
         error: "Vendor returned invalid JSON",
         rawResponse: text,
@@ -195,7 +212,7 @@ router.post("/item-master", async (req, res) => {
     }
 
     // =========================
-    // NORMALIZE ITEMS
+    // NORMALIZE
     // =========================
     let itemsArray = [];
 
@@ -203,25 +220,73 @@ router.post("/item-master", async (req, res) => {
     else if (Array.isArray(vendorData.data)) itemsArray = vendorData.data;
     else if (Array.isArray(vendorData.items)) itemsArray = vendorData.items;
     else if (Array.isArray(vendorData.records)) itemsArray = vendorData.records;
-    else if (vendorData.code && vendorData.message) {
-      return res.status(400).json({
-        error: "Vendor API error",
-        vendorMessage: vendorData.message,
-      });
-    } else {
+    else {
       return res.status(500).json({
-        error: "Invalid data format received",
-        rawVendorData: vendorData,
+        error: "Invalid vendor structure",
+        vendorData,
       });
     }
 
     // =========================
-    // INSERT / UPSERT INTO DB
+    // INSERT LOOP (SAFE)
     // =========================
+    let inserted = 0;
+    let failed = 0;
+
     for (const item of itemsArray) {
       try {
-        const query = `
-          INSERT INTO item_master (
+        const values = [
+          safeString(item.itemCode),
+          safeString(item.itemName),
+          safeString(item.itemShortName),
+          safeString(item.itemFullName),
+
+          safeString(item.brandCode),
+          safeString(item.brandName),
+          safeString(item.categoryCode),
+          safeString(item.categoryName),
+
+          safeString(item.contentCode),
+          safeString(item.contentName),
+          safeString(item.packCode),
+          safeString(item.packName),
+
+          safeNumber(item.itemQtyPerBox),
+          safeString(item.itemAddedDate),
+          safeString(item.itemUpdatedDate),
+
+          safeString(item.hsnSacCode),
+          safeString(item.hsnSacName),
+
+          safeNumber(item.minSaleQty, 1),
+          safeString(item.note),
+
+          safeString(item.mfacName, "-"),
+          safeString(item.mfacCode, "-"),
+
+          safeString(item.packTypCode, "-"),
+          safeString(item.packTypName, "-"),
+
+          safeString(item.scheduleCode, "-"),
+          safeString(item.scheduleName, "-"),
+
+          safeString(item.categoryHeadCode, "CH0005"),
+          safeString(item.categoryHeadName, "MEDICINE"),
+
+          safeString(item.categoryClassCode, "CAT005"),
+          safeString(item.categoryClassName, "MEDICINE"),
+
+          safeString(item.allowDisc, "YES"),
+          safeString(item.gstCode, "00"),
+
+          safeString(item.parentItemCode),
+          safeString(item.parentItemName),
+
+          JSON.stringify(safeJson(item.moleculeInfo)),
+        ];
+
+        await pool.query(
+          `INSERT INTO item_master (
             item_code, item_name, item_short_name, item_full_name,
             brand_code, brand_name, category_code, category_name,
             content_code, content_name, pack_code, pack_name,
@@ -270,101 +335,45 @@ router.post("/item-master", async (req, res) => {
             gstCode = EXCLUDED.gstCode,
             parentItemCode = EXCLUDED.parentItemCode,
             parentItemName = EXCLUDED.parentItemName,
-            molecule_info = EXCLUDED.molecule_info
-        `;
+            molecule_info = EXCLUDED.molecule_info`,
+          values
+        );
 
-        const values = [
-          item.itemCode,
-          item.itemName,
-          item.itemShortName || null,
-          item.itemFullName || null,
-
-          item.brandCode || null,
-          item.brandName || null,
-          item.categoryCode || null,
-          item.categoryName || null,
-
-          item.contentCode || null,
-          item.contentName || null,
-          item.packCode || null,
-          item.packName || null,
-
-          item.itemQtyPerBox || 0,
-          item.itemAddedDate || null,
-          item.itemUpdatedDate || null,
-
-          item.hsnSacCode || null,
-          item.hsnSacName || null,
-
-          item.minSaleQty || 1,
-          item.note || null,
-
-          item.mfacName || "-",
-          item.mfacCode || "-",
-
-          item.packTypCode || "-",
-          item.packTypName || "-",
-
-          item.scheduleCode || "-",
-          item.scheduleName || "-",
-
-          item.categoryHeadCode || "CH0005",
-          item.categoryHeadName || "MEDICINE",
-
-          item.categoryClassCode || "CAT005",
-          item.categoryClassName || "MEDICINE",
-
-          item.allowDisc || "YES",
-          item.gstCode || "00",
-
-          item.parentItemCode || null,
-          item.parentItemName || null,
-
-          JSON.stringify(item.moleculeInfo || [])
-        ];
-
-        await pool.query(query, values);
-      } catch (itemErr) {
-        console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
+        inserted++;
+      } catch (err) {
+        failed++;
+        console.error("INSERT FAILED:", item.itemCode, err.message);
       }
     }
 
     // =========================
-    // PAGINATION (DB SIDE)
+    // PAGINATION
     // =========================
     const offset = (page - 1) * limit;
 
-    const paginatedQuery = `
-      SELECT *
-      FROM item_master
-      ORDER BY item_code
-      LIMIT $1 OFFSET $2
-    `;
-
-    const dbResult = await pool.query(paginatedQuery, [limit, offset]);
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM item_master`
+    const dbResult = await pool.query(
+      `SELECT * FROM item_master ORDER BY item_code LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
 
-    const totalCount = parseInt(countResult.rows[0].count, 10);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM item_master`);
 
-    // =========================
-    // RESPONSE
-    // =========================
     res.status(200).json({
-      message: "Item master synced successfully",
+      message: "Item master sync completed",
       page,
       limit,
-      totalItemsInDB: totalCount,
+      inserted,
+      failed,
+      totalItemsInDB: parseInt(countResult.rows[0].count, 10),
       totalFetchedFromVendor: itemsArray.length,
       data: dbResult.rows,
     });
 
   } catch (err) {
-    console.error("Item Master Error:", err.message);
+    console.error("GLOBAL ERROR:", err);
     res.status(500).json({
       error: "Failed to fetch or store item master",
+      details: err.message,
     });
   }
 });
