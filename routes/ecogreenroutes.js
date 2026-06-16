@@ -139,63 +139,72 @@ router.post("/item-master", async (req, res) => {
     return res.status(400).json({ error: "All fields are required" });
   }
 
-  const vendorUrl =
-    "http://117.211.64.158:21000/ws_c2_services_get_master_data";
+  try {
+    const apiKey = await getToken();
 
-  const apiKey = await getToken();
+    let formattedDateTime = inputDateTime
+      .replace("T", " ")
+      .replace(/\s+/g, " ")
+      .replace(/\s*:\s*/g, ":")
+      .trim();
 
-  let formattedDateTime = inputDateTime
-    .replace("T", " ")
-    .replace(/\s+/g, " ")
-    .replace(/\s*:\s*/g, ":")
-    .trim();
+    if (!/:\d{2}$/.test(formattedDateTime)) {
+      formattedDateTime += ":00";
+    }
 
-  if (!/:\d{2}$/.test(formattedDateTime)) {
-    formattedDateTime += ":00";
-  }
+    const vendorUrl =
+      "http://117.211.64.158:21000/ws_c2_services_get_master_data";
 
-  const postBody = {
-    c2Code,
-    storeId,
-    prodCode,
-    inputDateTime: formattedDateTime,
-    apiKey,
-  };
+    const postBody = {
+      c2Code,
+      storeId,
+      prodCode,
+      inputDateTime: formattedDateTime,
+      apiKey,
+    };
 
-  // =========================
-  // SAFE FETCH WITH RETRY
-  // =========================
-  async function fetchVendor(retries = 3) {
-    for (let i = 0; i < retries; i++) {
+    // ==============================
+    // 🔥 SAFE FETCH WITH RETRY
+    // ==============================
+    async function fetchVendor(retries = 2) {
       try {
         const response = await fetch(vendorUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Connection: "close",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(postBody),
         });
 
         const text = await response.text();
 
-        // detect truncation
-        if (!text || (!text.trim().endsWith("}") && !text.trim().endsWith("]"))) {
-          throw new Error("Truncated vendor response");
+        // detect truncated response
+        if (!text.trim().endsWith("}")) {
+          throw new Error("TRUNCATED_RESPONSE");
         }
 
         return text;
       } catch (err) {
-        console.log(`Vendor retry ${i + 1} failed:`, err.message);
-
-        if (i === retries - 1) throw err;
+        if (retries > 0) {
+          console.log("Retrying vendor API...");
+          return fetchVendor(retries - 1);
+        }
+        throw err;
       }
     }
-  }
 
-  try {
-    const text = await fetchVendor(3);
+    let text;
 
+    try {
+      text = await fetchVendor();
+    } catch (err) {
+      return res.status(500).json({
+        error: "Vendor fetch failed (network/truncation issue)",
+        message: err.message,
+      });
+    }
+
+    // ==============================
+    // SAFE JSON PARSE
+    // ==============================
     let vendorData;
 
     try {
@@ -204,10 +213,13 @@ router.post("/item-master", async (req, res) => {
       return res.status(500).json({
         error: "Vendor returned invalid JSON",
         message: err.message,
-        rawResponse: text.slice(0, 2000),
+        preview: text.slice(-500),
       });
     }
 
+    // ==============================
+    // NORMALIZE DATA
+    // ==============================
     let itemsArray = [];
 
     if (Array.isArray(vendorData)) itemsArray = vendorData;
@@ -216,12 +228,15 @@ router.post("/item-master", async (req, res) => {
     else if (Array.isArray(vendorData?.records)) itemsArray = vendorData.records;
     else {
       return res.status(500).json({
-        error: "Invalid vendor response format",
-        rawVendorData: vendorData,
+        error: "Invalid vendor format",
       });
     }
 
+    // ==============================
+    // INSERT LOOP (FAIL SAFE)
+    // ==============================
     const insertedItems = [];
+    const failedItems = [];
 
     for (const item of itemsArray) {
       try {
@@ -283,71 +298,64 @@ router.post("/item-master", async (req, res) => {
           item.itemName,
           item.itemShortName || null,
           item.itemFullName || null,
-
           item.brandCode || null,
           item.brandName || null,
           item.categoryCode || null,
           item.categoryName || null,
-
           item.contentCode || null,
           item.contentName || null,
           item.packCode || null,
           item.packName || null,
-
           item.itemQtyPerBox || 0,
           item.itemAddedDate || null,
           item.itemUpdatedDate || null,
-
           item.hsnSacCode || null,
           item.hsnSacName || null,
-
           item.minSaleQty || 1,
           item.note || null,
-
           item.mfacName || "-",
           item.mfacCode || "-",
-
           item.packTypCode || "-",
           item.packTypName || "-",
-
           item.scheduleCode || "-",
           item.scheduleName || "-",
-
-          item.categoryHeadCode || "CH0005",
-          item.categoryHeadName || "MEDICINE",
-
-          item.categoryClassCode || "CAT005",
-          item.categoryClassName || "MEDICINE",
-
-          item.allowDisc || "YES",
-          item.gstCode || "00",
-
+          item.categoryHeadCode || null,
+          item.categoryHeadName || null,
+          item.categoryClassCode || null,
+          item.categoryClassName || null,
+          item.allowDisc || null,
+          item.gstCode || null,
           item.parentItemCode || null,
           item.parentItemName || null,
-
           JSON.stringify(item.moleculeInfo || [])
         ];
 
         await pool.query(query, values);
 
-        insertedItems.push({
-          itemCode: item.itemCode,
-          status: "inserted",
-        });
+        insertedItems.push(item.itemCode);
       } catch (err) {
-        console.error("Insert failed:", item.itemCode, err.message);
+        failedItems.push({
+          itemCode: item.itemCode,
+          error: err.message,
+        });
       }
     }
 
+    // ==============================
+    // FINAL RESPONSE
+    // ==============================
     return res.status(200).json({
-      message: "Item master synced successfully",
-      totalItems: itemsArray.length,
-      insertedItems,
+      message: "Sync completed",
+      total: itemsArray.length,
+      inserted: insertedItems.length,
+      failed: failedItems.length,
+      failedItems,
     });
+
   } catch (err) {
-    console.error("Item Master Error:", err.message);
+    console.error("Item Master Error:", err);
     return res.status(500).json({
-      error: "Vendor fetch failed (likely truncated response)",
+      error: "Unexpected server error",
       message: err.message,
     });
   }
