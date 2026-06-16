@@ -180,11 +180,13 @@ console.log("RAW VENDOR RESPONSE (first 500 chars):", text.slice(0, 500));
 // -------------------------------
 // CLEAN INVALID CHARACTERS FIRST
 // -------------------------------
-const cleanedText = text
-  .replace(/:\s*-\s*([,}])/g, ': null$1')   // fix "-,"
-  .replace(/:\s*-\s*$/g, ': null')          // fix trailing "-"
-  .replace(/:\s*NaN/g, ': null')           // fix NaN
-  .replace(/:\s*undefined/g, ': null');     // fix undefined
+let cleanedText = text
+  // fix standalone minus used as null
+  .replace(/:\s*-\s*(?=[,}\]])/g, ': null')   // : -, : -}, : -]
+  .replace(/:\s*-\s*$/g, ': null')            // trailing
+  .replace(/:\s*-\s*"/g, ': null"')          // edge case quoted
+  .replace(/:\s*NaN/g, ': null')
+  .replace(/:\s*undefined/g, ': null');
 
 // -------------------------------
 // SAFE JSON CHECK
