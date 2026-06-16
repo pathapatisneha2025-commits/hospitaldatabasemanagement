@@ -171,15 +171,29 @@ router.post("/item-master", async (req, res) => {
 
     const text = await response.text();
 
-    let vendorData;
-    try {
-      vendorData = JSON.parse(text);
-    } catch {
-      return res.status(500).json({
-        error: "Vendor returned invalid JSON",
-        rawResponse: text,
-      });
-    }
+   try {
+  vendorData = JSON.parse(text);
+} catch (err) {
+  console.error("JSON Parse Error:", err.message);
+
+  const match = err.message.match(/position (\d+)/);
+  const pos = match ? Number(match[1]) : 0;
+
+  console.log(
+    "Around error:",
+    text.substring(Math.max(0, pos - 100), pos + 100)
+  );
+
+  return res.status(500).json({
+    error: "Vendor returned invalid JSON",
+    parseError: err.message,
+    errorPosition: pos,
+    aroundError: text.substring(
+      Math.max(0, pos - 100),
+      pos + 100
+    ),
+  });
+}
 
     let itemsArray = [];
 
