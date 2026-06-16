@@ -173,30 +173,46 @@ router.post("/item-master", async (req, res) => {
       body: JSON.stringify(postBody),
     });
 
-    const text = await response.text();
+   const text = await response.text();
 
-    console.log("RAW VENDOR RESPONSE (first 500 chars):", text.slice(0, 500));
+console.log("RAW VENDOR RESPONSE (first 500 chars):", text.slice(0, 500));
 
-    // ==============================
-    //  SAFE JSON PARSING (FIX)
-    // ==============================
-    if (!text || (!text.trim().startsWith("{") && !text.trim().startsWith("["))) {
-      return res.status(500).json({
-        error: "Vendor returned non-JSON response",
-        rawResponse: text,
-      });
-    }
+// -------------------------------
+// CLEAN INVALID CHARACTERS FIRST
+// -------------------------------
+const cleanedText = text
+  .replace(/:\s*-\s*([,}])/g, ': null$1')   // fix "-,"
+  .replace(/:\s*-\s*$/g, ': null')          // fix trailing "-"
+  .replace(/:\s*NaN/g, ': null')           // fix NaN
+  .replace(/:\s*undefined/g, ': null');     // fix undefined
 
-    let vendorData;
-    try {
-      vendorData = JSON.parse(text);
-    } catch (err) {
-      return res.status(500).json({
-        error: "Vendor returned INVALID JSON (likely '-' or corrupted number)",
-        message: err.message,
-        rawResponse: text.slice(0, 1000),
-      });
-    }
+// -------------------------------
+// SAFE JSON CHECK
+// -------------------------------
+if (
+  !cleanedText ||
+  (!cleanedText.trim().startsWith("{") &&
+   !cleanedText.trim().startsWith("["))
+) {
+  return res.status(500).json({
+    error: "Vendor returned non-JSON response",
+    rawResponse: text.slice(0, 1000),
+  });
+}
+
+let vendorData;
+
+try {
+  vendorData = JSON.parse(cleanedText);
+} catch (err) {
+  console.log(" JSON PARSE FAILED:", err.message);
+
+  return res.status(500).json({
+    error: "Vendor returned INVALID JSON",
+    message: err.message,
+    rawResponse: text.slice(0, 1000),
+  });
+}
 
     // ==============================
     // ARRAY EXTRACTION SAFE
