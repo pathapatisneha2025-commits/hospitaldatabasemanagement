@@ -169,8 +169,8 @@ router.post("/item-master", async (req, res) => {
       body: JSON.stringify(postBody),
     });
 
-    const text = await response.text();
-
+const text = await response.text();
+console.log("RAW RESPONSE:", text);
     let vendorData;
     try {
       vendorData = JSON.parse(text);
