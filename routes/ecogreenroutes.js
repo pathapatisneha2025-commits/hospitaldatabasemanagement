@@ -168,12 +168,20 @@ router.post("/item-master", async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(postBody),
     });
-
 const text = await response.text();
+
 console.log("RAW RESPONSE:", text);
-    let vendorData;
-    try {
-      vendorData = JSON.parse(text);
+
+// ✅ ADD THIS HERE (before JSON.parse)
+if (text.includes(": -") || text.includes(":-,")) {
+  console.error("⚠️ Invalid vendor JSON detected");
+  console.log(text.substring(0, 500));
+}
+
+let vendorData;
+
+try {
+  vendorData = JSON.parse(text);
     } catch {
       return res.status(500).json({
         error: "Vendor returned invalid JSON",
