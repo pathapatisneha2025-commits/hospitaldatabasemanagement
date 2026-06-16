@@ -139,109 +139,90 @@ router.post("/item-master", async (req, res) => {
     return res.status(400).json({ error: "All fields are required" });
   }
 
+  const vendorUrl =
+    "http://117.211.64.158:21000/ws_c2_services_get_master_data";
+
+  const apiKey = await getToken();
+
+  let formattedDateTime = inputDateTime
+    .replace("T", " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*:\s*/g, ":")
+    .trim();
+
+  if (!/:\d{2}$/.test(formattedDateTime)) {
+    formattedDateTime += ":00";
+  }
+
+  const postBody = {
+    c2Code,
+    storeId,
+    prodCode,
+    inputDateTime: formattedDateTime,
+    apiKey,
+  };
+
+  // =========================
+  // SAFE FETCH WITH RETRY
+  // =========================
+  async function fetchVendor(retries = 3) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(vendorUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Connection: "close",
+          },
+          body: JSON.stringify(postBody),
+        });
+
+        const text = await response.text();
+
+        // detect truncation
+        if (!text || (!text.trim().endsWith("}") && !text.trim().endsWith("]"))) {
+          throw new Error("Truncated vendor response");
+        }
+
+        return text;
+      } catch (err) {
+        console.log(`Vendor retry ${i + 1} failed:`, err.message);
+
+        if (i === retries - 1) throw err;
+      }
+    }
+  }
+
   try {
-    const apiKey = await getToken();
+    const text = await fetchVendor(3);
 
-    let formattedDateTime = inputDateTime
-      ?.replace("T", " ")
-      ?.replace(/\s+/g, " ")
-      ?.replace(/\s*:\s*/g, ":")
-      ?.trim();
+    let vendorData;
 
-    if (!formattedDateTime) {
-      return res.status(400).json({ error: "Invalid inputDateTime" });
+    try {
+      vendorData = JSON.parse(text);
+    } catch (err) {
+      return res.status(500).json({
+        error: "Vendor returned invalid JSON",
+        message: err.message,
+        rawResponse: text.slice(0, 2000),
+      });
     }
 
-    if (!/:\d{2}$/.test(formattedDateTime)) {
-      formattedDateTime += ":00";
-    }
-
-    const vendorUrl =
-      "http://117.211.64.158:21000/ws_c2_services_get_master_data";
-
-    const postBody = {
-      c2Code,
-      storeId,
-      prodCode,
-      inputDateTime: formattedDateTime,
-      apiKey,
-    };
-
-    const response = await fetch(vendorUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(postBody),
-    });
-
-   const text = await response.text();
-
-console.log("RAW VENDOR RESPONSE (first 500 chars):", text.slice(0, 500));
-
-// -------------------------------
-// CLEAN INVALID CHARACTERS FIRST
-// -------------------------------
-let cleanedText = text
-  // fix standalone minus used as null
-  .replace(/:\s*-\s*(?=[,}\]])/g, ': null')   // : -, : -}, : -]
-  .replace(/:\s*-\s*$/g, ': null')            // trailing
-  .replace(/:\s*-\s*"/g, ': null"')          // edge case quoted
-  .replace(/:\s*NaN/g, ': null')
-  .replace(/:\s*undefined/g, ': null');
-
-// -------------------------------
-// SAFE JSON CHECK
-// -------------------------------
-if (
-  !cleanedText ||
-  (!cleanedText.trim().startsWith("{") &&
-   !cleanedText.trim().startsWith("["))
-) {
-  return res.status(500).json({
-    error: "Vendor returned non-JSON response",
-    rawResponse: text.slice(0, 1000),
-  });
-}
-
-let vendorData;
-
-try {
-  vendorData = JSON.parse(cleanedText);
-} catch (err) {
-  console.log(" JSON PARSE FAILED:", err.message);
-
-  return res.status(500).json({
-    error: "Vendor returned INVALID JSON",
-    message: err.message,
-    rawResponse: text.slice(0, 1000),
-  });
-}
-
-    // ==============================
-    // ARRAY EXTRACTION SAFE
-    // ==============================
     let itemsArray = [];
 
     if (Array.isArray(vendorData)) itemsArray = vendorData;
     else if (Array.isArray(vendorData?.data)) itemsArray = vendorData.data;
     else if (Array.isArray(vendorData?.items)) itemsArray = vendorData.items;
     else if (Array.isArray(vendorData?.records)) itemsArray = vendorData.records;
-    else if (vendorData?.code && vendorData?.message) {
-      return res.status(400).json({
-        error: "Vendor API error",
-        vendorMessage: vendorData.message,
-      });
-    } else {
+    else {
       return res.status(500).json({
-        error: "Unknown vendor response format",
+        error: "Invalid vendor response format",
         rawVendorData: vendorData,
       });
     }
 
     const insertedItems = [];
 
-    // ==============================
-    // DB INSERT LOOP
-    // ==============================
     for (const item of itemsArray) {
       try {
         const query = `
@@ -258,8 +239,7 @@ try {
             allowDisc, gstCode,
             parentItemCode, parentItemName,
             molecule_info
-          )
-          VALUES (
+          ) VALUES (
             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
             $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
           )
@@ -352,11 +332,10 @@ try {
 
         insertedItems.push({
           itemCode: item.itemCode,
-          itemName: item.itemName,
           status: "inserted",
         });
-      } catch (itemErr) {
-        console.error("Insert failed:", item.itemCode, itemErr.message);
+      } catch (err) {
+        console.error("Insert failed:", item.itemCode, err.message);
       }
     }
 
@@ -365,11 +344,10 @@ try {
       totalItems: itemsArray.length,
       insertedItems,
     });
-
   } catch (err) {
-    console.error("Item Master Error:", err);
+    console.error("Item Master Error:", err.message);
     return res.status(500).json({
-      error: "Failed to fetch or store item master",
+      error: "Vendor fetch failed (likely truncated response)",
       message: err.message,
     });
   }
