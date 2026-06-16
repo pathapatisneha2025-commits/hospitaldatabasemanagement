@@ -171,16 +171,42 @@ router.post("/item-master", async (req, res) => {
 
     const text = await response.text();
 
+    // =========================
+    // 🔥 FIX VENDOR JSON
+    // =========================
+    function fixVendorJson(str) {
+      return str
+        // fix 15"S issue
+        .replace(/(\d)"S/g, '$1\\"S')
+
+        // fix -ABC type invalid values
+        .replace(/:\s*-\s*([A-Za-z"])/g, ': null')
+
+        // remove trailing commas
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]");
+    }
+
     let vendorData;
+
     try {
-      vendorData = JSON.parse(text);
-    } catch {
+      vendorData = JSON.parse(fixVendorJson(text));
+    } catch (err) {
+      console.error("❌ Vendor JSON still invalid");
+
+      console.log("RAW RESPONSE SAMPLE:");
+      console.log(text.substring(0, 1000));
+
       return res.status(500).json({
         error: "Vendor returned invalid JSON",
-        rawResponse: text,
+        message: err.message,
+        sample: text.substring(0, 500),
       });
     }
 
+    // =========================
+    // NORMALIZE DATA
+    // =========================
     let itemsArray = [];
 
     if (Array.isArray(vendorData)) itemsArray = vendorData;
@@ -201,6 +227,9 @@ router.post("/item-master", async (req, res) => {
 
     const insertedItems = [];
 
+    // =========================
+    // INSERT LOOP
+    // =========================
     for (const item of itemsArray) {
       try {
         const query = `
@@ -303,7 +332,6 @@ router.post("/item-master", async (req, res) => {
           item.parentItemCode || null,
           item.parentItemName || null,
 
-          // ✅ NEW FIELD (JSONB)
           JSON.stringify(item.moleculeInfo || [])
         ];
 
@@ -312,71 +340,23 @@ router.post("/item-master", async (req, res) => {
         insertedItems.push({
           itemCode: item.itemCode,
           itemName: item.itemName,
-          itemShortName: item.itemShortName || null,
-          itemFullName: item.itemFullName || null,
-
-          brandCode: item.brandCode || null,
-          brandName: item.brandName || null,
-          categoryCode: item.categoryCode || null,
-          categoryName: item.categoryName || null,
-
-          contentCode: item.contentCode || null,
-          contentName: item.contentName || null,
-          packCode: item.packCode || null,
-          packName: item.packName || null,
-
-          itemQtyPerBox: item.itemQtyPerBox || 0,
-          itemAddedDate: item.itemAddedDate || null,
-          itemUpdatedDate: item.itemUpdatedDate || null,
-
-          hsnSacCode: item.hsnSacCode || null,
-          hsnSacName: item.hsnSacName || null,
-
-          minSaleQty: item.minSaleQty || 1,
-          note: item.note || null,
-
-          mfacName: item.mfacName || null,
-          mfacCode: item.mfacCode || null,
-
-          packTypCode: item.packTypCode || null,
-          packTypName: item.packTypName || null,
-
-          scheduleCode: item.scheduleCode || null,
-          scheduleName: item.scheduleName || null,
-
-          categoryHeadCode: item.categoryHeadCode || null,
-          categoryHeadName: item.categoryHeadName || null,
-
-          categoryClassCode: item.categoryClassCode || null,
-          categoryClassName: item.categoryClassName || null,
-
-          allowDisc: item.allowDisc || null,
-          gstCode: item.gstCode || null,
-
-          parentItemCode: item.parentItemCode || null,
-          parentItemName: item.parentItemName || null,
-
-          // ✅ NEW RESPONSE FIELD
-          moleculeInfo: item.moleculeInfo || [],
-
           status: "inserted",
         });
+
       } catch (itemErr) {
-        console.error(
-          `Insert failed ${item.itemCode}:`,
-          itemErr.message
-        );
+        console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
       }
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Item master synced successfully",
       totalItems: itemsArray.length,
       insertedItems,
     });
+
   } catch (err) {
     console.error("Item Master Error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to fetch or store item master",
     });
   }
