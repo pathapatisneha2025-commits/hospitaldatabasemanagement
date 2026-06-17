@@ -6,23 +6,28 @@ const autoLogoutJob = () => {
     try {
       console.log("Running midnight auto logout job...");
 
-      // ✅ Get latest attendance + employee schedule_out
       const result = await pool.query(`
         SELECT DISTINCT ON (a.employee_id)
           a.id,
           a.employee_id,
+          a.phone,
           a.status,
           a.timestamp,
-          s.schedule_out
+          e.id AS emp_id,
+          e.mobile,
+          e.schedule_out
         FROM attendance a
-        LEFT JOIN employee_shifts s 
-          ON s.employee_id = a.employee_id
+        LEFT JOIN employees e 
+          ON (
+            e.id::text = a.employee_id::text
+            OR e.mobile::text = a.employee_id::text
+            OR e.mobile::text = a.phone::text
+          )
         ORDER BY a.employee_id, a.timestamp DESC;
       `);
 
       const latestRecords = result.rows;
 
-      // ✅ Only employees still ON DUTY
       const missingOut = latestRecords.filter(
         (row) => row.status === "On Duty"
       );
@@ -32,9 +37,11 @@ const autoLogoutJob = () => {
         return;
       }
 
-      // ✅ Auto logout using schedule_out time (NOT NOW)
       for (const emp of missingOut) {
-        const logoutTime = emp.schedule_out || new Date();
+        if (!emp.schedule_out) {
+          console.log(`Skipping employee ${emp.employee_id} (no schedule_out)`);
+          continue;
+        }
 
         await pool.query(
           `
@@ -50,9 +57,9 @@ const autoLogoutJob = () => {
           [
             emp.employee_id,
             "System Logged Out",
-            logoutTime, // ✅ schedule_out used here
+            emp.schedule_out,
             true,
-            "System auto logout at scheduled out time",
+            "Auto logout based on employee scheduled out time",
           ]
         );
       }
