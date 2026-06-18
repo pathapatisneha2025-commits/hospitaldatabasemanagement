@@ -133,14 +133,7 @@ const getToken = async () => {
 };
 
 router.post("/item-master", async (req, res) => {
-  const {
-    c2Code,
-    storeId,
-    prodCode,
-    inputDateTime,
-    page = 1,
-    limit = 50
-  } = req.body;
+  const { c2Code, storeId, prodCode, inputDateTime } = req.body;
 
   if (!c2Code || !storeId || !prodCode) {
     return res.status(400).json({ error: "All fields are required" });
@@ -149,9 +142,6 @@ router.post("/item-master", async (req, res) => {
   try {
     const apiKey = await getToken();
 
-    // =========================
-    // FORMAT DATE TIME
-    // =========================
     let formattedDateTime = inputDateTime
       .replace("T", " ")
       .replace(/\s+/g, " ")
@@ -162,9 +152,6 @@ router.post("/item-master", async (req, res) => {
       formattedDateTime += ":00";
     }
 
-    // =========================
-    // CALL VENDOR API
-    // =========================
     const vendorUrl =
       "http://117.211.64.158:21000/ws_c2_services_get_master_data";
 
@@ -194,9 +181,6 @@ router.post("/item-master", async (req, res) => {
       });
     }
 
-    // =========================
-    // NORMALIZE ITEMS
-    // =========================
     let itemsArray = [];
 
     if (Array.isArray(vendorData)) itemsArray = vendorData;
@@ -215,9 +199,8 @@ router.post("/item-master", async (req, res) => {
       });
     }
 
-    // =========================
-    // INSERT / UPSERT INTO DB
-    // =========================
+    const insertedItems = [];
+
     for (const item of itemsArray) {
       try {
         const query = `
@@ -320,47 +303,77 @@ router.post("/item-master", async (req, res) => {
           item.parentItemCode || null,
           item.parentItemName || null,
 
+          // ✅ NEW FIELD (JSONB)
           JSON.stringify(item.moleculeInfo || [])
         ];
 
         await pool.query(query, values);
+
+        insertedItems.push({
+          itemCode: item.itemCode,
+          itemName: item.itemName,
+          itemShortName: item.itemShortName || null,
+          itemFullName: item.itemFullName || null,
+
+          brandCode: item.brandCode || null,
+          brandName: item.brandName || null,
+          categoryCode: item.categoryCode || null,
+          categoryName: item.categoryName || null,
+
+          contentCode: item.contentCode || null,
+          contentName: item.contentName || null,
+          packCode: item.packCode || null,
+          packName: item.packName || null,
+
+          itemQtyPerBox: item.itemQtyPerBox || 0,
+          itemAddedDate: item.itemAddedDate || null,
+          itemUpdatedDate: item.itemUpdatedDate || null,
+
+          hsnSacCode: item.hsnSacCode || null,
+          hsnSacName: item.hsnSacName || null,
+
+          minSaleQty: item.minSaleQty || 1,
+          note: item.note || null,
+
+          mfacName: item.mfacName || null,
+          mfacCode: item.mfacCode || null,
+
+          packTypCode: item.packTypCode || null,
+          packTypName: item.packTypName || null,
+
+          scheduleCode: item.scheduleCode || null,
+          scheduleName: item.scheduleName || null,
+
+          categoryHeadCode: item.categoryHeadCode || null,
+          categoryHeadName: item.categoryHeadName || null,
+
+          categoryClassCode: item.categoryClassCode || null,
+          categoryClassName: item.categoryClassName || null,
+
+          allowDisc: item.allowDisc || null,
+          gstCode: item.gstCode || null,
+
+          parentItemCode: item.parentItemCode || null,
+          parentItemName: item.parentItemName || null,
+
+          // ✅ NEW RESPONSE FIELD
+          moleculeInfo: item.moleculeInfo || [],
+
+          status: "inserted",
+        });
       } catch (itemErr) {
-        console.error(`Insert failed ${item.itemCode}:`, itemErr.message);
+        console.error(
+          `Insert failed ${item.itemCode}:`,
+          itemErr.message
+        );
       }
     }
 
-    // =========================
-    // PAGINATION (DB SIDE)
-    // =========================
-    const offset = (page - 1) * limit;
-
-    const paginatedQuery = `
-      SELECT *
-      FROM item_master
-      ORDER BY item_code
-      LIMIT $1 OFFSET $2
-    `;
-
-    const dbResult = await pool.query(paginatedQuery, [limit, offset]);
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM item_master`
-    );
-
-    const totalCount = parseInt(countResult.rows[0].count, 10);
-
-    // =========================
-    // RESPONSE
-    // =========================
     res.status(200).json({
       message: "Item master synced successfully",
-      page,
-      limit,
-      totalItemsInDB: totalCount,
-      totalFetchedFromVendor: itemsArray.length,
-      data: dbResult.rows,
+      totalItems: itemsArray.length,
+      insertedItems,
     });
-
   } catch (err) {
     console.error("Item Master Error:", err.message);
     res.status(500).json({
