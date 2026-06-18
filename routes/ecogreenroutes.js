@@ -1752,8 +1752,26 @@ router.post("/sales-order", async (req, res) => {
 // });
 router.get("/sales-orders", async (req, res) => {
   try {
+    // 👇 create cutoff time: today 15:50 IST
+    const now = new Date();
+
+    const cutoff = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      15,
+      50,
+      0
+    );
+
     const result = await pool.query(
-      "SELECT * FROM ecogreensales_orders ORDER BY created_at DESC"
+      `
+      SELECT * 
+      FROM ecogreensales_orders
+      WHERE created_at <= $1
+      ORDER BY created_at DESC
+      `,
+      [cutoff.toISOString()]
     );
 
     const orders = result.rows.map((order) => ({
@@ -1975,7 +1993,13 @@ router.get("/sales-invoice/by-order", async (req, res) => {
 // Fetch all sales invoices
 router.get("/sales-invoice/all", async (req, res) => {
   try {
-    const query = `SELECT * FROM ecogreensales_invoices ORDER BY created_at DESC`;
+    const query = `
+      SELECT * 
+      FROM ecogreensales_invoices
+      WHERE created_at <= (CURRENT_DATE + TIME '15:50:00')
+      ORDER BY created_at DESC
+    `;
+
     const result = await pool.query(query);
 
     res.status(200).json(result.rows);
