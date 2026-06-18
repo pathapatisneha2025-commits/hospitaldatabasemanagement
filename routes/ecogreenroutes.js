@@ -1993,7 +1993,12 @@ router.get("/ecogreen/sales-invoice/today", async (req, res) => {
       ORDER BY created_at_system DESC
     `);
 
-    res.json(result.rows);
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({
