@@ -1984,6 +1984,24 @@ router.get("/sales-invoice/all", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+router.get("/ecogreen/sales-invoice/today", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM ecogreensales_invoices
+      WHERE created_at_system::date = CURRENT_DATE
+      ORDER BY created_at_system DESC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
 
 router.post("/sales-invoice/assign-delivery", async (req, res) => {
   const { invoice_id, order_no } = req.body;
