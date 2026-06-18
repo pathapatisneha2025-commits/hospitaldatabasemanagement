@@ -1768,8 +1768,8 @@ router.get("/sales-orders", async (req, res) => {
       `
       SELECT * 
       FROM ecogreensales_orders
-      WHERE created_at <= $1
-      ORDER BY created_at DESC
+      WHERE created_at_system <= $1
+      ORDER BY created_at_system DESC
       `,
       [cutoff.toISOString()]
     );
