@@ -4,7 +4,7 @@ const syncSalesInvoices = async () => {
   try {
     console.log("🔄 Sales Invoice Sync started");
 
-    // 1. Get last sync time (NO LIMIT VERSION)
+    // 1. Get last sync time
     const syncRes = await pool.query(`
       SELECT last_synced_at
       FROM sync_logs_invoice
@@ -19,18 +19,19 @@ const syncSalesInvoices = async () => {
       yesterday.setDate(yesterday.getDate() - 1);
 
       lastSyncedAt = yesterday;
-
       console.log("No sync found → fallback used:", lastSyncedAt);
     }
 
-    // 3. BACKFILL SAFETY (prevents missing data)
+    // 3. SAFETY WINDOW (IMPORTANT)
     const fromDate = new Date(lastSyncedAt);
-    fromDate.setMinutes(fromDate.getMinutes() - 10);
+
+    // 🔥 increase buffer to avoid missing invoices
+    fromDate.setMinutes(fromDate.getMinutes() - 60);
 
     const fromTime = fromDate.toISOString();
 
-    // 4. API CALL
-    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(fromTime)}`;
+    const url =
+      `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(fromTime)}`;
 
     console.log("📡 Fetching from:", fromTime);
 
@@ -46,7 +47,7 @@ const syncSalesInvoices = async () => {
 
     let latestCreatedAt = new Date(lastSyncedAt);
 
-    // 5. INSERT / UPDATE
+    // 4. INSERT / UPDATE
     for (const data of invoices) {
       const createdAt = new Date(data.created_at);
 
@@ -103,13 +104,13 @@ const syncSalesInvoices = async () => {
         ]
       );
 
-      // track latest timestamp
+      // track latest
       if (createdAt > latestCreatedAt) {
         latestCreatedAt = createdAt;
       }
     }
 
-    // 6. SAVE SYNC LOG
+    // 5. SAVE SYNC LOG
     await pool.query(
       `INSERT INTO sync_logs_invoice (last_synced_at) VALUES ($1)`,
       [latestCreatedAt]
