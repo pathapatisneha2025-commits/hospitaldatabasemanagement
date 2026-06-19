@@ -1805,8 +1805,8 @@ router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
   try {
-    const createdAt = data.created_at || null;
-    const createdAtSystem = new Date().toISOString();
+   const createdAt = new Date().toISOString();
+const createdAtSystem = new Date().toISOString();
 
     const values = [
       data.order_id || null,
