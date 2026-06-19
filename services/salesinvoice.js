@@ -4,19 +4,16 @@ const syncSalesInvoices = async () => {
   try {
     console.log("🔄 Sales Invoice Sync started");
 
-    // 1. Get last sync time
-    const syncRes = await pool.query(
-      `
+    // 1. Get last sync time (SAFE without relying on LIMIT logic issue)
+    const syncRes = await pool.query(`
       SELECT last_synced_at
       FROM sync_logs_invoice
       ORDER BY id DESC
-      LIMIT 1
-      `
-    );
+    `);
 
     let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
-    // ✅ fallback: yesterday IST if no sync exists
+    // fallback: yesterday IST if no sync exists
     if (!lastSyncedAt) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
@@ -33,9 +30,9 @@ const syncSalesInvoices = async () => {
       );
     }
 
-    // 2. Build API URL safely
+    // 2. Build API URL
     const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(
-      lastSyncedAt
+      lastSyncedAt.toISOString()
     )}`;
 
     // 3. Fetch from EcoGreen API
@@ -55,7 +52,7 @@ const syncSalesInvoices = async () => {
 
     let latestCreatedAt = lastSyncedAt;
 
-    // 4. Save invoices to DB
+    // 4. Save invoices
     for (const data of invoices) {
       await pool.query(
         `
@@ -81,7 +78,6 @@ const syncSalesInvoices = async () => {
           $1,$2,$3,$4,$5,$6,$7,$8,
           $9,$10,$11,$12,$13,$14,$15,$16
         )
-
         ON CONFLICT (order_id)
         DO UPDATE SET
           payment_status = EXCLUDED.payment_status,
@@ -109,7 +105,6 @@ const syncSalesInvoices = async () => {
         ]
       );
 
-      // track latest created_at
       if (
         data.created_at &&
         new Date(data.created_at) > new Date(latestCreatedAt)
@@ -118,7 +113,7 @@ const syncSalesInvoices = async () => {
       }
     }
 
-    // 5. Save latest sync time
+    // 5. Save sync time
     await pool.query(
       `
       INSERT INTO sync_logs_invoice (last_synced_at)
