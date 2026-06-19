@@ -1805,91 +1805,88 @@ router.get("/sales-orders/:id", async (req, res) => {
 router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
+  // ✅ convert to array always
+  const invoices = Array.isArray(data) ? data : [data];
+
   try {
-    const createdAt = data.created_at || null;
-    const createdAtSystem = new Date().toISOString();
+    const results = [];
 
-    const values = [
-      data.order_id || null,
-      data.order_no || null,
-      data.invoice_id || null,
+    for (const item of invoices) {
+      const createdAt = item.created_at || null;
+      const createdAtSystem = new Date().toISOString();
 
-      createdAt,
-      createdAtSystem,
+      const values = [
+        item.order_id || null,
+        item.order_no || null,
+        item.invoice_id || null,
 
-      data.createduser || null,
+        createdAt,
+        createdAtSystem,
 
-      data.order_type || null,
-      data.payment_status || null,
-      data.total_price || 0,
-      data.total_discount || 0,
-      data.order_for || null,
-      data.delivered_by || null,
-      data.shipping_charge || 0,
-      data.patient_name || null,
-      data.patient_contact_no || null,
+        item.createduser || null,
+        item.order_type || null,
+        item.payment_status || null,
+        item.total_price || 0,
+        item.total_discount || 0,
+        item.order_for || null,
+        item.delivered_by || null,
+        item.shipping_charge || 0,
+        item.patient_name || null,
+        item.patient_contact_no || null,
 
-      // Patient Address
-      data.patient_address
-        ? JSON.stringify(data.patient_address)
-        : null,
+        item.patient_address ? JSON.stringify(item.patient_address) : null,
+        item.pharmacy ? JSON.stringify(item.pharmacy) : null,
 
-      // Pharmacy
-      data.pharmacy
-        ? JSON.stringify(data.pharmacy)
-        : null,
+        item.store_id || null,
+        item.order_items ? JSON.stringify(item.order_items) : null,
 
-      data.store_id || null,
+        item.user_email || null,
 
-      data.order_items
-        ? JSON.stringify(data.order_items)
-        : null,
+        item.reminder_date || null,
+        item.d_remind_date || null
+      ];
 
-      data.user_email || null,
+      const query = `
+        INSERT INTO ecogreensales_invoices (
+          order_id,
+          order_no,
+          invoice_id,
+          created_at,
+          created_at_system,
+          createduser,
+          order_type,
+          payment_status,
+          total_price,
+          total_discount,
+          order_for,
+          delivered_by,
+          shipping_charge,
+          patient_name,
+          patient_contact_no,
+          patient_address,
+          pharmacy,
+          store_id,
+          order_items,
+          user_email,
+          reminder_date,
+          d_remind_date
+        )
+        VALUES (
+          ${values.map((_, i) => `$${i + 1}`).join(",")}
+        )
+        RETURNING id
+      `;
 
-      // ✅ NEW FIELDS
-      data.reminder_date || null,
-      data.d_remind_date || null
-    ];
+      const result = await pool.query(query, values);
 
-    const query = `
-      INSERT INTO ecogreensales_invoices (
-        order_id,
-        order_no,
-        invoice_id,
-        created_at,
-        created_at_system,
-        createduser,
-        order_type,
-        payment_status,
-        total_price,
-        total_discount,
-        order_for,
-        delivered_by,
-        shipping_charge,
-        patient_name,
-        patient_contact_no,
-        patient_address,
-        pharmacy,
-        store_id,
-        order_items,
-        user_email,
-
-        reminder_date,
-        d_remind_date
-      )
-      VALUES (
-        ${values.map((_, i) => `$${i + 1}`).join(",")}
-      )
-      RETURNING id
-    `;
-
-    const result = await pool.query(query, values);
+      results.push(result.rows[0].id);
+    }
 
     res.status(200).json({
       success: true,
-      message: "Sales invoice saved successfully",
-      id: result.rows[0].id
+      message: "Batch invoices saved successfully",
+      insertedCount: results.length,
+      ids: results
     });
 
   } catch (err) {
