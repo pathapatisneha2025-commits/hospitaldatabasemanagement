@@ -1752,51 +1752,23 @@ router.post("/sales-order", async (req, res) => {
 // });
 router.get("/sales-orders", async (req, res) => {
   try {
-    // 👇 create cutoff time: today 15:50 IST
-    const now = new Date();
-
-    const cutoff = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      15,
-      50,
-      0
-    );
-
-    const result = await pool.query(
-      `
-      SELECT * 
+    const query = `
+      SELECT *
       FROM ecogreensales_orders
-      WHERE created_at_system <= $1
+      WHERE created_at_system < (
+        (CURRENT_DATE + TIME '15:50:00')
+      )
       ORDER BY created_at_system DESC
-      `,
-      [cutoff.toISOString()]
-    );
+    `;
 
-    const orders = result.rows.map((order) => ({
-      ...order,
-      patient_address:
-        typeof order.patient_address === "string"
-          ? JSON.parse(order.patient_address || "{}")
-          : order.patient_address || {},
-      pharmacy:
-        typeof order.pharmacy === "string"
-          ? JSON.parse(order.pharmacy || "{}")
-          : order.pharmacy || {},
-      order_items:
-        typeof order.order_items === "string"
-          ? JSON.parse(order.order_items || "[]")
-          : order.order_items || [],
-    }));
+    const result = await pool.query(query);
 
-    res.status(200).json(orders);
+    res.status(200).json(result.rows);
   } catch (err) {
     console.error("Error fetching orders:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 // ✅ Fetch single order by ID
 router.get("/sales-orders/:id", async (req, res) => {
   try {
