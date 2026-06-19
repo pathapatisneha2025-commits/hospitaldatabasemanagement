@@ -31,7 +31,7 @@ const syncSalesInvoices = async () => {
     const fromTime = fromDate.toISOString();
 
     const url =
-      `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(fromTime)}`;
+      `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoice?from=${encodeURIComponent(fromTime)}`;
 
     console.log("📡 Fetching from:", fromTime);
 
