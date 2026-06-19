@@ -4,6 +4,7 @@ const syncSalesInvoices = async () => {
   try {
     console.log("🔄 Sales Invoice Sync started");
 
+    // 1. Get last sync time (NO LIMIT VERSION)
     const syncRes = await pool.query(`
       SELECT last_synced_at
       FROM sync_logs_invoice
@@ -12,38 +13,40 @@ const syncSalesInvoices = async () => {
 
     let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
-    // ✅ SAFE fallback (no locale / timezone conversion)
+    // 2. fallback
     if (!lastSyncedAt) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
-      lastSyncedAt = new Date(yesterday.getTime());
+      lastSyncedAt = yesterday;
 
-      console.log("Using fallback timestamp:", lastSyncedAt);
+      console.log("No sync found → fallback used:", lastSyncedAt);
     }
 
-    // 🔥 BACKFILL SAFETY (prevents missing invoices)
+    // 3. BACKFILL SAFETY (prevents missing data)
     const fromDate = new Date(lastSyncedAt);
-    fromDate.setDate(fromDate.getDate() - 2);
+    fromDate.setMinutes(fromDate.getMinutes() - 10);
 
-    const fromTime = fromDate; // keep as Date object (no string conversion)
+    const fromTime = fromDate.toISOString();
 
-    // ⚠️ IMPORTANT: API must accept this format OR you must stringify server-side
-    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${fromTime}`;
+    // 4. API CALL
+    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(fromTime)}`;
+
+    console.log("📡 Fetching from:", fromTime);
 
     const response = await fetch(url);
     const result = await response.json();
 
-    // support both formats: array OR {data: []}
-    const invoices = Array.isArray(result) ? result : result?.data;
+    const invoices = result?.data || result;
 
     if (!Array.isArray(invoices)) {
-      console.log("Invalid response format");
+      console.log("❌ Invalid response format");
       return;
     }
 
     let latestCreatedAt = new Date(lastSyncedAt);
 
+    // 5. INSERT / UPDATE
     for (const data of invoices) {
       const createdAt = new Date(data.created_at);
 
@@ -100,20 +103,19 @@ const syncSalesInvoices = async () => {
         ]
       );
 
-      // 🔥 track latest timestamp safely
+      // track latest timestamp
       if (createdAt > latestCreatedAt) {
         latestCreatedAt = createdAt;
       }
     }
 
-    // ✅ save sync checkpoint
+    // 6. SAVE SYNC LOG
     await pool.query(
       `INSERT INTO sync_logs_invoice (last_synced_at) VALUES ($1)`,
       [latestCreatedAt]
     );
 
-    console.log("✅ Sync completed:", latestCreatedAt);
-
+    console.log("✅ Sync completed:", latestCreatedAt.toISOString());
   } catch (err) {
     console.error("❌ Sync error:", err.message);
   }
