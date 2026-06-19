@@ -78,8 +78,9 @@ const syncSalesInvoices = async () => {
           $1,$2,$3,$4,$5,$6,$7,$8,
           $9,$10,$11,$12,$13,$14,$15,$16
         )
-        ON CONFLICT (order_id)
-        DO UPDATE SET
+ON CONFLICT (invoice_id)       
+ DO UPDATE SET
+
           payment_status = EXCLUDED.payment_status,
           total_price = EXCLUDED.total_price,
           total_discount = EXCLUDED.total_discount,
