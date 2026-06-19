@@ -1752,21 +1752,34 @@ router.post("/sales-order", async (req, res) => {
 // });
 router.get("/sales-orders", async (req, res) => {
   try {
-    const query = `
-      SELECT *
-      FROM ecogreensales_orders
-      WHERE created_at_system <= TIMESTAMP '2026-06-18 15:50:00'
-      ORDER BY created_at_system DESC
-    `;
+    const result = await pool.query(
+      "SELECT * FROM ecogreensales_orders ORDER BY created_at DESC"
+    );
 
-    const result = await pool.query(query);
+    const orders = result.rows.map((order) => ({
+      ...order,
+      patient_address:
+        typeof order.patient_address === "string"
+          ? JSON.parse(order.patient_address || "{}")
+          : order.patient_address || {},
+      pharmacy:
+        typeof order.pharmacy === "string"
+          ? JSON.parse(order.pharmacy || "{}")
+          : order.pharmacy || {},
+      order_items:
+        typeof order.order_items === "string"
+          ? JSON.parse(order.order_items || "[]")
+          : order.order_items || [],
+    }));
 
-    res.status(200).json(result.rows);
+    res.status(200).json(orders);
   } catch (err) {
     console.error("Error fetching orders:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+
 // ✅ Fetch single order by ID
 router.get("/sales-orders/:id", async (req, res) => {
   try {
@@ -1963,14 +1976,9 @@ router.get("/sales-invoice/by-order", async (req, res) => {
 // Fetch all sales invoices
 router.get("/sales-invoice/all", async (req, res) => {
   try {
-    const query = `
-      SELECT *
-      FROM ecogreensales_invoices
-      WHERE created_at <= TIMESTAMP '2026-06-18 15:36:00'
-      ORDER BY created_at DESC
-    `;
-
+    const query = `SELECT * FROM ecogreensales_invoices ORDER BY created_at DESC`;
     const result = await pool.query(query);
+
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("Error fetching sales invoices:", err);
