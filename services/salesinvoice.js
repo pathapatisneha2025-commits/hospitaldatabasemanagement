@@ -12,22 +12,19 @@ const syncSalesInvoices = async () => {
 
     let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
+    // ✅ SAFE fallback (NO locale conversion)
     if (!lastSyncedAt) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
-      lastSyncedAt = new Date(
-        yesterday.toLocaleString("en-US", {
-          timeZone: "Asia/Kolkata",
-        })
-      );
+      lastSyncedAt = new Date(yesterday.getTime()); // keep pure timestamp
 
-      console.log("Using fallback IST:", lastSyncedAt);
+      console.log("Using fallback ISO:", lastSyncedAt.toISOString());
     }
 
-    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(
-      lastSyncedAt.toISOString()
-    )}`;
+    const fromTime = new Date(lastSyncedAt).toISOString();
+
+    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(fromTime)}`;
 
     const response = await fetch(url);
     const invoices = await response.json();
@@ -37,9 +34,11 @@ const syncSalesInvoices = async () => {
       return;
     }
 
-    let latestCreatedAt = lastSyncedAt;
+    let latestCreatedAt = new Date(lastSyncedAt);
 
     for (const data of invoices) {
+      const createdAt = new Date(data.created_at);
+
       await pool.query(
         `
         INSERT INTO ecogreensales_invoices (
@@ -75,7 +74,7 @@ const syncSalesInvoices = async () => {
         [
           data.order_id,
           data.order_no,
-          data.invoice_id,   // ✅ FIXED HERE (IMPORTANT)
+          data.invoice_id,
           data.created_at,
           data.order_type,
           data.payment_status,
@@ -93,20 +92,19 @@ const syncSalesInvoices = async () => {
         ]
       );
 
-      if (
-        data.created_at &&
-        new Date(data.created_at) > new Date(latestCreatedAt)
-      ) {
-        latestCreatedAt = data.created_at;
+      // ✅ correct latest sync tracking
+      if (createdAt > latestCreatedAt) {
+        latestCreatedAt = createdAt;
       }
     }
 
+    // ✅ store ISO directly (no conversion loss)
     await pool.query(
       `INSERT INTO sync_logs_invoice (last_synced_at) VALUES ($1)`,
-      [latestCreatedAt]
+      [latestCreatedAt.toISOString()]
     );
 
-    console.log("✅ Sync completed:", latestCreatedAt);
+    console.log("✅ Sync completed:", latestCreatedAt.toISOString());
 
   } catch (err) {
     console.error("❌ Sync error:", err.message);
