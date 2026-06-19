@@ -4,7 +4,6 @@ const syncSalesInvoices = async () => {
   try {
     console.log("🔄 Sales Invoice Sync started");
 
-    // 1. Get last sync time (SAFE without relying on LIMIT logic issue)
     const syncRes = await pool.query(`
       SELECT last_synced_at
       FROM sync_logs_invoice
@@ -13,7 +12,6 @@ const syncSalesInvoices = async () => {
 
     let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
-    // fallback: yesterday IST if no sync exists
     if (!lastSyncedAt) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
@@ -24,41 +22,30 @@ const syncSalesInvoices = async () => {
         })
       );
 
-      console.log(
-        "No previous invoice sync found, using IST yesterday:",
-        lastSyncedAt
-      );
+      console.log("Using fallback IST:", lastSyncedAt);
     }
 
-    // 2. Build API URL
     const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(
       lastSyncedAt.toISOString()
     )}`;
 
-    // 3. Fetch from EcoGreen API
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
+    const response = await fetch(url);
     const invoices = await response.json();
 
     if (!Array.isArray(invoices)) {
-      console.log("❌ Invalid response from invoice API");
+      console.log("Invalid response");
       return;
     }
 
     let latestCreatedAt = lastSyncedAt;
 
-    // 4. Save invoices
     for (const data of invoices) {
       await pool.query(
         `
         INSERT INTO ecogreensales_invoices (
           order_id,
           order_no,
+          invoice_id,
           created_at,
           order_type,
           payment_status,
@@ -76,11 +63,10 @@ const syncSalesInvoices = async () => {
         )
         VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,
-          $9,$10,$11,$12,$13,$14,$15,$16
+          $9,$10,$11,$12,$13,$14,$15,$16,$17
         )
-ON CONFLICT (invoice_id)       
- DO UPDATE SET
-
+        ON CONFLICT (invoice_id)
+        DO UPDATE SET
           payment_status = EXCLUDED.payment_status,
           total_price = EXCLUDED.total_price,
           total_discount = EXCLUDED.total_discount,
@@ -89,6 +75,7 @@ ON CONFLICT (invoice_id)
         [
           data.order_id,
           data.order_no,
+          data.invoice_id,   // ✅ FIXED HERE (IMPORTANT)
           data.created_at,
           data.order_type,
           data.payment_status,
@@ -114,19 +101,15 @@ ON CONFLICT (invoice_id)
       }
     }
 
-    // 5. Save sync time
     await pool.query(
-      `
-      INSERT INTO sync_logs_invoice (last_synced_at)
-      VALUES ($1)
-      `,
+      `INSERT INTO sync_logs_invoice (last_synced_at) VALUES ($1)`,
       [latestCreatedAt]
     );
 
-    console.log("✅ Sales Invoice Sync completed:", latestCreatedAt);
+    console.log("✅ Sync completed:", latestCreatedAt);
 
   } catch (err) {
-    console.error("❌ Sales Invoice Sync error:", err.message);
+    console.error("❌ Sync error:", err.message);
   }
 };
 
