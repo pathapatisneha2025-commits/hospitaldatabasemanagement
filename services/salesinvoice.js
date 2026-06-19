@@ -12,25 +12,33 @@ const syncSalesInvoices = async () => {
 
     let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
-    // ✅ SAFE fallback (NO locale conversion)
+    // ✅ SAFE fallback (no locale / timezone conversion)
     if (!lastSyncedAt) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
-      lastSyncedAt = new Date(yesterday.getTime()); // keep pure timestamp
+      lastSyncedAt = new Date(yesterday.getTime());
 
-      console.log("Using fallback ISO:", lastSyncedAt.toISOString());
+      console.log("Using fallback timestamp:", lastSyncedAt);
     }
 
-    const fromTime = new Date(lastSyncedAt).toISOString();
+    // 🔥 BACKFILL SAFETY (prevents missing invoices)
+    const fromDate = new Date(lastSyncedAt);
+    fromDate.setDate(fromDate.getDate() - 2);
 
-    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(fromTime)}`;
+    const fromTime = fromDate; // keep as Date object (no string conversion)
+
+    // ⚠️ IMPORTANT: API must accept this format OR you must stringify server-side
+    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${fromTime}`;
 
     const response = await fetch(url);
-    const invoices = await response.json();
+    const result = await response.json();
+
+    // support both formats: array OR {data: []}
+    const invoices = Array.isArray(result) ? result : result?.data;
 
     if (!Array.isArray(invoices)) {
-      console.log("Invalid response");
+      console.log("Invalid response format");
       return;
     }
 
@@ -92,19 +100,19 @@ const syncSalesInvoices = async () => {
         ]
       );
 
-      // ✅ correct latest sync tracking
+      // 🔥 track latest timestamp safely
       if (createdAt > latestCreatedAt) {
         latestCreatedAt = createdAt;
       }
     }
 
-    // ✅ store ISO directly (no conversion loss)
+    // ✅ save sync checkpoint
     await pool.query(
       `INSERT INTO sync_logs_invoice (last_synced_at) VALUES ($1)`,
-      [latestCreatedAt.toISOString()]
+      [latestCreatedAt]
     );
 
-    console.log("✅ Sync completed:", latestCreatedAt.toISOString());
+    console.log("✅ Sync completed:", latestCreatedAt);
 
   } catch (err) {
     console.error("❌ Sync error:", err.message);
