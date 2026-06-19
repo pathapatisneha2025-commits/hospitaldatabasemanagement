@@ -1806,12 +1806,11 @@ router.post("/sales-invoice", async (req, res) => {
   try {
     const data = req.body;
 
-    // ✅ always expect invoices array inside payload
     const invoices = Array.isArray(data.invoices)
       ? data.invoices
       : [];
 
-    if (invoices.length === 0) {
+    if (!invoices.length) {
       return res.status(400).json({
         success: false,
         message: "No invoices found in request body",
@@ -1821,10 +1820,21 @@ router.post("/sales-invoice", async (req, res) => {
     const results = [];
 
     for (const inv of invoices) {
+
+      // ✅ SAFE duplicate check (IMPORTANT)
+      const existing = await pool.query(
+        `SELECT id FROM ecogreensales_invoices WHERE invoice_id = $1`,
+        [inv.docNo]
+      );
+
+      if (existing.rows.length > 0) {
+        continue; // skip duplicate
+      }
+
       const createdAtSystem = new Date().toISOString();
 
       const values = [
-        data.orderId || null,
+        data.salesOrderId || null,          // order_id (FIXED)
         data.code || null,
         inv.docNo || null,
 
@@ -1845,11 +1855,11 @@ router.post("/sales-invoice", async (req, res) => {
         data.doctorName || null,
         data.custCode || null,
 
-        JSON.stringify(data.fromGstNo || null),
-        JSON.stringify(data.toGstNo || null),
+        data.fromGstNo || null,
+        data.toGstNo || null,
 
         data.salesOrderId || null,
-        JSON.stringify(inv.detail || []),
+        inv.detail ? JSON.stringify(inv.detail) : null,
 
         data.userEmail || null,
         data.reminderDate || null,
@@ -1887,15 +1897,19 @@ router.post("/sales-invoice", async (req, res) => {
 
       const result = await pool.query(query, values);
 
-      results.push(result.rows[0].id);
+      results.push({
+        id: result.rows[0].id,
+        invoice: inv.docNo
+      });
     }
 
     return res.status(200).json({
       success: true,
       message: "Invoices inserted successfully",
       insertedCount: results.length,
-      ids: results,
+      results
     });
+
   } catch (err) {
     console.error("Error saving sales invoice:", err);
 
