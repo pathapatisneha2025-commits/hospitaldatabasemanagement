@@ -1803,77 +1803,85 @@ router.get("/sales-orders/:id", async (req, res) => {
 // Sales Invoice Webhook
 // =====================
 router.post("/sales-invoice", async (req, res) => {
-  const data = req.body;
-
-  // ✅ convert to array always
-  const invoices = Array.isArray(data) ? data : [data];
-
   try {
+    const data = req.body;
+
+    // ✅ always expect invoices array inside payload
+    const invoices = Array.isArray(data.invoices)
+      ? data.invoices
+      : [];
+
+    if (invoices.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No invoices found in request body",
+      });
+    }
+
     const results = [];
 
-    for (const item of invoices) {
-      const createdAt = item.created_at || null;
+    for (const inv of invoices) {
       const createdAtSystem = new Date().toISOString();
 
       const values = [
-        item.order_id || null,
-        item.order_no || null,
-        item.invoice_id || null,
+        data.orderId || null,
+        data.code || null,
+        inv.docNo || null,
 
-        createdAt,
+        inv.docDate || null,
         createdAtSystem,
 
-        item.createduser || null,
-        item.order_type || null,
-        item.payment_status || null,
-        item.total_price || 0,
-        item.total_discount || 0,
-        item.order_for || null,
-        item.delivered_by || null,
-        item.shipping_charge || 0,
-        item.patient_name || null,
-        item.patient_contact_no || null,
+        inv.createdBy || null,
+        data.customerType || null,
+        inv.docStatus || null,
 
-        item.patient_address ? JSON.stringify(item.patient_address) : null,
-        item.pharmacy ? JSON.stringify(item.pharmacy) : null,
+        inv.docTotal || 0,
+        data.docDiscount || 0,
 
-        item.store_id || null,
-        item.order_items ? JSON.stringify(item.order_items) : null,
+        data.orderType || null,
+        data.deliveredBy || null,
 
-        item.user_email || null,
+        data.shippingCharge || 0,
+        data.doctorName || null,
+        data.custCode || null,
 
-        item.reminder_date || null,
-        item.d_remind_date || null
+        JSON.stringify(data.fromGstNo || null),
+        JSON.stringify(data.toGstNo || null),
+
+        data.salesOrderId || null,
+        JSON.stringify(inv.detail || []),
+
+        data.userEmail || null,
+        data.reminderDate || null,
+        data.dRemindDate || null
       ];
 
       const query = `
         INSERT INTO ecogreensales_invoices (
           order_id,
-          order_no,
+          code,
           invoice_id,
-          created_at,
+          doc_date,
           created_at_system,
           createduser,
-          order_type,
-          payment_status,
+          customer_type,
+          doc_status,
           total_price,
           total_discount,
-          order_for,
+          order_type,
           delivered_by,
           shipping_charge,
-          patient_name,
-          patient_contact_no,
-          patient_address,
-          pharmacy,
-          store_id,
+          doctor_name,
+          cust_code,
+          from_gst_no,
+          to_gst_no,
+          sales_order_id,
           order_items,
           user_email,
           reminder_date,
           d_remind_date
         )
-        VALUES (
-          ${values.map((_, i) => `$${i + 1}`).join(",")}
-        )
+        VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
         RETURNING id
       `;
 
@@ -1882,19 +1890,18 @@ router.post("/sales-invoice", async (req, res) => {
       results.push(result.rows[0].id);
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Batch invoices saved successfully",
+      message: "Invoices inserted successfully",
       insertedCount: results.length,
-      ids: results
+      ids: results,
     });
-
   } catch (err) {
     console.error("Error saving sales invoice:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      error: err.message
+      error: err.message,
     });
   }
 });
