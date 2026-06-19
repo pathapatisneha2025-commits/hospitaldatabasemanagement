@@ -1728,6 +1728,7 @@ router.post("/sales-order", async (req, res) => {
   }
 });
 
+
 // router.get("/sales-orders", async (req, res) => {
 //   try {
 //     const { from } = req.query;
@@ -1778,8 +1779,6 @@ router.get("/sales-orders", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-
 // ✅ Fetch single order by ID
 router.get("/sales-orders/:id", async (req, res) => {
   try {
@@ -1803,119 +1802,101 @@ router.get("/sales-orders/:id", async (req, res) => {
 // Sales Invoice Webhook
 // =====================
 router.post("/sales-invoice", async (req, res) => {
+  const data = req.body;
+
   try {
-    const data = req.body;
+    const createdAt = data.created_at || null;
+    const createdAtSystem = new Date().toISOString();
 
-    const invoices = Array.isArray(data.invoices)
-      ? data.invoices
-      : [];
+    const values = [
+      data.order_id || null,
+      data.order_no || null,
+      data.invoice_id || null,
 
-    if (!invoices.length) {
-      return res.status(400).json({
-        success: false,
-        message: "No invoices found in request body",
-      });
-    }
+      createdAt,
+      createdAtSystem,
 
-    const results = [];
+      data.createduser || null,
 
-    for (const inv of invoices) {
+      data.order_type || null,
+      data.payment_status || null,
+      data.total_price || 0,
+      data.total_discount || 0,
+      data.order_for || null,
+      data.delivered_by || null,
+      data.shipping_charge || 0,
+      data.patient_name || null,
+      data.patient_contact_no || null,
 
-      // ✅ SAFE duplicate check (IMPORTANT)
-      const existing = await pool.query(
-        `SELECT id FROM ecogreensales_invoices WHERE invoice_id = $1`,
-        [inv.docNo]
-      );
+      // Patient Address
+      data.patient_address
+        ? JSON.stringify(data.patient_address)
+        : null,
 
-      if (existing.rows.length > 0) {
-        continue; // skip duplicate
-      }
+      // Pharmacy
+      data.pharmacy
+        ? JSON.stringify(data.pharmacy)
+        : null,
 
-      const createdAtSystem = new Date().toISOString();
+      data.store_id || null,
 
-      const values = [
-        data.salesOrderId || null,          // order_id (FIXED)
-        data.code || null,
-        inv.docNo || null,
+      data.order_items
+        ? JSON.stringify(data.order_items)
+        : null,
 
-        inv.docDate || null,
-        createdAtSystem,
+      data.user_email || null,
 
-        inv.createdBy || null,
-        data.customerType || null,
-        inv.docStatus || null,
+      // ✅ NEW FIELDS
+      data.reminder_date || null,
+      data.d_remind_date || null
+    ];
 
-        inv.docTotal || 0,
-        data.docDiscount || 0,
+    const query = `
+      INSERT INTO ecogreensales_invoices (
+        order_id,
+        order_no,
+        invoice_id,
+        created_at,
+        created_at_system,
+        createduser,
+        order_type,
+        payment_status,
+        total_price,
+        total_discount,
+        order_for,
+        delivered_by,
+        shipping_charge,
+        patient_name,
+        patient_contact_no,
+        patient_address,
+        pharmacy,
+        store_id,
+        order_items,
+        user_email,
 
-        data.orderType || null,
-        data.deliveredBy || null,
+        reminder_date,
+        d_remind_date
+      )
+      VALUES (
+        ${values.map((_, i) => `$${i + 1}`).join(",")}
+      )
+      RETURNING id
+    `;
 
-        data.shippingCharge || 0,
-        data.doctorName || null,
-        data.custCode || null,
+    const result = await pool.query(query, values);
 
-        data.fromGstNo || null,
-        data.toGstNo || null,
-
-        data.salesOrderId || null,
-        inv.detail ? JSON.stringify(inv.detail) : null,
-
-        data.userEmail || null,
-        data.reminderDate || null,
-        data.dRemindDate || null
-      ];
-
-      const query = `
-        INSERT INTO ecogreensales_invoices (
-          order_id,
-          code,
-          invoice_id,
-          doc_date,
-          created_at_system,
-          createduser,
-          customer_type,
-          doc_status,
-          total_price,
-          total_discount,
-          order_type,
-          delivered_by,
-          shipping_charge,
-          doctor_name,
-          cust_code,
-          from_gst_no,
-          to_gst_no,
-          sales_order_id,
-          order_items,
-          user_email,
-          reminder_date,
-          d_remind_date
-        )
-        VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
-        RETURNING id
-      `;
-
-      const result = await pool.query(query, values);
-
-      results.push({
-        id: result.rows[0].id,
-        invoice: inv.docNo
-      });
-    }
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "Invoices inserted successfully",
-      insertedCount: results.length,
-      results
+      message: "Sales invoice saved successfully",
+      id: result.rows[0].id
     });
 
   } catch (err) {
     console.error("Error saving sales invoice:", err);
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: err.message,
+      error: err.message
     });
   }
 });
