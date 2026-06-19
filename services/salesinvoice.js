@@ -5,58 +5,63 @@ const syncSalesInvoices = async () => {
     console.log("🔄 Sales Invoice Sync started");
 
     // 1. Get last sync time
-    const syncRes = await pool.query(`
+    const syncRes = await pool.query(
+      `
       SELECT last_synced_at
       FROM sync_logs_invoice
       ORDER BY id DESC
-    `);
+      LIMIT 1
+      `
+    );
 
     let lastSyncedAt = syncRes.rows[0]?.last_synced_at;
 
-    // 2. fallback
+    // ✅ fallback: yesterday IST if no sync exists
     if (!lastSyncedAt) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
-      lastSyncedAt = yesterday;
-      console.log("No sync found → fallback used:", lastSyncedAt);
+      lastSyncedAt = new Date(
+        yesterday.toLocaleString("en-US", {
+          timeZone: "Asia/Kolkata",
+        })
+      );
+
+      console.log(
+        "No previous invoice sync found, using IST yesterday:",
+        lastSyncedAt
+      );
     }
 
-    // 3. SAFETY WINDOW (IMPORTANT)
-    const fromDate = new Date(lastSyncedAt);
+    // 2. Build API URL safely
+    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoice?from=${encodeURIComponent(
+      lastSyncedAt
+    )}`;
 
-    // 🔥 increase buffer to avoid missing invoices
-    fromDate.setMinutes(fromDate.getMinutes() - 60);
+    // 3. Fetch from EcoGreen API
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
-    const fromTime = fromDate.toISOString();
-
-    const url =
-      `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoice?from=${encodeURIComponent(fromTime)}`;
-
-    console.log("📡 Fetching from:", fromTime);
-
-    const response = await fetch(url);
-    const result = await response.json();
-
-    const invoices = result?.data || result;
+    const invoices = await response.json();
 
     if (!Array.isArray(invoices)) {
-      console.log("❌ Invalid response format");
+      console.log("❌ Invalid response from invoice API");
       return;
     }
 
-    let latestCreatedAt = new Date(lastSyncedAt);
+    let latestCreatedAt = lastSyncedAt;
 
-    // 4. INSERT / UPDATE
+    // 4. Save invoices to DB
     for (const data of invoices) {
-      const createdAt = new Date(data.created_at);
-
       await pool.query(
         `
         INSERT INTO ecogreensales_invoices (
           order_id,
           order_no,
-          invoice_id,
           created_at,
           order_type,
           payment_status,
@@ -74,9 +79,10 @@ const syncSalesInvoices = async () => {
         )
         VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,
-          $9,$10,$11,$12,$13,$14,$15,$16,$17
+          $9,$10,$11,$12,$13,$14,$15,$16
         )
-        ON CONFLICT (invoice_id)
+
+        ON CONFLICT (order_id)
         DO UPDATE SET
           payment_status = EXCLUDED.payment_status,
           total_price = EXCLUDED.total_price,
@@ -86,7 +92,6 @@ const syncSalesInvoices = async () => {
         [
           data.order_id,
           data.order_no,
-          data.invoice_id,
           data.created_at,
           data.order_type,
           data.payment_status,
@@ -104,21 +109,28 @@ const syncSalesInvoices = async () => {
         ]
       );
 
-      // track latest
-      if (createdAt > latestCreatedAt) {
-        latestCreatedAt = createdAt;
+      // track latest created_at
+      if (
+        data.created_at &&
+        new Date(data.created_at) > new Date(latestCreatedAt)
+      ) {
+        latestCreatedAt = data.created_at;
       }
     }
 
-    // 5. SAVE SYNC LOG
+    // 5. Save latest sync time
     await pool.query(
-      `INSERT INTO sync_logs_invoice (last_synced_at) VALUES ($1)`,
+      `
+      INSERT INTO sync_logs_invoice (last_synced_at)
+      VALUES ($1)
+      `,
       [latestCreatedAt]
     );
 
-    console.log("✅ Sync completed:", latestCreatedAt.toISOString());
+    console.log("✅ Sales Invoice Sync completed:", latestCreatedAt);
+
   } catch (err) {
-    console.error("❌ Sync error:", err.message);
+    console.error("❌ Sales Invoice Sync error:", err.message);
   }
 };
 
