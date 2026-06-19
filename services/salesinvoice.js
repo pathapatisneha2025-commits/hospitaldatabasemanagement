@@ -34,7 +34,7 @@ const syncSalesInvoices = async () => {
     }
 
     // 2. Build API URL safely
-    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoice?from=${encodeURIComponent(
+    const url = `https://hospitaldatabasemanagement.onrender.com/ecogreen/sales-invoices?from=${encodeURIComponent(
       lastSyncedAt
     )}`;
 
