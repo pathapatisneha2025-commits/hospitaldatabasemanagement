@@ -1994,14 +1994,13 @@ router.get("/sales-invoice/by-order", async (req, res) => {
 router.get("/sales-invoice/all", async (req, res) => {
   try {
     const query = `
-      SELECT * 
+      SELECT *
       FROM ecogreensales_invoices
-      WHERE created_at <= (CURRENT_DATE + TIME '15:50:00')
+      WHERE created_at <= TIMESTAMP '2026-06-18 15:36:00'
       ORDER BY created_at DESC
     `;
 
     const result = await pool.query(query);
-
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("Error fetching sales invoices:", err);
