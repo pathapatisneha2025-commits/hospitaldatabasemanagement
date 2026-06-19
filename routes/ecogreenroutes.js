@@ -1756,7 +1756,7 @@ router.get("/sales-orders", async (req, res) => {
       SELECT *
       FROM ecogreensales_orders
       WHERE created_at_system < (
-        (CURRENT_DATE + TIME '15:50:00')
+        (CURRENT_DATE + TIME '15:50:00') AT TIME ZONE 'Asia/Kolkata'
       )
       ORDER BY created_at_system DESC
     `;
