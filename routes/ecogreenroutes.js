@@ -1804,64 +1804,67 @@ router.get("/sales-orders/:id", async (req, res) => {
 router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
-  const createdAtSystem = new Date().toISOString();
-
-  const upsertQuery = `
-    INSERT INTO ecogreensales_invoices (
-      order_id,
-      order_no,
-      invoice_id,
-      created_at,
-      created_at_system,
-      createduser,
-      order_type,
-      payment_status,
-      total_price,
-      total_discount,
-      order_for,
-      delivered_by,
-      shipping_charge,
-      patient_name,
-      patient_contact_no,
-      patient_address,
-      pharmacy,
-      store_id,
-      order_items,
-      user_email,
-      reminder_date,
-      d_remind_date
-    )
-    VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-      $11,$12,$13,$14,$15,$16,$17,$18,
-      $19,$20,$21,$22
-    )
-    ON CONFLICT (invoice_id)
-    DO UPDATE SET
-      order_id           = EXCLUDED.order_id,
-      order_no           = EXCLUDED.order_no,
-      created_at         = EXCLUDED.created_at,
-      created_at_system  = EXCLUDED.created_at_system,
-      createduser        = EXCLUDED.createduser,
-      order_type         = EXCLUDED.order_type,
-      payment_status     = EXCLUDED.payment_status,
-      total_price        = EXCLUDED.total_price,
-      total_discount     = EXCLUDED.total_discount,
-      order_for          = EXCLUDED.order_for,
-      delivered_by       = EXCLUDED.delivered_by,
-      shipping_charge    = EXCLUDED.shipping_charge,
-      patient_name       = EXCLUDED.patient_name,
-      patient_contact_no = EXCLUDED.patient_contact_no,
-      patient_address    = EXCLUDED.patient_address,
-      pharmacy           = EXCLUDED.pharmacy,
-      store_id           = EXCLUDED.store_id,
-      order_items        = EXCLUDED.order_items,
-      user_email         = EXCLUDED.user_email,
-      reminder_date      = EXCLUDED.reminder_date,
-      d_remind_date      = EXCLUDED.d_remind_date
-  `;
+  const client = await pool.connect();
 
   try {
+    await client.query("BEGIN");
+
+    const createdAtSystem = new Date().toISOString();
+
+    const upsertQuery = `
+      INSERT INTO ecogreensales_invoices (
+        order_id,
+        order_no,
+        invoice_id,
+        created_at,
+        created_at_system,
+        createduser,
+        order_type,
+        payment_status,
+        total_price,
+        total_discount,
+        order_for,
+        delivered_by,
+        shipping_charge,
+        patient_name,
+        patient_contact_no,
+        patient_address,
+        pharmacy,
+        store_id,
+        order_items,
+        user_email,
+        reminder_date,
+        d_remind_date
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16,$17,$18,
+        $19,$20,$21,$22
+      )
+      ON CONFLICT (invoice_id)
+      DO UPDATE SET
+        order_id           = EXCLUDED.order_id,
+        order_no           = EXCLUDED.order_no,
+        created_at         = EXCLUDED.created_at,
+        created_at_system  = EXCLUDED.created_at_system,
+        createduser        = EXCLUDED.createduser,
+        order_type         = EXCLUDED.order_type,
+        payment_status     = EXCLUDED.payment_status,
+        total_price        = EXCLUDED.total_price,
+        total_discount     = EXCLUDED.total_discount,
+        order_for          = EXCLUDED.order_for,
+        delivered_by       = EXCLUDED.delivered_by,
+        shipping_charge    = EXCLUDED.shipping_charge,
+        patient_name       = EXCLUDED.patient_name,
+        patient_contact_no = EXCLUDED.patient_contact_no,
+        patient_address    = EXCLUDED.patient_address,
+        pharmacy           = EXCLUDED.pharmacy,
+        store_id           = EXCLUDED.store_id,
+        order_items        = EXCLUDED.order_items,
+        user_email         = EXCLUDED.user_email,
+        reminder_date      = EXCLUDED.reminder_date,
+        d_remind_date      = EXCLUDED.d_remind_date
+    `;
 
     // ===========================
     // BATCH INVOICES
@@ -1913,14 +1916,10 @@ router.post("/sales-invoice", async (req, res) => {
           data.d_remind_date || null
         ];
 
-        await pool.query(upsertQuery, values);
+        await client.query(upsertQuery, values);
       }
 
     } else {
-
-      // ===========================
-      // SINGLE INVOICE
-      // ===========================
 
       const values = [
         data.order_id || null,
@@ -1934,10 +1933,8 @@ router.post("/sales-invoice", async (req, res) => {
 
         data.order_type || null,
         data.payment_status || null,
-
         data.total_price || 0,
         data.total_discount || 0,
-
         data.order_for || null,
         data.delivered_by || null,
         data.shipping_charge || 0,
@@ -1965,21 +1962,28 @@ router.post("/sales-invoice", async (req, res) => {
         data.d_remind_date || null
       ];
 
-      await pool.query(upsertQuery, values);
+      await client.query(upsertQuery, values);
     }
 
-    return res.status(200).json({
+    await client.query("COMMIT");
+
+    res.status(200).json({
       success: true,
-      message: "Sales invoice(s) saved/updated successfully"
+      message: "Sales invoice saved with UPSERT logic"
     });
 
   } catch (err) {
+    await client.query("ROLLBACK");
+
     console.error("Error saving sales invoice:", err);
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: err.message
     });
+
+  } finally {
+    client.release();
   }
 });
 router.put("/sales-invoice/update-delivery-type", async (req, res) => {
