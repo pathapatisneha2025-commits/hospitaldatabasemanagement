@@ -1804,100 +1804,188 @@ router.get("/sales-orders/:id", async (req, res) => {
 router.post("/sales-invoice", async (req, res) => {
   const data = req.body;
 
+  const client = await pool.connect();
+
   try {
-    const createdAt = data.created_at || null;
+    await client.query("BEGIN");
+
     const createdAtSystem = new Date().toISOString();
 
-    const values = [
-      data.order_id || null,
-      data.order_no || null,
-      data.invoice_id || null,
+    // ✅ CASE 1: BATCH INVOICES (NEW STRUCTURE)
+    if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+      
+      for (const inv of data.invoices) {
 
-      createdAt,
-      createdAtSystem,
+        const invoiceValues = [
+          data.order_id || null,
+          data.order_no || null,
+          inv.docNo || null,              // ✅ from invoice loop
 
-      data.createduser || null,
+          data.created_at || null,
+          createdAtSystem,
 
-      data.order_type || null,
-      data.payment_status || null,
-      data.total_price || 0,
-      data.total_discount || 0,
-      data.order_for || null,
-      data.delivered_by || null,
-      data.shipping_charge || 0,
-      data.patient_name || null,
-      data.patient_contact_no || null,
+          inv.createdBy || data.createduser || null,
 
-      // Patient Address
-      data.patient_address
-        ? JSON.stringify(data.patient_address)
-        : null,
+          data.order_type || null,
+          data.payment_status || inv.docStatus || null,
 
-      // Pharmacy
-      data.pharmacy
-        ? JSON.stringify(data.pharmacy)
-        : null,
+          inv.docTotal || 0,
+          data.total_discount || 0,
 
-      data.store_id || null,
+          data.order_for || null,
+          data.delivered_by || null,
+          data.shipping_charge || 0,
 
-      data.order_items
-        ? JSON.stringify(data.order_items)
-        : null,
+          data.patient_name || null,
+          data.patient_contact_no || null,
 
-      data.user_email || null,
+          data.patient_address
+            ? JSON.stringify(data.patient_address)
+            : null,
 
-      // ✅ NEW FIELDS
-      data.reminder_date || null,
-      data.d_remind_date || null
-    ];
+          data.pharmacy
+            ? JSON.stringify(data.pharmacy)
+            : null,
 
-    const query = `
-      INSERT INTO ecogreensales_invoices (
-        order_id,
-        order_no,
-        invoice_id,
-        created_at,
-        created_at_system,
-        createduser,
-        order_type,
-        payment_status,
-        total_price,
-        total_discount,
-        order_for,
-        delivered_by,
-        shipping_charge,
-        patient_name,
-        patient_contact_no,
-        patient_address,
-        pharmacy,
-        store_id,
-        order_items,
-        user_email,
+          data.store_id || null,
 
-        reminder_date,
-        d_remind_date
-      )
-      VALUES (
-        ${values.map((_, i) => `$${i + 1}`).join(",")}
-      )
-      RETURNING id
-    `;
+          // IMPORTANT: store invoice details per invoice
+          inv.detail ? JSON.stringify(inv.detail) : null,
 
-    const result = await pool.query(query, values);
+          data.user_email || null,
+
+          data.reminder_date || null,
+          data.d_remind_date || null
+        ];
+
+        await client.query(
+          `
+          INSERT INTO ecogreensales_invoices (
+            order_id,
+            order_no,
+            invoice_id,
+            created_at,
+            created_at_system,
+            createduser,
+            order_type,
+            payment_status,
+            total_price,
+            total_discount,
+            order_for,
+            delivered_by,
+            shipping_charge,
+            patient_name,
+            patient_contact_no,
+            patient_address,
+            pharmacy,
+            store_id,
+            order_items,
+            user_email,
+            reminder_date,
+            d_remind_date
+          )
+          VALUES (${invoiceValues.map((_, i) => `$${i + 1}`).join(",")})
+          `,
+          invoiceValues
+        );
+      }
+
+    } 
+    // ✅ CASE 2: SINGLE INVOICE (OLD SYSTEM)
+    else {
+
+      const values = [
+        data.order_id || null,
+        data.order_no || null,
+        data.invoice_id || null,
+
+        data.created_at || null,
+        createdAtSystem,
+
+        data.createduser || null,
+
+        data.order_type || null,
+        data.payment_status || null,
+        data.total_price || 0,
+        data.total_discount || 0,
+        data.order_for || null,
+        data.delivered_by || null,
+        data.shipping_charge || 0,
+
+        data.patient_name || null,
+        data.patient_contact_no || null,
+
+        data.patient_address
+          ? JSON.stringify(data.patient_address)
+          : null,
+
+        data.pharmacy
+          ? JSON.stringify(data.pharmacy)
+          : null,
+
+        data.store_id || null,
+
+        data.order_items
+          ? JSON.stringify(data.order_items)
+          : null,
+
+        data.user_email || null,
+
+        data.reminder_date || null,
+        data.d_remind_date || null
+      ];
+
+      await client.query(
+        `
+        INSERT INTO ecogreensales_invoices (
+          order_id,
+          order_no,
+          invoice_id,
+          created_at,
+          created_at_system,
+          createduser,
+          order_type,
+          payment_status,
+          total_price,
+          total_discount,
+          order_for,
+          delivered_by,
+          shipping_charge,
+          patient_name,
+          patient_contact_no,
+          patient_address,
+          pharmacy,
+          store_id,
+          order_items,
+          user_email,
+          reminder_date,
+          d_remind_date
+        )
+        VALUES (${values.map((_, i) => `$${i + 1}`).join(",")})
+        `,
+        values
+      );
+    }
+
+    await client.query("COMMIT");
 
     res.status(200).json({
       success: true,
-      message: "Sales invoice saved successfully",
-      id: result.rows[0].id
+      message: "Sales invoice(s) saved successfully"
     });
 
   } catch (err) {
+    await client.query("ROLLBACK");
+
     console.error("Error saving sales invoice:", err);
 
     res.status(500).json({
       success: false,
       error: err.message
     });
+
+  } finally {
+    client.release();
   }
 });
 router.put("/sales-invoice/update-delivery-type", async (req, res) => {
