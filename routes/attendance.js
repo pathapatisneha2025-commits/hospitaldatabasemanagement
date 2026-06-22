@@ -516,7 +516,27 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
   phone,
   capturedUrl,
 });
+let employeeName = "Unknown Employee";
 
+if (actualEmployeeId) {
+  const empRes = await pool.query(
+    "SELECT name FROM employees WHERE id = $1",
+    [actualEmployeeId]
+  );
+
+  if (empRes.rowCount > 0) {
+    employeeName = empRes.rows[0].name;
+  }
+} else if (phone) {
+  const empRes = await pool.query(
+    "SELECT full_name FROM employees WHERE mobile = $1",
+    [phone]
+  );
+
+  if (empRes.rowCount > 0) {
+    employeeName = empRes.rows[0].name;
+  }
+}
 // ✅ SEND WEBSOCKET BEFORE RETURN
 const payload = {
   type: "ATTENDANCE_MARKED",
@@ -525,7 +545,7 @@ const payload = {
     subadminId,
     adminId,
     phone,
-    employeeName: "Unknown Employee",
+    employeeName,   // FIXED HERE
     status: attendanceRow.status,
     timestamp: attendanceRow.timestamp,
   },
