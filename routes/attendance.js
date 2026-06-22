@@ -509,22 +509,43 @@ router.post("/verify-face", upload.single("image"), async (req, res) => {
       });
     }
 
-    const attendanceRow = await markAttendance({
-      employeeId: actualEmployeeId,
-      subadminId,
-      adminId,
-      phone,
-      capturedUrl,
-    });
+   const attendanceRow = await markAttendance({
+  employeeId: actualEmployeeId,
+  subadminId,
+  adminId,
+  phone,
+  capturedUrl,
+});
 
-    return res.json({
-      success: true,
-      faceVerified: true,
-      attendanceMarked: true,
-      message: "Login successful (attendance marked)",
-      timestamp: attendanceRow.timestamp,
-      status: attendanceRow.status,
-    });
+// ✅ SEND WEBSOCKET BEFORE RETURN
+const payload = {
+  type: "ATTENDANCE_MARKED",
+  data: {
+    employeeId: actualEmployeeId,
+    subadminId,
+    adminId,
+    phone,
+    employeeName: "Unknown Employee",
+    status: attendanceRow.status,
+    timestamp: attendanceRow.timestamp,
+  },
+};
+
+global.clients?.forEach((ws) => {
+  if (ws.readyState === 1) {
+    ws.send(JSON.stringify(payload));
+  }
+});
+
+// ✅ THEN RETURN RESPONSE
+return res.json({
+  success: true,
+  faceVerified: true,
+  attendanceMarked: true,
+  message: "Login successful (attendance marked)",
+  timestamp: attendanceRow.timestamp,
+  status: attendanceRow.status,
+});
 
   } catch (error) {
     console.error("Face verification error:", error);
