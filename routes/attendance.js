@@ -520,7 +520,7 @@ let employeeName = "Unknown Employee";
 
 if (actualEmployeeId) {
   const empRes = await pool.query(
-    "SELECT name FROM employees WHERE id = $1",
+    "SELECT full_name FROM employees WHERE id = $1",
     [actualEmployeeId]
   );
 
