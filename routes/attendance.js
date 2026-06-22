@@ -525,7 +525,7 @@ if (actualEmployeeId) {
   );
 
   if (empRes.rowCount > 0) {
-    employeeName = empRes.rows[0].name;
+    employeeName = empRes.rows[0].full_name;
   }
 } else if (phone) {
   const empRes = await pool.query(
@@ -534,7 +534,7 @@ if (actualEmployeeId) {
   );
 
   if (empRes.rowCount > 0) {
-    employeeName = empRes.rows[0].name;
+    employeeName = empRes.rows[0].full_name;
   }
 }
 // ✅ SEND WEBSOCKET BEFORE RETURN
