@@ -134,7 +134,13 @@ const getToken = async () => {
 
 router.post("/item-master", async (req, res) => {
   const { c2Code, storeId, prodCode, inputDateTime } = req.body;
-
+console.log("==== REQUEST RECEIVED ====");
+console.log("c2Code:", c2Code);
+console.log("storeId:", storeId);
+console.log("prodCode:", prodCode);
+console.log("inputDateTime RAW:", inputDateTime);
+console.log("SERVER TIME:", new Date().toString());
+console.log("TIMEZONE OFFSET:", new Date().getTimezoneOffset());
   if (!c2Code || !storeId || !prodCode) {
     return res.status(400).json({ error: "All fields are required" });
   }
