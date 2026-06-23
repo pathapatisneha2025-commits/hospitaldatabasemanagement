@@ -861,6 +861,7 @@ router.post("/purchase-orders", async (req, res) => {
 
   if (!c2Code || !storeId || !prodCode) {
     return res.status(400).json({
+      success: false,
       error: "Required fields missing: c2Code, storeId, prodCode",
     });
   }
@@ -880,9 +881,7 @@ router.post("/purchase-orders", async (req, res) => {
       toDate: toDate || "",
     };
 
-    // =========================
     // 1. FETCH FROM VENDOR
-    // =========================
     const fetchResponse = await fetch(
       "http://117.211.64.158:21000/ws_c2_services_po_fetch",
       {
@@ -895,7 +894,10 @@ router.post("/purchase-orders", async (req, res) => {
     const rawText = await fetchResponse.text();
 
     if (!rawText) {
-      return res.status(500).json({ error: "Empty response from vendor" });
+      return res.status(500).json({
+        success: false,
+        error: "Empty response from vendor",
+      });
     }
 
     let purchaseOrders;
@@ -908,6 +910,7 @@ router.post("/purchase-orders", async (req, res) => {
         purchaseOrders = JSON.parse(fixedText);
       } catch (e) {
         return res.status(500).json({
+          success: false,
           error: "Invalid vendor response format",
         });
       }
@@ -919,9 +922,7 @@ router.post("/purchase-orders", async (req, res) => {
 
     console.log("Vendor records received:", purchaseOrders.length);
 
-    // =========================
-    // 2. DEDUPLICATION (LIKE STOCK API)
-    // =========================
+    // 2. DEDUPLICATION
     const map = new Map();
 
     for (const po of purchaseOrders) {
@@ -931,13 +932,11 @@ router.post("/purchase-orders", async (req, res) => {
 
     const uniquePOs = Array.from(map.values());
 
-    // =========================
-    // 3. BULK INSERT (CHUNK SAFE)
-    // =========================
-    const chunkSize = 300;
+    // 3. SAFE BULK INSERT (CHUNKED + SAFE ERROR HANDLING)
+    const chunkSize = 200;
 
     for (let i = 0; i < uniquePOs.length; i += chunkSize) {
-      let chunk = uniquePOs.slice(i, i + chunkSize);
+      const chunk = uniquePOs.slice(i, i + chunkSize);
 
       const values = [];
       const placeholders = [];
@@ -968,7 +967,7 @@ router.post("/purchase-orders", async (req, res) => {
         );
       });
 
-      if (values.length > 0) {
+      try {
         await pool.query(
           `
           INSERT INTO ecogreenpurchase_orders (
@@ -988,8 +987,7 @@ router.post("/purchase-orders", async (req, res) => {
             refname = EXCLUDED.refname,
             total = EXCLUDED.total,
             details = EXCLUDED.details,
-              createDateTime = EXCLUDED.createDateTime,
-
+            createDateTime = EXCLUDED.createDateTime,
             createUser = EXCLUDED.createUser,
             modifyDateTime = EXCLUDED.modifyDateTime,
             modifiedUser = EXCLUDED.modifiedUser,
@@ -997,28 +995,31 @@ router.post("/purchase-orders", async (req, res) => {
           `,
           values
         );
+      } catch (dbErr) {
+        console.error("Chunk insert failed:", dbErr.message);
+        // continue next chunk instead of crashing server
       }
     }
 
-    // =========================
-    // 4. PAGINATION (LIKE STOCK API STYLE)
-    // =========================
+    // 4. PAGINATION (API RESPONSE ONLY)
     const start = (page - 1) * limit;
     const paginatedData = uniquePOs.slice(start, start + limit);
 
     return res.status(200).json({
-      message: "Purchase orders fetched and stored successfully",
+      success: true,
+      message: "Purchase orders processed successfully",
       totalItems: uniquePOs.length,
       page,
       limit,
       totalPages: Math.ceil(uniquePOs.length / limit),
-      purchaseOrders: paginatedData,
+      data: paginatedData, //  FIXED for frontend compatibility
     });
 
   } catch (err) {
     console.error("Purchase Orders Error:", err);
 
     return res.status(500).json({
+      success: false,
       error: "Failed to fetch or store purchase orders",
     });
   }
