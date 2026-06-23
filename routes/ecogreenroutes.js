@@ -847,6 +847,8 @@ router.get('/local-customers/:mobile', async (req, res) => {
    5.5 Push Purchase Orders
 ========================================================= */
 router.post("/purchase-orders", async (req, res) => {
+  console.log("Incoming request body:", req.body);
+
   let {
     c2Code,
     storeId,
@@ -863,18 +865,24 @@ router.post("/purchase-orders", async (req, res) => {
     });
   }
 
-  fromDate = fromDate || "";
-  toDate = toDate || "";
-
-  page = parseInt(page);
-  limit = parseInt(limit);
-  const offset = (page - 1) * limit;
+  page = parseInt(page, 10) || 1;
+  limit = parseInt(limit, 10) || 100;
 
   try {
     const apiKey = await getToken();
 
-    const payload = { c2Code, storeId, prodCode, apiKey, fromDate, toDate };
+    const payload = {
+      c2Code,
+      storeId,
+      prodCode,
+      apiKey,
+      fromDate: fromDate || "",
+      toDate: toDate || "",
+    };
 
+    // =========================
+    // 1. FETCH FROM VENDOR
+    // =========================
     const fetchResponse = await fetch(
       "http://117.211.64.158:21000/ws_c2_services_po_fetch",
       {
@@ -884,15 +892,9 @@ router.post("/purchase-orders", async (req, res) => {
       }
     );
 
-    if (!fetchResponse.ok) {
-      const errorText = await fetchResponse.text();
-      throw new Error(`Fetch failed: ${fetchResponse.status} - ${errorText}`);
-    }
-
     const rawText = await fetchResponse.text();
 
     let purchaseOrders;
-
     try {
       purchaseOrders = JSON.parse(rawText);
     } catch (err) {
@@ -904,97 +906,104 @@ router.post("/purchase-orders", async (req, res) => {
       ? purchaseOrders
       : [purchaseOrders];
 
-    // ================================
-    // INSERT / UPSERT INTO DATABASE
-    // ================================
+    // =========================
+    // 2. DEDUPLICATION (IMPORTANT)
+    // =========================
+    const map = new Map();
+
     for (const po of purchaseOrders) {
-      const query = `
-        INSERT INTO ecogreenpurchase_orders (
-          br_code, year, prefix, srno,
-          custcode, custname, refcode, refname,
-          total, details,
-          createDateTime, createUser, modifyDateTime, modifiedUser, remarks
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-        ON CONFLICT (br_code, year, prefix, srno) DO UPDATE SET
-          custcode = EXCLUDED.custcode,
-          custname = EXCLUDED.custname,
-          refcode = EXCLUDED.refcode,
-          refname = EXCLUDED.refname,
-          total = EXCLUDED.total,
-          details = EXCLUDED.details,
-          createDateTime = EXCLUDED.createDateTime,
-          createUser = EXCLUDED.createUser,
-          modifyDateTime = EXCLUDED.modifyDateTime,
-          modifiedUser = EXCLUDED.modifiedUser,
-          remarks = EXCLUDED.remarks
-      `;
+      const key = `${po.br_code}-${po.year}-${po.prefix}-${po.srno}`;
+      map.set(key, po);
+    }
 
-      const values = [
-        po.br_code,
-        po.year,
-        po.prefix,
-        po.srno,
-        po.custcode,
-        po.custname,
-        po.refcode || null,
-        po.refname || null,
-        po.total,
-        JSON.stringify(po.details),
-        po.createDateTime || new Date(),
-        po.createUser || "SYSTEM",
-        po.modifyDateTime || new Date(),
-        po.modifiedUser || "SYSTEM",
-        po.remarks || "",
-      ];
+    const uniquePOs = Array.from(map.values());
 
-      try {
-        await pool.query(query, values);
-      } catch (dbErr) {
-        console.error("DB INSERT ERROR:", dbErr.message);
+    // =========================
+    // 3. CHUNK INSERT (SAFE)
+    // =========================
+    const chunkSize = 1000;
+
+    for (let i = 0; i < uniquePOs.length; i += chunkSize) {
+      let chunk = uniquePOs.slice(i, i + chunkSize);
+
+      const values = [];
+      const placeholders = [];
+
+      chunk.forEach((po, index) => {
+        const idx = index * 15;
+
+        placeholders.push(
+          `($${idx + 1},$${idx + 2},$${idx + 3},$${idx + 4},$${idx + 5},$${idx + 6},$${idx + 7},$${idx + 8},$${idx + 9},$${idx + 10},$${idx + 11},$${idx + 12},$${idx + 13},$${idx + 14},$${idx + 15})`
+        );
+
+        values.push(
+          po.br_code,
+          po.year,
+          po.prefix,
+          po.srno,
+          po.custcode,
+          po.custname,
+          po.refcode || null,
+          po.refname || null,
+          po.total,
+          JSON.stringify(po.details),
+          po.createDateTime || new Date(),
+          po.createUser || "SYSTEM",
+          po.modifyDateTime || new Date(),
+          po.modifiedUser || "SYSTEM",
+          po.remarks || ""
+        );
+      });
+
+      if (values.length > 0) {
+        await pool.query(
+          `
+          INSERT INTO ecogreenpurchase_orders (
+            br_code, year, prefix, srno,
+            custcode, custname, refcode, refname,
+            total, details,
+            createDateTime, createUser, modifyDateTime, modifiedUser, remarks
+          )
+          VALUES ${placeholders.join(",")}
+          ON CONFLICT (br_code, year, prefix, srno)
+          DO UPDATE SET
+            custcode = EXCLUDED.custcode,
+            custname = EXCLUDED.custname,
+            refcode = EXCLUDED.refcode,
+            refname = EXCLUDED.refname,
+            total = EXCLUDED.total,
+            details = EXCLUDED.details,
+            createDateTime = EXCLUDED.createDateTime,
+            createUser = EXCLUDED.createUser,
+            modifyDateTime = EXCLUDED.modifyDateTime,
+            modifiedUser = EXCLUDED.modifiedUser,
+            remarks = EXCLUDED.remarks
+          `,
+          values
+        );
       }
     }
 
-    // ================================
-    // PAGINATED FETCH FROM DB
-    // ================================
-    const dataResult = await pool.query(
-      `
-      SELECT *
-      FROM ecogreenpurchase_orders
-      WHERE br_code = $1
-        AND ($2 = '' OR custcode = $2)
-        AND ($3 = '' OR refcode = $3)
-      ORDER BY createDateTime DESC
-      LIMIT $4 OFFSET $5
-      `,
-      [c2Code, storeId, prodCode, limit, offset]
-    );
+    // =========================
+    // 4. PAGINATION FROM CLEAN DATA
+    // =========================
+    const start = (page - 1) * limit;
+    const paginatedData = uniquePOs.slice(start, start + limit);
 
-    const countResult = await pool.query(
-      `
-      SELECT COUNT(*) FROM ecogreenpurchase_orders
-      WHERE br_code = $1
-        AND ($2 = '' OR custcode = $2)
-        AND ($3 = '' OR refcode = $3)
-      `,
-      [c2Code, storeId, prodCode]
-    );
-
-    const totalRecords = parseInt(countResult.rows[0].count);
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Purchase orders synced & fetched successfully",
-      data: dataResult.rows,
-      totalRecords,
-      currentPage: page,
-      totalPages: Math.ceil(totalRecords / limit),
+      message: "Purchase orders fetched & stored successfully",
+      totalItems: uniquePOs.length,
+      page,
+      limit,
+      totalPages: Math.ceil(uniquePOs.length / limit),
+      data: paginatedData,
     });
+
   } catch (err) {
-    console.error("Purchase Orders Error:", err.message);
-    res.status(500).json({
-      error: "Failed to fetch or save purchase orders",
+    console.error("Purchase Orders Error:", err);
+    return res.status(500).json({
+      error: "Failed to fetch or store purchase orders",
     });
   }
 });
