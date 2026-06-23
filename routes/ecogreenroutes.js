@@ -847,7 +847,15 @@ router.get('/local-customers/:mobile', async (req, res) => {
    5.5 Push Purchase Orders
 ========================================================= */
 router.post("/purchase-orders", async (req, res) => {
-  let { c2Code, storeId, prodCode, fromDate, toDate } = req.body;
+  let {
+    c2Code,
+    storeId,
+    prodCode,
+    fromDate,
+    toDate,
+    page = 1,
+    limit = 20,
+  } = req.body;
 
   if (!c2Code || !storeId || !prodCode) {
     return res.status(400).json({
@@ -858,12 +866,14 @@ router.post("/purchase-orders", async (req, res) => {
   fromDate = fromDate || "";
   toDate = toDate || "";
 
+  page = parseInt(page);
+  limit = parseInt(limit);
+  const offset = (page - 1) * limit;
+
   try {
     const apiKey = await getToken();
-    console.log("Generated API Key:", apiKey);
 
     const payload = { c2Code, storeId, prodCode, apiKey, fromDate, toDate };
-    console.log("Payload for vendor API:", payload);
 
     const fetchResponse = await fetch(
       "http://117.211.64.158:21000/ws_c2_services_po_fetch",
@@ -879,7 +889,6 @@ router.post("/purchase-orders", async (req, res) => {
       throw new Error(`Fetch failed: ${fetchResponse.status} - ${errorText}`);
     }
 
-    // ✅ FIX: handle broken JSON response safely
     const rawText = await fetchResponse.text();
 
     let purchaseOrders;
@@ -887,7 +896,6 @@ router.post("/purchase-orders", async (req, res) => {
     try {
       purchaseOrders = JSON.parse(rawText);
     } catch (err) {
-      // Fix: multiple JSON objects stuck together
       const fixedText = `[${rawText.replace(/}{/g, "},{")}]`;
       purchaseOrders = JSON.parse(fixedText);
     }
@@ -896,20 +904,18 @@ router.post("/purchase-orders", async (req, res) => {
       ? purchaseOrders
       : [purchaseOrders];
 
+    // ================================
+    // INSERT / UPSERT INTO DATABASE
+    // ================================
     for (const po of purchaseOrders) {
-      const createDateTime = po.createDateTime || new Date();
-      const createUser = po.createUser || "SYSTEM";
-      const modifyDateTime = po.modifyDateTime || new Date();
-      const modifiedUser = po.modifiedUser || "SYSTEM";
-      const remarks = po.remarks || "";
-
       const query = `
         INSERT INTO ecogreenpurchase_orders (
           br_code, year, prefix, srno,
           custcode, custname, refcode, refname,
           total, details,
           createDateTime, createUser, modifyDateTime, modifiedUser, remarks
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         ON CONFLICT (br_code, year, prefix, srno) DO UPDATE SET
           custcode = EXCLUDED.custcode,
           custname = EXCLUDED.custname,
@@ -935,28 +941,55 @@ router.post("/purchase-orders", async (req, res) => {
         po.refname || null,
         po.total,
         JSON.stringify(po.details),
-        createDateTime,
-        createUser,
-        modifyDateTime,
-        modifiedUser,
-        remarks,
+        po.createDateTime || new Date(),
+        po.createUser || "SYSTEM",
+        po.modifyDateTime || new Date(),
+        po.modifiedUser || "SYSTEM",
+        po.remarks || "",
       ];
 
       try {
         await pool.query(query, values);
       } catch (dbErr) {
-        console.error(
-          `DB INSERT ERROR for ${po.br_code}-${po.prefix}-${po.srno}:`,
-          dbErr.message
-        );
+        console.error("DB INSERT ERROR:", dbErr.message);
       }
     }
 
+    // ================================
+    // PAGINATED FETCH FROM DB
+    // ================================
+    const dataResult = await pool.query(
+      `
+      SELECT *
+      FROM ecogreenpurchase_orders
+      WHERE br_code = $1
+        AND ($2 = '' OR custcode = $2)
+        AND ($3 = '' OR refcode = $3)
+      ORDER BY createDateTime DESC
+      LIMIT $4 OFFSET $5
+      `,
+      [c2Code, storeId, prodCode, limit, offset]
+    );
+
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(*) FROM ecogreenpurchase_orders
+      WHERE br_code = $1
+        AND ($2 = '' OR custcode = $2)
+        AND ($3 = '' OR refcode = $3)
+      `,
+      [c2Code, storeId, prodCode]
+    );
+
+    const totalRecords = parseInt(countResult.rows[0].count);
+
     res.status(200).json({
       success: true,
-      message: "Purchase orders synced successfully",
-      total: purchaseOrders.length,
-      data: purchaseOrders,
+      message: "Purchase orders synced & fetched successfully",
+      data: dataResult.rows,
+      totalRecords,
+      currentPage: page,
+      totalPages: Math.ceil(totalRecords / limit),
     });
   } catch (err) {
     console.error("Purchase Orders Error:", err.message);
