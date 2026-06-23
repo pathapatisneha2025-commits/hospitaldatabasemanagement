@@ -900,15 +900,17 @@ router.post("/purchase-orders", async (req, res) => {
       });
     }
 
-    let purchaseOrders;
+    // 2. SAFE PARSING (handles broken JSON too)
+    let purchaseOrders = [];
 
     try {
       purchaseOrders = JSON.parse(rawText);
     } catch (err) {
       try {
-        const fixedText = `[${rawText.replace(/}{/g, "},{")}]`;
+        const fixedText = `[${rawText.replace(/}\s*{/g, "},{")}]`;
         purchaseOrders = JSON.parse(fixedText);
       } catch (e) {
+        console.error("Vendor raw response:", rawText);
         return res.status(500).json({
           success: false,
           error: "Invalid vendor response format",
@@ -922,21 +924,13 @@ router.post("/purchase-orders", async (req, res) => {
 
     console.log("Vendor records received:", purchaseOrders.length);
 
-    // 2. DEDUPLICATION
-    const map = new Map();
+    // 3. REDUCED MEMORY INSERT (NO JS DEDUP)
+    // We rely on DB ON CONFLICT instead
 
-    for (const po of purchaseOrders) {
-      const key = `${po.br_code}-${po.year}-${po.prefix}-${po.srno}`;
-      map.set(key, po);
-    }
+    const chunkSize = 50; // 🔥 reduced from 200 (important)
 
-    const uniquePOs = Array.from(map.values());
-
-    // 3. SAFE BULK INSERT (CHUNKED + SAFE ERROR HANDLING)
-    const chunkSize = 200;
-
-    for (let i = 0; i < uniquePOs.length; i += chunkSize) {
-      const chunk = uniquePOs.slice(i, i + chunkSize);
+    for (let i = 0; i < purchaseOrders.length; i += chunkSize) {
+      const chunk = purchaseOrders.slice(i, i + chunkSize);
 
       const values = [];
       const placeholders = [];
@@ -997,22 +991,23 @@ router.post("/purchase-orders", async (req, res) => {
         );
       } catch (dbErr) {
         console.error("Chunk insert failed:", dbErr.message);
-        // continue next chunk instead of crashing server
       }
     }
 
     // 4. PAGINATION (API RESPONSE ONLY)
     const start = (page - 1) * limit;
-    const paginatedData = uniquePOs.slice(start, start + limit);
+    const paginatedData = purchaseOrders.slice(start, start + limit);
+
+    console.log("Memory usage:", process.memoryUsage());
 
     return res.status(200).json({
       success: true,
       message: "Purchase orders processed successfully",
-      totalItems: uniquePOs.length,
+      totalItems: purchaseOrders.length,
       page,
       limit,
-      totalPages: Math.ceil(uniquePOs.length / limit),
-      data: paginatedData, //  FIXED for frontend compatibility
+      totalPages: Math.ceil(purchaseOrders.length / limit),
+      data: paginatedData,
     });
 
   } catch (err) {
