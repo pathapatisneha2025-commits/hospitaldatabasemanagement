@@ -866,8 +866,8 @@ router.post("/purchase-orders", async (req, res) => {
   fromDate = fromDate || "";
   toDate = toDate || "";
 
-  page = parseInt(page, 10) || 1;
-  limit = parseInt(limit, 10) || 100;
+  page = parseInt(page);
+  limit = parseInt(limit);
   const offset = (page - 1) * limit;
 
   try {
@@ -904,89 +904,60 @@ router.post("/purchase-orders", async (req, res) => {
       ? purchaseOrders
       : [purchaseOrders];
 
-    // ==================================================
-    // 1. DEDUPLICATION (LIKE stock-details)
-    // ==================================================
-    const map = new Map();
-
+    // ================================
+    // INSERT / UPSERT INTO DATABASE
+    // ================================
     for (const po of purchaseOrders) {
-      const key = `${po.br_code}-${po.year}-${po.prefix}-${po.srno}`;
-      map.set(key, po);
-    }
+      const query = `
+        INSERT INTO ecogreenpurchase_orders (
+          br_code, year, prefix, srno,
+          custcode, custname, refcode, refname,
+          total, details,
+          createDateTime, createUser, modifyDateTime, modifiedUser, remarks
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        ON CONFLICT (br_code, year, prefix, srno) DO UPDATE SET
+          custcode = EXCLUDED.custcode,
+          custname = EXCLUDED.custname,
+          refcode = EXCLUDED.refcode,
+          refname = EXCLUDED.refname,
+          total = EXCLUDED.total,
+          details = EXCLUDED.details,
+          createDateTime = EXCLUDED.createDateTime,
+          createUser = EXCLUDED.createUser,
+          modifyDateTime = EXCLUDED.modifyDateTime,
+          modifiedUser = EXCLUDED.modifiedUser,
+          remarks = EXCLUDED.remarks
+      `;
 
-    const uniquePOs = Array.from(map.values());
+      const values = [
+        po.br_code,
+        po.year,
+        po.prefix,
+        po.srno,
+        po.custcode,
+        po.custname,
+        po.refcode || null,
+        po.refname || null,
+        po.total,
+        JSON.stringify(po.details),
+        po.createDateTime || new Date(),
+        po.createUser || "SYSTEM",
+        po.modifyDateTime || new Date(),
+        po.modifiedUser || "SYSTEM",
+        po.remarks || "",
+      ];
 
-    // ==================================================
-    // 2. BULK INSERT WITH CHUNKING
-    // ==================================================
-    const chunkSize = 500;
-
-    for (let i = 0; i < uniquePOs.length; i += chunkSize) {
-      const chunk = uniquePOs.slice(i, i + chunkSize);
-
-      const values = [];
-      const placeholders = [];
-
-      chunk.forEach((po, index) => {
-        const idx = index * 15;
-
-        placeholders.push(
-          `($${idx + 1},$${idx + 2},$${idx + 3},$${idx + 4},$${idx + 5},
-            $${idx + 6},$${idx + 7},$${idx + 8},$${idx + 9},$${idx + 10},
-            $${idx + 11},$${idx + 12},$${idx + 13},$${idx + 14},$${idx + 15})`
-        );
-
-        values.push(
-          po.br_code,
-          po.year,
-          po.prefix,
-          po.srno,
-          po.custcode,
-          po.custname,
-          po.refcode || null,
-          po.refname || null,
-          po.total,
-          JSON.stringify(po.details),
-          po.createDateTime || new Date(),
-          po.createUser || "SYSTEM",
-          po.modifyDateTime || new Date(),
-          po.modifiedUser || "SYSTEM",
-          po.remarks || ""
-        );
-      });
-
-      if (values.length > 0) {
-        await pool.query(
-          `
-          INSERT INTO ecogreenpurchase_orders (
-            br_code, year, prefix, srno,
-            custcode, custname, refcode, refname,
-            total, details,
-            createDateTime, createUser, modifyDateTime, modifiedUser, remarks
-          )
-          VALUES ${placeholders.join(",")}
-          ON CONFLICT (br_code, year, prefix, srno)
-          DO UPDATE SET
-            custcode = EXCLUDED.custcode,
-            custname = EXCLUDED.custname,
-            refcode = EXCLUDED.refcode,
-            refname = EXCLUDED.refname,
-            total = EXCLUDED.total,
-            details = EXCLUDED.details,
-            createDateTime = EXCLUDED.createDateTime,
-            createUser = EXCLUDED.createUser,
-            modifyDateTime = EXCLUDED.modifyDateTime,
-            modifiedUser = EXCLUDED.modifiedUser,
-            remarks = EXCLUDED.remarks
-          `,
-          values
-        );
+      try {
+        await pool.query(query, values);
+      } catch (dbErr) {
+        console.error("DB INSERT ERROR:", dbErr.message);
       }
     }
 
-    // ==================================================
-    // 3. PAGINATED FETCH FROM DB
-    // ==================================================
+    // ================================
+    // PAGINATED FETCH FROM DB
+    // ================================
     const dataResult = await pool.query(
       `
       SELECT *
