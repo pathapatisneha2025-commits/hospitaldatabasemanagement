@@ -854,7 +854,7 @@ router.post("/purchase-orders", async (req, res) => {
     fromDate,
     toDate,
     page = 1,
-    limit = 20,
+    limit = 100,
   } = req.body;
 
   if (!c2Code || !storeId || !prodCode) {
