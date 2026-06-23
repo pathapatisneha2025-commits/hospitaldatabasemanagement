@@ -894,20 +894,33 @@ router.post("/purchase-orders", async (req, res) => {
 
     const rawText = await fetchResponse.text();
 
+    if (!rawText) {
+      return res.status(500).json({ error: "Empty response from vendor" });
+    }
+
     let purchaseOrders;
+
     try {
       purchaseOrders = JSON.parse(rawText);
     } catch (err) {
-      const fixedText = `[${rawText.replace(/}{/g, "},{")}]`;
-      purchaseOrders = JSON.parse(fixedText);
+      try {
+        const fixedText = `[${rawText.replace(/}{/g, "},{")}]`;
+        purchaseOrders = JSON.parse(fixedText);
+      } catch (e) {
+        return res.status(500).json({
+          error: "Invalid vendor response format",
+        });
+      }
     }
 
-    purchaseOrders = Array.isArray(purchaseOrders)
-      ? purchaseOrders
-      : [purchaseOrders];
+    if (!Array.isArray(purchaseOrders)) {
+      purchaseOrders = [purchaseOrders];
+    }
+
+    console.log("Vendor records received:", purchaseOrders.length);
 
     // =========================
-    // 2. DEDUPLICATION (IMPORTANT)
+    // 2. DEDUPLICATION (LIKE STOCK API)
     // =========================
     const map = new Map();
 
@@ -919,9 +932,9 @@ router.post("/purchase-orders", async (req, res) => {
     const uniquePOs = Array.from(map.values());
 
     // =========================
-    // 3. CHUNK INSERT (SAFE)
+    // 3. BULK INSERT (CHUNK SAFE)
     // =========================
-    const chunkSize = 1000;
+    const chunkSize = 300;
 
     for (let i = 0; i < uniquePOs.length; i += chunkSize) {
       let chunk = uniquePOs.slice(i, i + chunkSize);
@@ -945,8 +958,8 @@ router.post("/purchase-orders", async (req, res) => {
           po.custname,
           po.refcode || null,
           po.refname || null,
-          po.total,
-          JSON.stringify(po.details),
+          po.total || 0,
+          JSON.stringify(po.details || []),
           po.createDateTime || new Date(),
           po.createUser || "SYSTEM",
           po.modifyDateTime || new Date(),
@@ -962,7 +975,9 @@ router.post("/purchase-orders", async (req, res) => {
             br_code, year, prefix, srno,
             custcode, custname, refcode, refname,
             total, details,
-            createDateTime, createUser, modifyDateTime, modifiedUser, remarks
+            createDateTime, createUser,
+            modifyDateTime, modifiedUser,
+            remarks
           )
           VALUES ${placeholders.join(",")}
           ON CONFLICT (br_code, year, prefix, srno)
@@ -973,7 +988,8 @@ router.post("/purchase-orders", async (req, res) => {
             refname = EXCLUDED.refname,
             total = EXCLUDED.total,
             details = EXCLUDED.details,
-            createDateTime = EXCLUDED.createDateTime,
+              createDateTime = EXCLUDED.createDateTime,
+
             createUser = EXCLUDED.createUser,
             modifyDateTime = EXCLUDED.modifyDateTime,
             modifiedUser = EXCLUDED.modifiedUser,
@@ -985,23 +1001,23 @@ router.post("/purchase-orders", async (req, res) => {
     }
 
     // =========================
-    // 4. PAGINATION FROM CLEAN DATA
+    // 4. PAGINATION (LIKE STOCK API STYLE)
     // =========================
     const start = (page - 1) * limit;
     const paginatedData = uniquePOs.slice(start, start + limit);
 
     return res.status(200).json({
-      success: true,
-      message: "Purchase orders fetched & stored successfully",
+      message: "Purchase orders fetched and stored successfully",
       totalItems: uniquePOs.length,
       page,
       limit,
       totalPages: Math.ceil(uniquePOs.length / limit),
-      data: paginatedData,
+      purchaseOrders: paginatedData,
     });
 
   } catch (err) {
     console.error("Purchase Orders Error:", err);
+
     return res.status(500).json({
       error: "Failed to fetch or store purchase orders",
     });
