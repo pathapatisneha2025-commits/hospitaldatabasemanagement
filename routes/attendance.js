@@ -2062,21 +2062,20 @@ router.post("/manual-edit", async (req, res) => {
     }
 
     time = time ? time.trim() : null;
-    if (time === "") time = null;
 
-    // ✅ FIXED: NO double conversion
-    let correctionTimestamp = null;
+    let correctedTimestamp = null;
 
     if (time) {
       const safeTime = time.length === 5 ? `${time}:00` : time;
-      correctionTimestamp = new Date(`${date}T${safeTime}+05:30`);
+
+      // ✅ SAME LOGIC AS APPROVE ROUTE
+      correctedTimestamp = new Date(`${date}T${safeTime}`);
     }
 
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
-       AND DATE(timestamp) = $2::date
-       ORDER BY timestamp ASC`,
+       AND timestamp::date = $2`,
       [employee_id, date]
     );
 
@@ -2092,7 +2091,7 @@ router.post("/manual-edit", async (req, res) => {
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp || firstIn.timestamp,
+            correctedTimestamp || firstIn.timestamp,
             status || "On Duty",
             admin_id || null,
             firstIn.id,
@@ -2104,7 +2103,7 @@ router.post("/manual-edit", async (req, res) => {
            VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctionTimestamp || new Date(),
+            correctedTimestamp || new Date(`${date}T09:00:00`),
             status || "On Duty",
             admin_id || null,
           ]
@@ -2124,7 +2123,7 @@ router.post("/manual-edit", async (req, res) => {
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp,
+            correctedTimestamp || last.timestamp,
             status || "Completed",
             admin_id || null,
             last.id,
@@ -2136,7 +2135,7 @@ router.post("/manual-edit", async (req, res) => {
            VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctionTimestamp || new Date(),
+            correctedTimestamp || new Date(`${date}T18:00:00`),
             status || "Completed",
             admin_id || null,
           ]
@@ -2150,7 +2149,7 @@ router.post("/manual-edit", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Manual Edit Error:", err);
+    console.error(err);
     return res.status(500).json({
       success: false,
       message: "Server error",
