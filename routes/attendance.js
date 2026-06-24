@@ -576,7 +576,7 @@ return res.json({
   }
 });
 // Location verification
-const OFFICE_LAT = 17.677614;
+const OFFICE_LAT =17.677614;
 const OFFICE_LNG = 83.199675;
 const RADIUS_IN_METERS = 2000;
 
@@ -2049,11 +2049,11 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
     });
   }
 });
+
 router.post("/manual-edit", async (req, res) => {
   try {
-    let { employee_id, date, time, type, status, admin_id } = req.body;
+    const { employee_id, date, time, type, status, admin_id } = req.body;
 
-    // ---------------- VALIDATION ----------------
     if (!employee_id || !date || !type) {
       return res.status(400).json({
         success: false,
@@ -2061,25 +2061,11 @@ router.post("/manual-edit", async (req, res) => {
       });
     }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format. Use YYYY-MM-DD",
-      });
-    }
+    const correctionTimestamp = time
+      ? new Date(`${date}T${time}`)
+      : new Date();
 
-    // ---------------- NORMALIZE TIME ----------------
-    time = time ? time.trim() : null;
-    if (time === "") time = null;
-
-    if (time && !/^\d{2}:\d{2}(:\d{2})?$/.test(time)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid time format. Use HH:MM or HH:MM:SS",
-      });
-    }
-
-    // ---------------- FETCH EXISTING ----------------
+    // IMPORTANT: fetch ALL records for the day
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
@@ -2088,22 +2074,11 @@ router.post("/manual-edit", async (req, res) => {
       [employee_id, date]
     );
 
-    let correctionTimestamp;
-
     // ---------------- MISSED IN ----------------
     if (type === "MISSED_IN") {
-      const firstIn = existing.rows.length > 0 ? existing.rows[0] : null;
+      if (existing.rows.length > 0) {
+        const firstIn = existing.rows[0];
 
-      // 🔥 USE DB CHECK-IN TIME IF NO MANUAL TIME PROVIDED
-      const finalTime =
-        time ||
-        (firstIn
-          ? new Date(firstIn.timestamp).toTimeString().slice(0, 8)
-          : "09:00:00"); // fallback
-
-      correctionTimestamp = new Date(`${date}T${finalTime}`);
-
-      if (firstIn) {
         await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
@@ -2134,17 +2109,9 @@ router.post("/manual-edit", async (req, res) => {
 
     // ---------------- MISSED OUT ----------------
     if (type === "MISSED_OUT") {
-      const last = existing.rows.length > 0 ? existing.rows[existing.rows.length - 1] : null;
+      if (existing.rows.length > 0) {
+        const last = existing.rows[existing.rows.length - 1];
 
-      const finalTime =
-        time ||
-        (last
-          ? new Date(last.timestamp).toTimeString().slice(0, 8)
-          : "18:00:00");
-
-      correctionTimestamp = new Date(`${date}T${finalTime}`);
-
-      if (last) {
         await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
