@@ -2061,7 +2061,6 @@ router.post("/manual-edit", async (req, res) => {
       });
     }
 
-    // validate date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({
         success: false,
@@ -2071,41 +2070,16 @@ router.post("/manual-edit", async (req, res) => {
 
     // ---------------- NORMALIZE TIME ----------------
     time = time ? time.trim() : null;
+    if (time === "") time = null;
 
-    if (time === "") {
-      time = null;
-    }
-
-    // validate time only if provided
-    if (time) {
-      if (!/^\d{2}:\d{2}(:\d{2})?$/.test(time)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid time format. Use HH:MM or HH:MM:SS",
-        });
-      }
-    }
-
-    // ---------------- SAFE TIMESTAMP BUILD ----------------
-    let correctionTimestamp;
-
-    if (time) {
-      const safeTime = time.length === 5 ? `${time}:00` : time;
-
-      correctionTimestamp = new Date(`${date}T${safeTime}`);
-    } else {
-      correctionTimestamp = new Date();
-    }
-
-    // final validation
-    if (isNaN(correctionTimestamp.getTime())) {
+    if (time && !/^\d{2}:\d{2}(:\d{2})?$/.test(time)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid timestamp generated",
+        message: "Invalid time format. Use HH:MM or HH:MM:SS",
       });
     }
 
-    // ---------------- FETCH EXISTING RECORDS ----------------
+    // ---------------- FETCH EXISTING ----------------
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
@@ -2114,11 +2088,22 @@ router.post("/manual-edit", async (req, res) => {
       [employee_id, date]
     );
 
+    let correctionTimestamp;
+
     // ---------------- MISSED IN ----------------
     if (type === "MISSED_IN") {
-      if (existing.rows.length > 0) {
-        const firstIn = existing.rows[0];
+      const firstIn = existing.rows.length > 0 ? existing.rows[0] : null;
 
+      // 🔥 USE DB CHECK-IN TIME IF NO MANUAL TIME PROVIDED
+      const finalTime =
+        time ||
+        (firstIn
+          ? new Date(firstIn.timestamp).toTimeString().slice(0, 8)
+          : "09:00:00"); // fallback
+
+      correctionTimestamp = new Date(`${date}T${finalTime}`);
+
+      if (firstIn) {
         await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
@@ -2149,9 +2134,17 @@ router.post("/manual-edit", async (req, res) => {
 
     // ---------------- MISSED OUT ----------------
     if (type === "MISSED_OUT") {
-      if (existing.rows.length > 0) {
-        const last = existing.rows[existing.rows.length - 1];
+      const last = existing.rows.length > 0 ? existing.rows[existing.rows.length - 1] : null;
 
+      const finalTime =
+        time ||
+        (last
+          ? new Date(last.timestamp).toTimeString().slice(0, 8)
+          : "18:00:00");
+
+      correctionTimestamp = new Date(`${date}T${finalTime}`);
+
+      if (last) {
         await pool.query(
           `UPDATE attendance
            SET timestamp = $1,
