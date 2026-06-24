@@ -2064,14 +2064,15 @@ router.post("/manual-edit", async (req, res) => {
     time = time ? time.trim() : null;
 
     let correctedTimestamp = null;
+if (time) {
+  const safeTime = time.length === 5 ? `${time}:00` : time;
 
-    if (time) {
-      const safeTime = time.length === 5 ? `${time}:00` : time;
+  // FORCE IST INTERPRETATION
+  const istDateTime = new Date(`${date}T${safeTime}+05:30`);
 
-      // ✅ SAME LOGIC AS APPROVE ROUTE
-      correctedTimestamp = new Date(`${date}T${safeTime}`);
-    }
-
+  // convert properly to UTC
+  correctedTimestamp = new Date(istDateTime.toISOString());
+}
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
