@@ -2061,23 +2061,17 @@ router.post("/manual-edit", async (req, res) => {
       });
     }
 
-    // ---------------- NORMALIZE TIME ----------------
     time = time ? time.trim() : null;
     if (time === "") time = null;
 
+    // ✅ FIXED: NO double conversion
     let correctionTimestamp = null;
 
     if (time) {
       const safeTime = time.length === 5 ? `${time}:00` : time;
-
-      // 👇 Treat input as IST explicitly
-      const istDateTime = new Date(`${date}T${safeTime}+05:30`);
-
-      // 👇 Convert to UTC (correct way)
-      correctionTimestamp = new Date(istDateTime.toISOString());
+      correctionTimestamp = new Date(`${date}T${safeTime}+05:30`);
     }
 
-    // ---------------- FETCH EXISTING RECORDS ----------------
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
@@ -2086,7 +2080,6 @@ router.post("/manual-edit", async (req, res) => {
       [employee_id, date]
     );
 
-    // ---------------- MISSED IN ----------------
     if (type === "MISSED_IN") {
       if (existing.rows.length > 0) {
         const firstIn = existing.rows[0];
@@ -2119,7 +2112,6 @@ router.post("/manual-edit", async (req, res) => {
       }
     }
 
-    // ---------------- MISSED OUT ----------------
     if (type === "MISSED_OUT") {
       if (existing.rows.length > 0) {
         const last = existing.rows[existing.rows.length - 1];
@@ -2132,7 +2124,7 @@ router.post("/manual-edit", async (req, res) => {
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp || last.timestamp,
+            correctionTimestamp,
             status || "Completed",
             admin_id || null,
             last.id,
