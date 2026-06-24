@@ -2049,10 +2049,9 @@ router.post("/attendance-correction/approve/:id", async (req, res) => {
     });
   }
 });
-
 router.post("/manual-edit", async (req, res) => {
   try {
-    const { employee_id, date, time, type, status, admin_id } = req.body;
+    let { employee_id, date, time, type, status, admin_id } = req.body;
 
     // ---------------- VALIDATION ----------------
     if (!employee_id || !date || !type) {
@@ -2070,25 +2069,35 @@ router.post("/manual-edit", async (req, res) => {
       });
     }
 
-    // validate time format if provided
-    if (time && !/^\d{2}:\d{2}(:\d{2})?$/.test(time)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid time format. Use HH:MM or HH:MM:SS",
-      });
+    // ---------------- NORMALIZE TIME ----------------
+    time = time ? time.trim() : null;
+
+    if (time === "") {
+      time = null;
+    }
+
+    // validate time only if provided
+    if (time) {
+      if (!/^\d{2}:\d{2}(:\d{2})?$/.test(time)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid time format. Use HH:MM or HH:MM:SS",
+        });
+      }
     }
 
     // ---------------- SAFE TIMESTAMP BUILD ----------------
     let correctionTimestamp;
 
     if (time) {
-      const safeTime = time.length === 5 ? `${time}:00` : time; // add seconds if missing
+      const safeTime = time.length === 5 ? `${time}:00` : time;
+
       correctionTimestamp = new Date(`${date}T${safeTime}`);
     } else {
       correctionTimestamp = new Date();
     }
 
-    // final validation (VERY IMPORTANT)
+    // final validation
     if (isNaN(correctionTimestamp.getTime())) {
       return res.status(400).json({
         success: false,
