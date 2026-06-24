@@ -2065,22 +2065,16 @@ router.post("/manual-edit", async (req, res) => {
     time = time ? time.trim() : null;
     if (time === "") time = null;
 
-    // ---------------- IST → UTC CONVERSION ----------------
-    const convertISTtoUTC = (dateStr, timeStr) => {
-      const [y, m, d] = dateStr.split("-").map(Number);
-      const [hh, mm] = timeStr.split(":").map(Number);
-
-      // IST = UTC + 5:30 → subtract 5h30m
-      const utcDate = new Date(Date.UTC(y, m - 1, d, hh - 5, mm - 30, 0));
-
-      return utcDate;
-    };
-
     let correctionTimestamp = null;
 
     if (time) {
-      const safeTime = time.length === 5 ? time : time.slice(0, 5);
-      correctionTimestamp = convertISTtoUTC(date, safeTime);
+      const safeTime = time.length === 5 ? `${time}:00` : time;
+
+      // 👇 Treat input as IST explicitly
+      const istDateTime = new Date(`${date}T${safeTime}+05:30`);
+
+      // 👇 Convert to UTC (correct way)
+      correctionTimestamp = new Date(istDateTime.toISOString());
     }
 
     // ---------------- FETCH EXISTING RECORDS ----------------
@@ -2105,7 +2099,7 @@ router.post("/manual-edit", async (req, res) => {
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp,
+            correctionTimestamp || firstIn.timestamp,
             status || "On Duty",
             admin_id || null,
             firstIn.id,
@@ -2117,7 +2111,7 @@ router.post("/manual-edit", async (req, res) => {
            VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctionTimestamp || new Date(), // fallback UTC
+            correctionTimestamp || new Date(),
             status || "On Duty",
             admin_id || null,
           ]
@@ -2138,7 +2132,7 @@ router.post("/manual-edit", async (req, res) => {
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp,
+            correctionTimestamp || last.timestamp,
             status || "Completed",
             admin_id || null,
             last.id,
