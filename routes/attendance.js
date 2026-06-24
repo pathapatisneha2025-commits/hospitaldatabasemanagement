@@ -2065,12 +2065,22 @@ router.post("/manual-edit", async (req, res) => {
     time = time ? time.trim() : null;
     if (time === "") time = null;
 
-    // ---------------- BUILD RAW TIMESTAMP (NO TIMEZONE) ----------------
+    // ---------------- IST → UTC CONVERSION ----------------
+    const convertISTtoUTC = (dateStr, timeStr) => {
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const [hh, mm] = timeStr.split(":").map(Number);
+
+      // IST = UTC + 5:30 → subtract 5h30m
+      const utcDate = new Date(Date.UTC(y, m - 1, d, hh - 5, mm - 30, 0));
+
+      return utcDate;
+    };
+
     let correctionTimestamp = null;
 
     if (time) {
-      const safeTime = time.length === 5 ? `${time}:00` : time;
-      correctionTimestamp = `${date} ${safeTime}`; // 👈 STRING ONLY
+      const safeTime = time.length === 5 ? time : time.slice(0, 5);
+      correctionTimestamp = convertISTtoUTC(date, safeTime);
     }
 
     // ---------------- FETCH EXISTING RECORDS ----------------
@@ -2089,13 +2099,13 @@ router.post("/manual-edit", async (req, res) => {
 
         await pool.query(
           `UPDATE attendance
-           SET timestamp = $1::timestamp,
+           SET timestamp = $1,
                status = $2,
                updated_by = $3,
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp || firstIn.timestamp,
+            correctionTimestamp,
             status || "On Duty",
             admin_id || null,
             firstIn.id,
@@ -2104,10 +2114,10 @@ router.post("/manual-edit", async (req, res) => {
       } else {
         await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status, created_by)
-           VALUES ($1, $2::timestamp, $3, $4)`,
+           VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctionTimestamp || `${date} 09:00:00`,
+            correctionTimestamp || new Date(), // fallback UTC
             status || "On Duty",
             admin_id || null,
           ]
@@ -2122,13 +2132,13 @@ router.post("/manual-edit", async (req, res) => {
 
         await pool.query(
           `UPDATE attendance
-           SET timestamp = $1::timestamp,
+           SET timestamp = $1,
                status = $2,
                updated_by = $3,
                updated_at = NOW()
            WHERE id = $4`,
           [
-            correctionTimestamp || last.timestamp,
+            correctionTimestamp,
             status || "Completed",
             admin_id || null,
             last.id,
@@ -2137,10 +2147,10 @@ router.post("/manual-edit", async (req, res) => {
       } else {
         await pool.query(
           `INSERT INTO attendance (employee_id, timestamp, status, created_by)
-           VALUES ($1, $2::timestamp, $3, $4)`,
+           VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctionTimestamp || `${date} 18:00:00`,
+            correctionTimestamp || new Date(),
             status || "Completed",
             admin_id || null,
           ]
