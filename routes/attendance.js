@@ -576,8 +576,8 @@ return res.json({
   }
 });
 // Location verification
-const OFFICE_LAT = 21.930424;
-const OFFICE_LNG = 86.726709;
+const OFFICE_LAT = 17.677614;
+const OFFICE_LNG = 83.199675;
 const RADIUS_IN_METERS = 2000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
