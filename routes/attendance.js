@@ -2064,15 +2064,15 @@ router.post("/manual-edit", async (req, res) => {
     time = time ? time.trim() : null;
 
     let correctedTimestamp = null;
-if (time) {
-  const safeTime = time.length === 5 ? `${time}:00` : time;
 
-  // FORCE IST INTERPRETATION
-  const istDateTime = new Date(`${date}T${safeTime}+05:30`);
+    // ✅ FIX: Proper IST handling (NO double conversion)
+    if (time) {
+      const safeTime = time.length === 5 ? `${time}:00` : time;
 
-  // convert properly to UTC
-  correctedTimestamp = new Date(istDateTime.toISOString());
-}
+      // Treat input as IST directly
+      correctedTimestamp = new Date(`${date}T${safeTime}+05:30`);
+    }
+
     const existing = await pool.query(
       `SELECT * FROM attendance 
        WHERE employee_id = $1 
@@ -2104,7 +2104,7 @@ if (time) {
            VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctedTimestamp || new Date(`${date}T09:00:00`),
+            correctedTimestamp || new Date(`${date}T09:00:00+05:30`),
             status || "On Duty",
             admin_id || null,
           ]
@@ -2136,7 +2136,7 @@ if (time) {
            VALUES ($1, $2, $3, $4)`,
           [
             employee_id,
-            correctedTimestamp || new Date(`${date}T18:00:00`),
+            correctedTimestamp || new Date(`${date}T18:00:00+05:30`),
             status || "Completed",
             admin_id || null,
           ]
