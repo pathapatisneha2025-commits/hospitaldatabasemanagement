@@ -6,6 +6,8 @@ const pool = require("../db");
 
 // Add new employee deduction
 router.post("/add", async (req, res) => {
+    console.log("REQ BODY:", req.body);
+
   const {
     employee_id,      //  NEW
     employee_name,
@@ -17,6 +19,7 @@ router.post("/add", async (req, res) => {
     working_hours,
     employee_type,
   } = req.body;
+  console.log("Employee ID:", employee_id);
 
   try {
     const result = await pool.query(
