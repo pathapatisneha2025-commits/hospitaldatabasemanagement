@@ -44,7 +44,7 @@ router.post("/add", async (req, res) => {
     }
 
     const employee_id = empResult.rows[0].id;
-    const employee_name = empResult.rows[0].full_name; // ✅ AUTO FROM DB
+    const employee_name = empResult.rows[0].full_name; // AUTO FROM DB
 
     // ✅ Insert into deductions table
     const result = await pool.query(
@@ -64,7 +64,7 @@ router.post("/add", async (req, res) => {
       RETURNING *`,
       [
         employee_id,
-        employee_name,   // ✅ FROM DB (not frontend)
+       //  FROM DB (not frontend)
         cleanEmail,
         salary || 0,
         late_penalty || 0,
