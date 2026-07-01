@@ -369,7 +369,7 @@ const workResult = await pool.query(
 
 
 // GET leaves by employee ID without storing employee_id in leaves table (based on full_name)
-router.get("/employee/:id", async (req, res) => {
+router.get("/by-employee/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
