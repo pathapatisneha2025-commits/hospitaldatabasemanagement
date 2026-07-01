@@ -18,8 +18,8 @@ router.post("/add", async (req, res) => {
   } = req.body;
 
   try {
-    console.log("RAW EMAIL:", email);
-
+  console.log("REQ BODY:", req.body);
+  console.log("RAW EMAIL:", email);
     const cleanEmail = email?.trim().toLowerCase();
 
     const employeeQuery = `
