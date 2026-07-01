@@ -19,44 +19,46 @@ router.post("/add", async (req, res) => {
 
   try {
     // 1. Fetch employee_id from employees table
-    const empResult = await pool.query(
-      `SELECT id FROM employees WHERE email = $1`,
-      [email]
-    );
+    const employeeQuery = `SELECT id FROM employees WHERE email = $1`;
+    const employeeResult = await pool.query(employeeQuery, [email]);
 
-    if (empResult.rows.length === 0) {
+    if (employeeResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Employee not found",
+        message: "Employee not found with the provided email",
       });
     }
 
-    const employee_id = empResult.rows[0].id;
+    const employee_id = employeeResult.rows[0].id;
 
-    // 2. Insert into deductions table
-    const result = await pool.query(
-      `INSERT INTO employee_deductions 
+    // 2. Insert into employee_deductions table
+    const insertQuery = `
+      INSERT INTO employee_deductions 
       (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *`,
-      [
-        employee_id,
-        employee_name,
-        email,
-        salary,
-        late_penalty,
-        break_penalty,
-        working_days,
-        working_hours,
-        employee_type,
-      ]
-    );
+      RETURNING *
+    `;
 
-    res.json({ success: true, data: result.rows[0] });
+    const result = await pool.query(insertQuery, [
+      employee_id,
+      employee_name,
+      email,
+      salary,
+      late_penalty,
+      break_penalty,
+      working_days,
+      working_hours,
+      employee_type,
+    ]);
+
+    return res.json({
+      success: true,
+      data: result.rows[0],
+    });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to add data",
     });
