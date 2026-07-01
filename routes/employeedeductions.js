@@ -18,9 +18,19 @@ router.post("/add", async (req, res) => {
   } = req.body;
 
   try {
-    // 1. Fetch employee_id from employees table
-    const employeeQuery = `SELECT id FROM employees WHERE email = $1`;
-    const employeeResult = await pool.query(employeeQuery, [email]);
+    console.log("RAW EMAIL:", email);
+
+    const cleanEmail = email?.trim().toLowerCase();
+
+    const employeeQuery = `
+      SELECT id 
+      FROM employees 
+      WHERE LOWER(email) = LOWER($1)
+    `;
+
+    const employeeResult = await pool.query(employeeQuery, [cleanEmail]);
+
+    console.log("EMPLOYEE RESULT:", employeeResult.rows);
 
     if (employeeResult.rows.length === 0) {
       return res.status(404).json({
@@ -31,7 +41,8 @@ router.post("/add", async (req, res) => {
 
     const employee_id = employeeResult.rows[0].id;
 
-    // 2. Insert into employee_deductions table
+    console.log("FOUND EMPLOYEE ID:", employee_id);
+
     const insertQuery = `
       INSERT INTO employee_deductions 
       (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
@@ -42,7 +53,7 @@ router.post("/add", async (req, res) => {
     const result = await pool.query(insertQuery, [
       employee_id,
       employee_name,
-      email,
+      cleanEmail,
       salary,
       late_penalty,
       break_penalty,
