@@ -391,7 +391,7 @@ router.get("/by-employee/:id", async (req, res) => {
     const workResult = await pool.query(
       `SELECT working_days 
        FROM employee_deductions 
-       WHERE employee_id = $1 
+       WHERE email = $1 
        LIMIT 1`,
       [id]
     );
