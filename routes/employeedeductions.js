@@ -7,6 +7,7 @@ const pool = require("../db");
 // Add new employee deduction
 router.post("/add", async (req, res) => {
   const {
+    employee_id,      //  NEW
     employee_name,
     email,
     salary,
@@ -18,61 +19,29 @@ router.post("/add", async (req, res) => {
   } = req.body;
 
   try {
-  console.log("REQ BODY:", req.body);
-  console.log("RAW EMAIL:", email);
-    const cleanEmail = email?.trim().toLowerCase();
-
-    const employeeQuery = `
-      SELECT id 
-      FROM employees 
-      WHERE LOWER(email) = LOWER($1)
-    `;
-
-    const employeeResult = await pool.query(employeeQuery, [cleanEmail]);
-
-    console.log("EMPLOYEE RESULT:", employeeResult.rows);
-
-    if (employeeResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found with the provided email",
-      });
-    }
-
-    const employee_id = employeeResult.rows[0].id;
-
-    console.log("FOUND EMPLOYEE ID:", employee_id);
-
-    const insertQuery = `
-      INSERT INTO employee_deductions 
+    const result = await pool.query(
+      `INSERT INTO employee_deductions 
       (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *
-    `;
+      RETURNING *`,
+      [
+        employee_id,     // ✅ added first
+        employee_name,
+        email,
+        salary,
+        late_penalty,
+        break_penalty,
+        working_days,
+        working_hours,
+        employee_type,
+      ]
+    );
 
-    const result = await pool.query(insertQuery, [
-      employee_id,
-      employee_name,
-      cleanEmail,
-      salary,
-      late_penalty,
-      break_penalty,
-      working_days,
-      working_hours,
-      employee_type,
-    ]);
-
-    return res.json({
-      success: true,
-      data: result.rows[0],
-    });
+    res.json({ success: true, data: result.rows[0] });
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add data",
-    });
+    res.status(500).json({ success: false, message: "Failed to add data" });
   }
 });
 
