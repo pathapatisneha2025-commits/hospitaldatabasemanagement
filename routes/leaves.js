@@ -390,7 +390,7 @@ router.get("/by-employee/:id", async (req, res) => {
     // 2️⃣ Fetch working days for this employee
     const workResult = await pool.query(
       `SELECT working_days 
-       FROM employee_working_days 
+       FROM employee_deductions 
        WHERE employee_id = $1 
        LIMIT 1`,
       [id]

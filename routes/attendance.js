@@ -576,8 +576,8 @@ return res.json({
   }
 });
 // Location verification
-const OFFICE_LAT =17.677614;
-const OFFICE_LNG = 83.199675;
+const OFFICE_LAT =21.930424;
+const OFFICE_LNG = 86.726709;
 const RADIUS_IN_METERS = 2000;
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -2063,15 +2063,17 @@ router.post("/manual-edit", async (req, res) => {
 
     time = time ? time.trim() : null;
 
-    let correctedTimestamp = null;
+   let correctedTimestamp = null;
 
-    // ✅ FIX: Proper IST handling (NO double conversion)
-    if (time) {
-      const safeTime = time.length === 5 ? `${time}:00` : time;
+if (time) {
+  const safeTime = time.length === 5 ? `${time}:00` : time;
 
-      // Treat input as IST directly
-      correctedTimestamp = new Date(`${date}T${safeTime}+05:30`);
-    }
+  // Create local date (IST input assumed)
+  const local = new Date(`${date}T${safeTime}`);
+
+  // Convert to UTC (store standard)
+  correctedTimestamp = new Date(local.toISOString());
+}
 
     const existing = await pool.query(
       `SELECT * FROM attendance 

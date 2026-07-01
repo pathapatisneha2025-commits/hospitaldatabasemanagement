@@ -14,16 +14,33 @@ router.post("/add", async (req, res) => {
     break_penalty,
     working_days,
     working_hours,
-    employee_type,   // added new field
+    employee_type,
   } = req.body;
 
   try {
+    // 1. Fetch employee_id from employees table
+    const empResult = await pool.query(
+      `SELECT id FROM employees WHERE email = $1`,
+      [email]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const employee_id = empResult.rows[0].id;
+
+    // 2. Insert into deductions table
     const result = await pool.query(
       `INSERT INTO employee_deductions 
-      (employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *`,
       [
+        employee_id,
         employee_name,
         email,
         salary,
@@ -39,7 +56,10 @@ router.post("/add", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Failed to add data" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to add data",
+    });
   }
 });
 
