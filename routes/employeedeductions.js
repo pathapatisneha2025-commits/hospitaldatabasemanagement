@@ -6,7 +6,7 @@ const pool = require("../db");
 
 // Add new employee deduction
 router.post("/add", async (req, res) => {
-  const {
+  let {
     email,
     late_penalty,
     break_penalty,
@@ -18,28 +18,36 @@ router.post("/add", async (req, res) => {
   } = req.body;
 
   try {
-    // 1. Get ONLY employee ID from email
+    // ✅ 1. Validate email
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    // ✅ 2. Normalize email (IMPORTANT FIX)
+    const cleanEmail = email.trim().toLowerCase();
+
+    // ✅ 3. Get employee ID safely
     const empResult = await pool.query(
-      `SELECT id FROM employees WHERE email = $1`,
-      [email]
+      `SELECT id FROM employees WHERE LOWER(email) = $1`,
+      [cleanEmail]
     );
 
-    if (!empResult.rows.length) {
+    if (empResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Employee not found",
+        message: "Employee not found for this email",
       });
     }
 
     const employee_id = empResult.rows[0].id;
 
-    // 2. Insert into deductions table
+    // ✅ 4. Insert into deductions table
     const result = await pool.query(
       `INSERT INTO employee_deductions 
-      (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *`,
-      [
+      (
         employee_id,
         employee_name,
         email,
@@ -48,20 +56,35 @@ router.post("/add", async (req, res) => {
         break_penalty,
         working_days,
         working_hours,
-        employee_type,
+        employee_type
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING *`,
+      [
+        employee_id,
+        employee_name || null,
+        cleanEmail,
+        salary || 0,
+        late_penalty || 0,
+        break_penalty || 0,
+        working_days || 0,
+        working_hours || 0,
+        employee_type || null,
       ]
     );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: result.rows[0],
     });
 
   } catch (err) {
     console.error("Error adding deduction:", err);
+
     return res.status(500).json({
       success: false,
       message: "Failed to add data",
+      error: err.message,
     });
   }
 });
