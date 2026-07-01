@@ -9,7 +9,7 @@ router.post("/add", async (req, res) => {
     console.log("REQ BODY:", req.body);
 
   const {
-    employee_id,      //  NEW
+       //  NEW
     employee_name,
     email,
     salary,
@@ -18,17 +18,18 @@ router.post("/add", async (req, res) => {
     working_days,
     working_hours,
     employee_type,
+    employee_id,   
   } = req.body;
   console.log("Employee ID:", employee_id);
 
   try {
     const result = await pool.query(
       `INSERT INTO employee_deductions 
-      (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
+      ( employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type,employee_id)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *`,
       [
-        employee_id,     // ✅ added first
+        employee_id,     // added first
         employee_name,
         email,
         salary,
