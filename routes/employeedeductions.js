@@ -12,13 +12,12 @@ router.post("/add", async (req, res) => {
     break_penalty,
     working_days,
     working_hours,
-    employee_name,
     salary,
     employee_type,
   } = req.body;
 
   try {
-    // ✅ 1. Validate email
+    // ✅ Validate email
     if (!email) {
       return res.status(400).json({
         success: false,
@@ -26,12 +25,14 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    // ✅ 2. Normalize email (IMPORTANT FIX)
+    // ✅ Normalize email
     const cleanEmail = email.trim().toLowerCase();
 
-    // ✅ 3. Get employee ID safely
+    // ✅ Get employee id + full name from DB
     const empResult = await pool.query(
-      `SELECT id FROM employees WHERE LOWER(email) = $1`,
+      `SELECT id, full_name 
+       FROM employees 
+       WHERE LOWER(email) = $1`,
       [cleanEmail]
     );
 
@@ -43,8 +44,9 @@ router.post("/add", async (req, res) => {
     }
 
     const employee_id = empResult.rows[0].id;
+    const employee_name = empResult.rows[0].full_name; // ✅ AUTO FROM DB
 
-    // ✅ 4. Insert into deductions table
+    // ✅ Insert into deductions table
     const result = await pool.query(
       `INSERT INTO employee_deductions 
       (
@@ -62,7 +64,7 @@ router.post("/add", async (req, res) => {
       RETURNING *`,
       [
         employee_id,
-        employee_name || null,
+        employee_name,   // ✅ FROM DB (not frontend)
         cleanEmail,
         salary || 0,
         late_penalty || 0,
@@ -88,7 +90,6 @@ router.post("/add", async (req, res) => {
     });
   }
 });
-
 // Get all employee deductions
 router.get("/all", async (req, res) => {
   try {
