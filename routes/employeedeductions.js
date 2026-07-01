@@ -6,50 +6,40 @@ const pool = require("../db");
 
 // Add new employee deduction
 router.post("/add", async (req, res) => {
-  let {
+  const {
     email,
     late_penalty,
     break_penalty,
     working_days,
     working_hours,
+    employee_name,
     salary,
     employee_type,
   } = req.body;
 
   try {
-    // ✅ Validate email
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    // ✅ Normalize email
-    const cleanEmail = email.trim().toLowerCase();
-
-    // ✅ Get employee id + full name from DB
+    // 1. Get ONLY employee ID from email
     const empResult = await pool.query(
-      `SELECT id, full_name 
-       FROM employees 
-       WHERE LOWER(email) = $1`,
-      [cleanEmail]
+      `SELECT id FROM employees WHERE email = $1`,
+      [email]
     );
 
-    if (empResult.rows.length === 0) {
+    if (!empResult.rows.length) {
       return res.status(404).json({
         success: false,
-        message: "Employee not found for this email",
+        message: "Employee not found",
       });
     }
 
     const employee_id = empResult.rows[0].id;
-    const employee_name = empResult.rows[0].full_name; // AUTO FROM DB
 
-    // ✅ Insert into deductions table
+    // 2. Insert into deductions table
     const result = await pool.query(
       `INSERT INTO employee_deductions 
-      (
+      (employee_id, employee_name, email, salary, late_penalty, break_penalty, working_days, working_hours, employee_type)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING *`,
+      [
         employee_id,
         employee_name,
         email,
@@ -58,38 +48,24 @@ router.post("/add", async (req, res) => {
         break_penalty,
         working_days,
         working_hours,
-        employee_type
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *`,
-      [
-        employee_id,
-       //  FROM DB (not frontend)
-        cleanEmail,
-        salary || 0,
-        late_penalty || 0,
-        break_penalty || 0,
-        working_days || 0,
-        working_hours || 0,
-        employee_type || null,
+        employee_type,
       ]
     );
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       data: result.rows[0],
     });
 
   } catch (err) {
     console.error("Error adding deduction:", err);
-
     return res.status(500).json({
       success: false,
       message: "Failed to add data",
-      error: err.message,
     });
   }
 });
+
 // Get all employee deductions
 router.get("/all", async (req, res) => {
   try {
