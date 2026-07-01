@@ -33,6 +33,7 @@ router.post("/add", async (req, res) => {
         working_days,
         working_hours,
         employee_type,
+        employee_id
       ]
     );
 
