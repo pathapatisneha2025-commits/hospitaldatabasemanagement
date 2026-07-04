@@ -2135,8 +2135,8 @@ router.get("/ecogreen/sales-invoice/today", async (req, res) => {
     const result = await pool.query(`
       SELECT *
       FROM ecogreensales_invoices
-      WHERE created_at::date = CURRENT_DATE
-      ORDER BY created_at DESC
+      WHERE created_at_system::date = CURRENT_DATE
+      ORDER BY created_at_system DESC
     `);
 
     res.json({
